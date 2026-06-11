@@ -58,6 +58,20 @@ Once you're set up with a copy of LR2oraja Endless Dream you might want to check
 
 Alternatively you can ask in our [Discord](https://discord.gg/HutCHCZHns) and we'll be happy to help you out.
 
+### BMS-IR compatibility
+
+When connecting this fork to [BMS-IR](https://www.bms-ir.org/), use the BMS-IR
+plugin build for LR2oraja Endless Dream. The plugin reports the host jar hash
+and `client_kind=lr2oraja-ed`, which lets BMS-IR keep this client in the
+LR2oraja ED bucket.
+
+For public BMS-IR allowlist registration, publish versioned release jars and
+share their MD5 and SHA-256 hashes. Locally built jars can have different hashes
+and are not suitable as stable allowlist entries.
+
+DX MODE scores should remain excluded from non-rianIR uploads. This matches the
+current `IRUtil.shouldSkipIR` behavior and is required for BMS-IR compatibility.
+
 ## Building from source
 A JDK 17 **with javafx** is required to build and run. Consider using [liberica JDK](https://bell-sw.com/pages/downloads/#jdk-17-lts), ensure that you download `Package: Full JDK` to get the JavaFX version.
 
