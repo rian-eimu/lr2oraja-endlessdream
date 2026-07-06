@@ -31,4 +31,9 @@ public class SameFolderBar extends DirectoryBar {
     public final Bar[] getChildren() {
         return SongBar.toSongBarArray(selector.getSongDatabase().getSongDatas("folder", crc));
     }
+
+    @Override
+    public void updateFolderStatus() {
+        updateFolderStatus(selector.getSongDatabase().getSongDatas("folder", crc));
+    }
 }

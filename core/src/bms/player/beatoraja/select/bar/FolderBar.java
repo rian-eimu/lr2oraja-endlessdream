@@ -56,14 +56,8 @@ public class FolderBar extends DirectoryBar {
         }).toArray(Bar[]::new);
     }
 
+    @Override
     public void updateFolderStatus() {
-        SongDatabaseAccessor songdb = selector.getSongDatabase();
-        String path = folder.getPath();
-        if (path.endsWith(String.valueOf(File.separatorChar))) {
-            path = path.substring(0, path.length() - 1);
-        }
-        final String ccrc = SongUtils.crc32(path, new String[0], new File(".").getAbsolutePath());
-
-        updateFolderStatus(songdb.getSongDatas("parent", ccrc));
+        updateFolderStatus(selector.getSongDatabase().getSongDatas("parent", crc));
     }
 }

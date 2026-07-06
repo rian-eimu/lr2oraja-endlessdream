@@ -38,6 +38,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 
 import bms.player.beatoraja.AudioConfig.DriverType;
 import bms.player.beatoraja.ir.IRConnectionManager;
+import bms.player.beatoraja.ir.IRPluginUpdater;
 import bms.player.beatoraja.launcher.PlayConfigurationView;
 import bms.player.beatoraja.song.SQLiteSongDatabaseAccessor;
 import bms.player.beatoraja.song.SongData;
@@ -112,6 +113,7 @@ public class MainLoader extends Application {
 
 
 		if (Files.exists(Config.configpath) && (bmsPath != null || auto != null)) {
+			IRPluginUpdater.updateBeforeIRLoad();
 			IRConnectionManager.getAllAvailableIRConnectionName();
 			if (UIUtils.isMac) {
 				BMSPlayerMode finalAuto = auto;
@@ -122,6 +124,7 @@ public class MainLoader extends Application {
 				play(bmsPath, auto, true, null, null, bmsPath != null);
 			}
 		} else {
+			IRPluginUpdater.updateBeforeIRLoad();
 			launch(args);
 		}
 	}

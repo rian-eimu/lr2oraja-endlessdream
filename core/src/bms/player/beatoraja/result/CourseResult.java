@@ -86,6 +86,7 @@ public class CourseResult extends AbstractResult {
 			state = STATE_IR_PROCESSING;
 			
 			irSendStatus.clear();
+			Set<String> processedIRs = new HashSet<String>();
 
 			boolean uln = false;
 			for(BMSModel model : resource.getCourseBMSModels()) {
@@ -97,6 +98,7 @@ public class CourseResult extends AbstractResult {
 			final int lnmode = uln ? config.getLnmode() : 0;
 			
         	for(IRStatus irc : ir) {
+
     			boolean send = resource.isUpdateCourseScore() && !resource.isForceNoIRSend() && resource.getCourseData().isRelease();
     			switch(irc.config.getIrsend()) {
     			case IRConfig.IR_SEND_ALWAYS:
@@ -112,6 +114,12 @@ public class CourseResult extends AbstractResult {
     			}
     			
     			if(send) {
+    				String uniqueKey = irc.config.getIrname() + ":" + irc.config.getUserid() + ":" + irc.config.getPassword();
+    				if (processedIRs.contains(uniqueKey)) {
+    					continue;
+    				}
+    				processedIRs.add(uniqueKey);
+
     				if (IRUtil.shouldSkipIR(irc.config.getIrname(), resource.getPlayerConfig().isDxMode())) {
     					continue;
     				}

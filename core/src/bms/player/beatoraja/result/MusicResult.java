@@ -120,7 +120,14 @@ public class MusicResult extends AbstractResult {
 		if (ir.length > 0 && resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY && !resource.isFreqOn()) {
 			state = STATE_IR_PROCESSING;
 			
+			List<IRSendStatus> addedScores = new ArrayList<IRSendStatus>();
+			Set<String> processedIRs = new HashSet<String>();
         	for(IRStatus irc : ir) {
+        		if (processedIRs.contains(irc.config.getIrname())) {
+        			continue;
+        		}
+        		processedIRs.add(irc.config.getIrname());
+
     			boolean send = resource.isUpdateScore() && !resource.isForceNoIRSend();
     			switch(irc.config.getIrsend()) {
     			case IRConfig.IR_SEND_ALWAYS:
@@ -140,7 +147,9 @@ public class MusicResult extends AbstractResult {
                         continue;
                     }
                     
-    				main.irSendStatus.add(new IRSendStatus(irc.connection, resource.getSongdata(), newscore, resource.getReplayData()));
+                    IRSendStatus status = new IRSendStatus(irc.connection, resource.getSongdata(), newscore, resource.getReplayData());
+    				main.irSendStatus.add(status);
+					addedScores.add(status);
     			}
         	}
 			
@@ -148,10 +157,7 @@ public class MusicResult extends AbstractResult {
 				int irsend = 0;
 				boolean succeed = true;
 				List<IRSendStatus> removeIrSendStatus = new ArrayList<IRSendStatus>();
-				List<IRSendStatus> scores = new ArrayList<IRSendStatus>();
-				if (!main.irSendStatus.isEmpty()) {
-					scores = main.irSendStatus.subList(main.irSendStatus.size() - ir.length, main.irSendStatus.size());
-				}
+				List<IRSendStatus> scores = addedScores;
 
 				for (IRSendStatus irc : scores) {
 					try {

@@ -116,11 +116,11 @@ public class IRScoreData {
 	/**
 	 * リプレイデータ（打鍵ログを含む）
 	 */
-	public ReplayData replayData;
+	public transient ReplayData replayData;
 	/**
 	 * コース用リプレイデータ
 	 */
-	public ReplayData[] replays;
+	public transient ReplayData[] replays;
 	
 	public IRScoreData(ScoreData score) {
 		this.sha256 = score.getSha256();
