@@ -52,12 +52,12 @@ public class ExtraNoteModifier extends PatternModifier {
             final TimeLine tl = tls[i];
             long currentTime = tl.getMilliTime();
 
-            // 演奏ノートが存在しないタイムラインは対象外
-            if (!tl.existNote()) {
+            // 演奏ノートもBGノートも存在しないタイムラインは対象外
+            if (!tl.existNote() && tl.getBackGroundNotes().length == 0) {
                 continue;
             }
 
-            // タイムライン上に存在する演奏ノートの音源ID(wav)を取得
+            // タイムライン上に存在する演奏ノートの音源ID(wav)を取得 (演奏ノートが無い場合は無音の0)
             int wav = 0;
             for (int key = 0; key < model.getMode().key; key++) {
                 if (tl.getNote(key) != null) {
