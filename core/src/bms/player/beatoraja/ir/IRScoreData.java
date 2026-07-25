@@ -111,6 +111,11 @@ public class IRScoreData {
 	
 	public final String skin;
 
+	/**
+	 * 実プレイ経過時間(ミリ秒単位)
+	 */
+	public final long playDuration;
+
 	public IRGaugeHistory gaugeHistory;
 	
 	/**
@@ -128,6 +133,7 @@ public class IRScoreData {
 		this.player = score.getPlayer();
 		this.clear = ClearType.getClearTypeByID(score.getClear());
 		this.date = score.getDate();
+		this.playDuration = score.getPlayDuration();
 		this.epg = score.getEpg();
 		this.lpg = score.getLpg();
 		this.egr = score.getEgr();

@@ -103,9 +103,11 @@ public class BMSPlayer extends MainState {
 	private boolean analysisChecked = false;
 	private Future<BMSLoudnessAnalyzer.AnalysisResult> analysisTask;
 	private boolean playEndMetricsSent = false;
+	private long playStartTimeMs = 0;
 
 	public BMSPlayer(MainController main, PlayerResource resource) {
 		super(main);
+		this.playStartTimeMs = System.currentTimeMillis();
 		this.model = resource.getBMSModel();
 		BMSPlayerMode autoplay = resource.getPlayMode();
 		PlayerConfig config = resource.getPlayerConfig();
@@ -1062,6 +1064,7 @@ public class BMSPlayer extends MainState {
 			}
 		}
 		score.setClear(clear.id);
+		score.setPlayDuration(playStartTimeMs > 0 ? System.currentTimeMillis() - playStartTimeMs : 0);
 		score.setGauge(gauge.isTypeChanged() ? -1 : gauge.getType());
 		score.setGaugelog(gaugelog);
 		score.setOption(playinfo.randomoption + (model.getMode().player == 2
