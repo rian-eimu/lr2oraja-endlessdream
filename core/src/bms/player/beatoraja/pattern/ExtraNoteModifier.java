@@ -57,15 +57,6 @@ public class ExtraNoteModifier extends PatternModifier {
                 continue;
             }
 
-            // タイムライン上に存在する演奏ノートの音源ID(wav)を取得 (演奏ノートが無い場合は無音の0)
-            int wav = 0;
-            for (int key = 0; key < model.getMode().key; key++) {
-                if (tl.getNote(key) != null) {
-                    wav = tl.getNote(key).getWav();
-                    break;
-                }
-            }
-
             for (int key = 0; key < model.getMode().key; key++) {
                 final Note note = tl.getNote(key);
                 if (note instanceof LongNote ln) {
@@ -118,9 +109,9 @@ public class ExtraNoteModifier extends PatternModifier {
                     break;
                 }
 
-                // 配置可能なキー候補の中からランダムに選択してノーツを配置
+                // 配置可能なキー候補の中からランダムに選択して無音ノーツを配置
                 int chosenKey = candidateKeys.get(random.nextInt(candidateKeys.size()));
-                final Note note = new NormalNote(wav);
+                final Note note = new NormalNote(-1);
                 tl.setNote(chosenKey, note);
                 blank[chosenKey] = false;
                 assist = AssistLevel.ASSIST;
