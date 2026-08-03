@@ -104,10 +104,12 @@ public class BMSPlayer extends MainState {
 	private Future<BMSLoudnessAnalyzer.AnalysisResult> analysisTask;
 	private boolean playEndMetricsSent = false;
 	private long playStartTimeMs = 0;
+	private long playEndTimeMs = 0;
 
 	public BMSPlayer(MainController main, PlayerResource resource) {
 		super(main);
-		this.playStartTimeMs = System.currentTimeMillis();
+		this.playStartTimeMs = 0;
+		this.playEndTimeMs = 0;
 		this.model = resource.getBMSModel();
 		BMSPlayerMode autoplay = resource.getPlayMode();
 		PlayerConfig config = resource.getPlayerConfig();
@@ -746,6 +748,8 @@ public class BMSPlayer extends MainState {
 				if (timer.getNowTime(TIMER_READY) > skin.getPlaystart()) {
 					replayConfig = lanerender.getPlayConfig().clone();
 					state = STATE_PLAY;
+					this.playStartTimeMs = System.currentTimeMillis();
+					this.playEndTimeMs = 0;
 					timer.setMicroTimer(TIMER_PLAY, micronow - starttimeoffset * 1000);
 					timer.setMicroTimer(TIMER_RHYTHM, micronow - starttimeoffset * 1000);
 
@@ -779,6 +783,9 @@ public class BMSPlayer extends MainState {
 				// System.out.println("playing time : " + time);
 				if (playtime < ptime) {
 					state = STATE_FINISHED;
+					if (this.playEndTimeMs == 0 && this.playStartTimeMs > 0) {
+						this.playEndTimeMs = System.currentTimeMillis();
+					}
 					timer.setTimerOn(TIMER_MUSIC_END);
 					for(int i = TIMER_PM_CHARA_1P_NEUTRAL; i <= TIMER_PM_CHARA_2P_BAD; i++) {
 						timer.setTimerOff(i);
@@ -817,6 +824,9 @@ public class BMSPlayer extends MainState {
 					case PlayerConfig.GAUGEAUTOSHIFT_NONE:
 						// FAILED移行
 						state = STATE_FAILED;
+						if (this.playEndTimeMs == 0 && this.playStartTimeMs > 0) {
+							this.playEndTimeMs = System.currentTimeMillis();
+						}
 						timer.setTimerOn(TIMER_FAILED);
 						if (resource.mediaLoadFinished()) {
 							main.getAudioProcessor().stop((Note) null);
@@ -1064,7 +1074,8 @@ public class BMSPlayer extends MainState {
 			}
 		}
 		score.setClear(clear.id);
-		score.setPlayDuration(playStartTimeMs > 0 ? System.currentTimeMillis() - playStartTimeMs : 0);
+		long duration = (playStartTimeMs > 0 && playEndTimeMs > 0) ? (playEndTimeMs - playStartTimeMs) : (playStartTimeMs > 0 ? System.currentTimeMillis() - playStartTimeMs : 0);
+		score.setPlayDuration(duration);
 		score.setGauge(gauge.isTypeChanged() ? -1 : gauge.getType());
 		score.setGaugelog(gaugelog);
 		score.setOption(playinfo.randomoption + (model.getMode().player == 2
