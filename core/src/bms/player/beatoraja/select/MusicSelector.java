@@ -82,7 +82,7 @@ public final class MusicSelector extends MainState {
 	 */
 	private final int previewDuration = 400;
 	
-	private final int rankingDuration = 5000;
+	private final int rankingDuration = 1000;
 	private final int rankingReloadDuration = 10 * 60 * 1000;
 	
 	private long currentRankingDuration = -1;
