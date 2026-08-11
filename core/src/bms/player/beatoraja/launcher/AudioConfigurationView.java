@@ -59,6 +59,9 @@ public class AudioConfigurationView implements Initializable {
 	private CheckBox loopResultSound;
 	@FXML
 	private CheckBox loopCourseResultSound;
+	@FXML
+	private CheckBox playKeySoundOnMiss;
+
 
 	private AudioConfig config;
 
@@ -90,6 +93,7 @@ public class AudioConfigurationView implements Initializable {
 		normalizeVolume.setSelected(config.isNormalizeVolume());
 		loopResultSound.setSelected(config.isLoopResultSound());
 		loopCourseResultSound.setSelected(config.isLoopCourseResultSound());
+		playKeySoundOnMiss.setSelected(config.isPlayKeySoundOnMiss());
 
 		updateAudioDriver();
 		updateNormalizeVolume();
@@ -109,6 +113,7 @@ public class AudioConfigurationView implements Initializable {
 		config.setNormalizeVolume(normalizeVolume.isSelected());
 		config.setLoopResultSound(loopResultSound.isSelected());
 		config.setLoopCourseResultSound(loopCourseResultSound.isSelected());
+		config.setPlayKeySoundOnMiss(playKeySoundOnMiss.isSelected());
 	}
 
 	@FXML

@@ -68,6 +68,11 @@ public class AudioConfig implements Validatable {
 	 */
 	private boolean isLoopCourseResultSound = false;
 
+	/**
+	 * 見逃しPOOR時にキー音を自動再生するか
+	 */
+	private boolean playKeySoundOnMiss = false;
+
 	public DriverType getDriver() {
 		return driver;
 	}
@@ -170,6 +175,14 @@ public class AudioConfig implements Validatable {
 
 	public void setLoopCourseResultSound(boolean loopCourseResultSound) {
 		isLoopCourseResultSound = loopCourseResultSound;
+	}
+
+	public boolean isPlayKeySoundOnMiss() {
+		return playKeySoundOnMiss;
+	}
+
+	public void setPlayKeySoundOnMiss(boolean playKeySoundOnMiss) {
+		this.playKeySoundOnMiss = playKeySoundOnMiss;
 	}
 	
 	public boolean validate() {

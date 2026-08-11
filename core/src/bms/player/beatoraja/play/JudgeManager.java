@@ -645,12 +645,16 @@ public class JudgeManager {
                 }
             }
             // 見逃しPOOR判定
+            final boolean playOnMiss = main.resource.getConfig().getAudioConfig().isPlayKeySoundOnMiss();
             state.lanemodel.reset();
             for (Note note = state.lanemodel.getNote(); note != null
                     && note.getMicroTime() < mtime + mjudge[3][0]; note = state.lanemodel.getNote()) {
                 final int mjud = (int) (note.getMicroTime() - mtime);
                 if (note instanceof NormalNote && note.getState() == 0) {
                     this.updateMicro(state, note, mtime, 4, mjud, true);
+                    if (playOnMiss) {
+                        keysound.play(note, getKeyVolume(), 0);
+                    }
                 } else if (note instanceof LongNote) {
                     final LongNote ln = (LongNote) note;
                     if (!ln.isEnd() && ln.getState() == 0) {
@@ -660,11 +664,17 @@ public class JudgeManager {
                             // System.out.println("CN start poor");
                             this.updateMicro(state, note, mtime, 4, mjud, true);
                             this.updateMicro(state, ((LongNote) note).getPair(), mtime, 4, mjud, true);
+                            if (playOnMiss) {
+                                keysound.play(note, getKeyVolume(), 0);
+                            }
                         }
                         if (((lntype == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
                                 || ln.getType() == LongNote.TYPE_LONGNOTE) && state.processing != ln.getPair()) {
                             // System.out.println("LN start poor");
                             this.updateMicro(state, note, mtime, 4, mjud, true);
+                            if (playOnMiss) {
+                                keysound.play(note, getKeyVolume(), 0);
+                            }
                         }
 
                     }
@@ -673,6 +683,9 @@ public class JudgeManager {
                             && ((LongNote) note).isEnd() && ((LongNote) note).getState() == 0) {
                         // System.out.println("CN end poor");
                         this.updateMicro(state, ((LongNote) note), mtime, 4, mjud, true);
+                        if (playOnMiss) {
+                            keysound.play(((LongNote) note), getKeyVolume(), 0);
+                        }
                         state.processing = null;
                         state.releasetime = Long.MIN_VALUE;
                         state.lnendJudge = Integer.MIN_VALUE;
