@@ -543,16 +543,16 @@ public class IntegerPropertyFactory {
 		playtime_second(162, (state) -> ((((int) (state.timer.isTimerOn(TIMER_PLAY) ? state.timer.getNowTime(TIMER_PLAY) : 0)) / 1000) % 60)),
 		timeleft_minute(163, (state) -> {
 			if (state instanceof BMSPlayer) {
-				return (int) (Math.max((((BMSPlayer) state).getPlaytime()
-						- (int) (state.timer.isTimerOn(TIMER_PLAY) ? state.timer.getNowTime(TIMER_PLAY) : 0) + 1000),
+				return (int) (Math.max((((BMSPlayer) state).getPlayableTime()
+						- (int) (state.timer.isTimerOn(TIMER_PLAY) ? state.timer.getNowTime(TIMER_PLAY) : 0) + 999),
 						0) / 60000);
 			}
 			return Integer.MIN_VALUE;
 		}),
 		timeleft_second(164, (state) -> {
 			if (state instanceof BMSPlayer) {
-				return (Math.max((((BMSPlayer) state).getPlaytime()
-						- (int) (state.timer.isTimerOn(TIMER_PLAY) ? state.timer.getNowTime(TIMER_PLAY) : 0) + 1000),
+				return (Math.max((((BMSPlayer) state).getPlayableTime()
+						- (int) (state.timer.isTimerOn(TIMER_PLAY) ? state.timer.getNowTime(TIMER_PLAY) : 0) + 999),
 						0) / 1000) % 60;
 			}
 			return Integer.MIN_VALUE;

@@ -1263,6 +1263,14 @@ public class BMSPlayer extends MainState {
 		return playtime;
 	}
 
+	/**
+	 * 最終playable notesの演奏終了時刻(ms)を取得する
+	 * @return 最終playable notes時刻
+	 */
+	public int getPlayableTime() {
+		return Math.max(0, playtime - TIME_MARGIN);
+	}
+
 	public Mode getMode() {
 		return model.getMode();
 	}

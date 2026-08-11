@@ -197,7 +197,8 @@ public class SongData implements Validatable, IpfsInformation {
 				}
 			}
 		}
-		length = model.getLastTime();
+		// 不正検知等の比較用に楽曲長(length)は最終playable notes基準にする
+		length = model.getLastNoteTime();
 		notes = model.getTotalNotes();
 
 		timelines = model.getAllTimeLines();

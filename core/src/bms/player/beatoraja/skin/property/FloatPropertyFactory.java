@@ -136,7 +136,7 @@ public class FloatPropertyFactory {
 		return (state) -> {
 			if (state instanceof BMSPlayer) {
 				if (state.timer.isTimerOn(TIMER_PLAY)) {
-					return Math.min((float) state.timer.getNowTime(TIMER_PLAY) / ((BMSPlayer) state).getPlaytime(),
+					return Math.min((float) state.timer.getNowTime(TIMER_PLAY) / ((BMSPlayer) state).getPlayableTime(),
 							1);
 				}
 			}
