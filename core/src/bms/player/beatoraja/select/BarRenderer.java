@@ -11,6 +11,7 @@ import bms.player.beatoraja.select.bar.*;
 import bms.player.beatoraja.skin.*;
 import bms.player.beatoraja.skin.Skin.SkinObjectRenderer;
 
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.IntSet;
 import com.badlogic.gdx.utils.IntSet.IntSetIterator;
@@ -32,6 +33,18 @@ public final class BarRenderer {
 	private final BarManager manager;
 	
 	private final String[] TROPHY = { "bronzemedal", "silvermedal", "goldmedal" };
+
+	/** お気に入りマーカー。ソースの文字コードに依存しないようコードポイントで定義 */
+	private static final char FAVORITE_MARK = 0x2605;
+	private static final String FAVORITE_MARK_TEXT = String.valueOf(FAVORITE_MARK);
+	/**
+	 * マーカーの右端をバーの右端からどれだけ内側に置くか。文字の高さに対する倍率。
+	 * 描画されたマーカーの幅は取得できないが、★はほぼ正方形なので高さを幅の目安に使う。
+	 * 倍率はスキンがスクロールバー等の余白情報を持たないため実測から決めた値
+	 */
+	private static final float FAVORITE_MARK_MARGIN = 2f;
+	/** マーカー描画時の色の退避先。フレーム毎に生成しないよう使い回す */
+	private final Color orgcolor = new Color();
 
 	private final int durationlow;
 	private final int durationhigh;
@@ -219,6 +232,8 @@ public final class BarRenderer {
 					bartextCharset.add(c);
 				}
 			}
+			// お気に入りマーカーは曲名に含まれないため、常にフォント生成対象に加える
+			bartextCharset.add(FAVORITE_MARK);
 			char[] chars = new char[bartextCharset.size];
 			int i = 0;
 			for (IntSetIterator iterator = bartextCharset.iterator();iterator.hasNext;) {
@@ -328,8 +343,8 @@ public final class BarRenderer {
 			}
 			final SkinText text = baro.getText(ba.text);
 			if(text != null) {
-				text.setText(ba.sd.getTitle());
-				text.draw(sprite, ba.x, ba.y);				
+				drawBarTitle(sprite, text, ba, baro.getBarImages(i == skin.getCenterBar(), i),
+						skin.getWidth());
 			}
 		}
 
@@ -454,6 +469,38 @@ public final class BarRenderer {
 				baro.getLabel(1).draw(sprite, ba.x, ba.y);
 			}
 		}
+	}
+
+	/**
+	 * 楽曲バーのタイトルを描画し、お気に入り譜面にはバーの右端にマーカーを添える。
+	 * 曲名の文字列自体は変更しない(getTitle()はBarManager#setSelectedのバー特定や
+	 * タイトルソートの比較に使われるため)。
+	 * SkinTextはバー間で共有されるので、変更した状態は必ず元に戻すこと。
+	 */
+	private void drawBarTitle(SkinObjectRenderer sprite, SkinText text, BarArea ba, SkinImage bar,
+			float skinwidth) {
+		final SongData song = ba.sd instanceof SongBar ? ((SongBar) ba.sd).getSongData() : null;
+		if (bar != null && song != null
+				&& (song.getFavorite() & (SongData.FAVORITE_SONG | SongData.FAVORITE_CHART)) != 0) {
+			final int orgalign = text.getAlign();
+			// バー本体もタイトル枠も画面外まで伸びる値を設定するスキンがあるため、
+			// バーの右端と画面の右端のうち手前を採る
+			final float right = Math.min(ba.x + bar.region.width, skinwidth)
+					- text.region.height * FAVORITE_MARK_MARGIN;
+			orgcolor.set(text.color);
+			text.setAlign(SkinText.ALIGN_RIGHT);
+			// アルファは元の値を引き継ぐ。曲名をフェードさせるスキンでマーカーだけ残らないよう
+			text.color.set(Color.GOLD.r, Color.GOLD.g, Color.GOLD.b, orgcolor.a);
+			text.setText(FAVORITE_MARK_TEXT);
+			// 右寄せ時は描画された文字の右端が region.x + オフセット に来る。region.xはバー
+			// 相対座標なので、絶対座標のrightから引いた値を渡すとrightが右端になる
+			text.draw(sprite, right - text.region.x, ba.y);
+			text.setAlign(orgalign);
+			text.color.set(orgcolor);
+		}
+		// 長い曲名がマーカーに重なったとき曲名側を優先するため、マーカーより後に描く
+		text.setText(ba.sd.getTitle());
+		text.draw(sprite, ba.x, ba.y);
 	}
 
 	public void input() {
