@@ -59,8 +59,11 @@
             </valueFactory>
         </NumericSpinner>
 
-        <Label text="%BGA_EXPAND" GridPane.rowIndex="9" GridPane.columnIndex="0" styleClass="optionLabel"/>
-        <ComboBox fx:id="bgaExpand" GridPane.rowIndex="9" GridPane.columnIndex="1">
+        <Label text="%HIDE_MISSLAYER_ON_GOOD" GridPane.rowIndex="9" GridPane.columnIndex="0" styleClass="optionLabel"/>
+        <CheckBox fx:id="hideMisslayerOnGood" mnemonicParsing="false" GridPane.rowIndex="9" GridPane.columnIndex="1"/>
+
+        <Label text="%BGA_EXPAND" GridPane.rowIndex="10" GridPane.columnIndex="0" styleClass="optionLabel"/>
+        <ComboBox fx:id="bgaExpand" GridPane.rowIndex="10" GridPane.columnIndex="1">
             <items>
                 <FXCollections fx:factory="observableArrayList">
                     <String fx:value="Full"/>

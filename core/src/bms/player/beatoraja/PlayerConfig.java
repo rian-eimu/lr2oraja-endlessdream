@@ -105,6 +105,11 @@ public final class PlayerConfig {
 	private int misslayerDuration = 500;
 
 	/**
+	 * GOOD以上を出した場合にミスレイヤーを即座に非表示にするか
+	 */
+	private boolean hideMisslayerOnGood = false;
+
+	/**
 	 * 難易度フィルター (0:ALL, 1:BEG, 2:NOR, 3:HYP, 4:ANO, 5:INS)
 	 */
 	private int difficultyFilter = 0;
@@ -658,6 +663,14 @@ public final class PlayerConfig {
 
 	public void setMisslayerDuration(int misslayerTime) {
 		this.misslayerDuration = misslayerTime;
+	}
+
+	public boolean isHideMisslayerOnGood() {
+		return hideMisslayerOnGood;
+	}
+
+	public void setHideMisslayerOnGood(boolean hideMisslayerOnGood) {
+		this.hideMisslayerOnGood = hideMisslayerOnGood;
 	}
 
 	public boolean isCustomJudge() {

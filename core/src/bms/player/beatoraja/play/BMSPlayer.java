@@ -1228,6 +1228,8 @@ public class BMSPlayer extends MainState {
 	public void update(int judge, long time) {
 		if (this.judge.getCombo() == 0) {
 			bga.setMisslayerTme(time);
+		} else if (main.getPlayerConfig().isHideMisslayerOnGood() && judge <= 2) {
+			bga.setMisslayerTme(0);
 		}
 		gauge.update(judge);
 		// System.out.println("Now count : " + notes + " - " + totalnotes);
