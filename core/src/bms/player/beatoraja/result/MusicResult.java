@@ -42,6 +42,8 @@ public class MusicResult extends AbstractResult {
 	private Mode originalMode;
 	// 【追加】 モード復元済みフラグ
 	private boolean isModeRestored = false;
+	// 【追加】 モード変更有無フラグ
+	private boolean modeChanged = false;
 
 	public MusicResult(MainController main) {
 		super(main);
@@ -60,7 +62,7 @@ public class MusicResult extends AbstractResult {
 		this.originalMode = resource.getPlayerConfig().getMode();
 
 		// モード変更があったかどうかのフラグ
-		boolean modeChanged = false;
+		modeChanged = false;
 
 		// 【修正】 リザルト画面では5鍵/10鍵曲でも、7鍵/14鍵コントローラーの入力(Key 6,7等)を使えるようにする
 		if (mode == Mode.BEAT_5K) {
@@ -558,7 +560,7 @@ public class MusicResult extends AbstractResult {
 
 	// 【追加】 モード復元処理
 	private void restoreMode() {
-		if (!isModeRestored && this.originalMode != null) {
+		if (!isModeRestored && modeChanged) {
 			resource.getPlayerConfig().setMode(this.originalMode);
 			// ここで入力プロセッサの設定を復元しても、MusicSelector.create()で再設定されるが、
 			// 状態の不整合を防ぐために念のため設定しておく
