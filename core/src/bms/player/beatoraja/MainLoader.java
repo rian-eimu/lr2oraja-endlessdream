@@ -395,20 +395,16 @@ public class MainLoader extends Application {
 
 		private void getInformation() {
 			try {
-				URL url = new URL("https://api.github.com/repos/seraxis/lr2oraja-endlessdream/releases/latest");
+				URL url = new URL("https://api.github.com/repos/rian-eimu/lr2oraja-endlessdream/releases/latest");
 				ObjectMapper mapper = new ObjectMapper();
 				GithubLastestRelease lastestData = mapper.readValue(url, GithubLastestRelease.class);
 				final String name = lastestData.name;
 				if (Version.compareToString(name) == 0) {
-					message = "Already on the latest version";
+					message = "最新版を利用中です";
 				} else if (Version.compareToString(name) == -1) {
-					message = String.format("Version [%s] is available to download", name);
+					message = String.format("最新版[%s]を利用可能です。", name);
 					dlurl = lastestData.html_url;
-				} else {
-                    // TODO: can we actually check if the current build is greater than the previous one by commit hash or build date? Doesn't seem possible with the latter
-                    message = "On Unstable Development Build [" + Version.getGitCommitHash() + "] for " + Version.getVersion();
-                    dlurl = "https://github.com/seraxis/lr2oraja-endlessdream/releases/tag/pre-release";
-                }
+				}
 			} catch (Exception e) {
 				logger.warn("最新版URL取得時例外:{}", e.getMessage());
 				message = "バージョン情報を取得できませんでした";
