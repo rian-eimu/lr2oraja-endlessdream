@@ -1,11 +1,24 @@
 #!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
+const { checkHelp, ensureDirSync } = require("./common");
+
+const HELP_TEXT = `
+setup.js - Tilly AI Agents セットアップツール
+
+【概要】
+  プロジェクトルートの .agents ディレクトリに workflows, skills, bin を
+  シンボリックリンク（またはコピー）して同期・セットアップします。
+
+【使用法】
+  node .agents/bin/setup.js [オプション]
+
+【オプション】
+  -h, --help, /?, /help   このヘルプメッセージを表示
+`;
 
 function copyFolderRecursiveSync(source, target) {
-  if (!fs.existsSync(target)) {
-    fs.mkdirSync(target, { recursive: true });
-  }
+  ensureDirSync(target);
   const files = fs.readdirSync(source);
   for (const file of files) {
     const curSource = path.join(source, file);
@@ -23,46 +36,53 @@ function syncDirectory(sourceDir, targetDir, dirName) {
   console.log(`  Source: ${sourceDir}`);
   console.log(`  Target: ${targetDir}`);
 
-  // Clean up existing target if it exists
-  if (fs.existsSync(targetDir)) {
+  let realSourceDir = sourceDir;
+  try {
+    if (fs.existsSync(sourceDir)) {
+      realSourceDir = fs.realpathSync(sourceDir);
+    }
+  } catch (_) {}
+
+  let targetExistsOnDisk = false;
+  try {
+    fs.lstatSync(targetDir);
+    targetExistsOnDisk = true;
+  } catch (_) {
+    targetExistsOnDisk = false;
+  }
+
+  if (targetExistsOnDisk) {
     try {
-      const lstat = fs.lstatSync(targetDir);
-      if (lstat.isSymbolicLink() || lstat.isDirectory()) {
-        fs.rmSync(targetDir, { recursive: true, force: true });
-      }
+      fs.rmSync(targetDir, { recursive: true, force: true });
     } catch (e) {
       console.warn(
-        `Warning: Could not remove existing directory ${targetDir}: ${e.message}`,
+        `Warning: Could not remove existing target ${targetDir}: ${e.message}`,
       );
     }
   }
 
-  // Try creating a symlink (junction on Windows, symlink on other platforms)
   try {
     const type = process.platform === "win32" ? "junction" : "dir";
-    fs.symlinkSync(sourceDir, targetDir, type);
+    fs.symlinkSync(realSourceDir, targetDir, type);
     console.log(`  Successfully symlinked ${dirName} directory (${type}).`);
   } catch (err) {
     console.warn(
       `  Failed to create symlink for ${dirName}: ${err.message}. Falling back to copying files...`,
     );
-    // Fallback to copy
-    copyFolderRecursiveSync(sourceDir, targetDir);
+    copyFolderRecursiveSync(realSourceDir, targetDir);
     console.log(`  Successfully copied ${dirName} directory.`);
   }
 }
 
 function main() {
+  checkHelp(HELP_TEXT);
+
   const projectRoot = process.cwd();
   const packageDir = path.join(__dirname, "..");
   const targetAgentsDir = path.join(projectRoot, ".agents");
 
   console.log(`Setting up Tilly AI Agents...`);
-
-  // Ensure .agents directory exists
-  if (!fs.existsSync(targetAgentsDir)) {
-    fs.mkdirSync(targetAgentsDir, { recursive: true });
-  }
+  ensureDirSync(targetAgentsDir);
 
   const dirsToSync = ["workflows", "skills", "bin"];
 
@@ -78,4 +98,11 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  syncDirectory,
+  copyFolderRecursiveSync,
+};

@@ -1,43 +1,117 @@
 #!/usr/bin/env node
+"use strict";
+
 const fs = require("fs");
 const path = require("path");
 const { parseArgs } = require("node:util");
+const {
+  checkHelp,
+  ensureDirSync,
+  resolveSessionId,
+} = require("./common");
 
-function parseArguments() {
+// ============================================================================
+// Constants & Configuration
+// ============================================================================
+
+const DEFAULT_REVIEW_DIR = "tmp/code-reviews";
+const DEFAULT_FALLBACK_TEXT = "具体的な改善提案はありません。";
+const NO_ISSUES_TEXT = "指摘事項（問題ありと判定されたフェーズ）はありませんでした。";
+
+const SUGGESTION_KEYWORDS = [
+  "脆弱性",
+  "リファクタリング",
+  "改善提案",
+  "改善案",
+  "問題点",
+  "指摘事項",
+  "検出された問題",
+  "課題",
+  "修正案",
+  "設計図",
+  "suggestion",
+  "improvement",
+  "refactor",
+  "vulnerabilit",
+  "issue",
+  "problem",
+  "recommendation",
+];
+
+const FACT_KEYWORDS = [
+  "評価プロセス",
+  "ファクト",
+  "検査プロセス",
+  "検証サマリー",
+  "fact",
+  "evaluation process",
+  "検出された欠陥",
+  "欠陥",
+  "defect",
+];
+
+const EXCLUDE_FROM_SUGGESTIONS = ["テスト戦略", "test strategy"];
+
+const HELP_TEXT = `
+extract-issues.js - 指摘事項＆改善提案 抽出ツール
+
+【概要】
+  統合レビューレポート（{SSS}-integrated-review-report_*.md）から、
+  合格基準未達（REJECT/FAIL）または減点・欠陥が存在するフェーズの改善提案を抽出し、
+  LLMコンテキスト節約用のサマリー（{SSS}-extracted_issues.md）を出力します。
+
+【使用法】
+  node .agents/bin/extract-issues.js [オプション] [入力レポートパス] [出力先パス]
+
+【オプション】
+  -s, --session-id <ID>   セッションID（例: 001）。未指定時は最新レポートを自動検出
+  --include-facts         検出された欠陥の詳細セクションもサマリーに含める
+  -f, --force             強制上書き実行
+  -h, --help, /?, /help   このヘルプメッセージを表示
+`;
+
+// ============================================================================
+// CLI & Path Resolution
+// ============================================================================
+
+function parseCliArgs() {
+  checkHelp(HELP_TEXT);
+
   const options = {
     "include-facts": { type: "boolean", default: false },
     force: { type: "boolean", default: false },
     "session-id": { type: "string", short: "s", default: "" },
+    help: { type: "boolean", short: "h", default: false },
   };
+
   const { values, positionals } = parseArgs({
     options,
     allowPositionals: true,
+    strict: false,
   });
+
   return {
     includeFacts: values["include-facts"],
     force: values.force,
     sessionId: values["session-id"],
+    help: values.help,
     customReportPath: positionals[0] || "",
     customOutputPath: positionals[1] || "",
   };
 }
 
-function findTargetReport(defaultDir, sessionId) {
-  if (!fs.existsSync(defaultDir)) {
-    console.error(`Error: Default directory not found at ${defaultDir}`);
-    process.exit(1);
-  }
-  const files = fs.readdirSync(defaultDir);
+function findLatestReport(targetDir, sessionId) {
+  ensureDirSync(targetDir);
+
+  const files = fs.readdirSync(targetDir);
   const matched = files
-    .filter(
-      (f) => f.includes("-integrated-review-report_") && f.endsWith(".md"),
-    )
+    .filter((f) => f.includes("-integrated-review-report_") && f.endsWith(".md"))
     .filter((f) => !sessionId || f.startsWith(`${sessionId}-`))
     .map((f) => ({
       name: f,
-      time: fs.statSync(path.join(defaultDir, f)).mtimeMs,
+      mtime: fs.statSync(path.join(targetDir, f)).mtimeMs,
     }))
-    .sort((a, b) => b.time - a.time);
+    .sort((a, b) => b.mtime - a.mtime);
 
   if (matched.length === 0) {
     console.error(
@@ -45,20 +119,19 @@ function findTargetReport(defaultDir, sessionId) {
     );
     process.exit(1);
   }
-  return path.join(defaultDir, matched[0].name);
+
+  return path.join(targetDir, matched[0].name);
 }
 
-function resolvePaths(customReportPath, customOutputPath, sessionId) {
-  const defaultDir = path.join(__dirname, "../../tmp/code-reviews");
+function resolveFilePaths(customReportPath, customOutputPath, sessionId) {
+  const defaultDir = path.resolve(process.cwd(), DEFAULT_REVIEW_DIR);
   let reportPath = customReportPath;
 
   if (!reportPath) {
-    reportPath = findTargetReport(defaultDir, sessionId);
-  } else {
-    if (!fs.existsSync(reportPath)) {
-      console.error(`Error: Input report file not found: ${reportPath}`);
-      process.exit(1);
-    }
+    reportPath = findLatestReport(defaultDir, sessionId);
+  } else if (!fs.existsSync(reportPath)) {
+    console.error(`Error: Input report file not found: ${reportPath}`);
+    process.exit(1);
   }
 
   let outputPath = customOutputPath;
@@ -72,16 +145,62 @@ function resolvePaths(customReportPath, customOutputPath, sessionId) {
   return { reportPath, outputPath };
 }
 
-function testIsIssue(facts, gateResult) {
-  if (/\*\*F\*\*:\s*([1-9]\d*)/.test(facts)) return true;
-  if (/\*\*M\*\*:\s*([1-9]\d*)/.test(facts)) return true;
-  if (/\*\*m\*\*:\s*([1-9]\d*)/.test(facts)) return true;
-  if (facts.includes("RED CARD") || facts.includes("FAIL")) return true;
-  if (gateResult.includes("FAIL") || gateResult.includes("💀")) return true;
+// ============================================================================
+// Phase & Keyword Helpers
+// ============================================================================
+
+function normalizePhaseKey(phaseStr) {
+  if (!phaseStr) return "";
+  const cleaned = phaseStr.replace(/[*_`【】\[\]]/g, "").trim();
+  const m = cleaned.match(/(?:Phase|フェーズ)?\s*(\d+)(?:[\-_.](\d+))?/i);
+  if (m) {
+    const main = parseInt(m[1], 10);
+    const sub = m[2] !== undefined ? parseInt(m[2], 10) : null;
+    return sub !== null ? `phase-${main}-${sub}` : `phase-${main}`;
+  }
+  return cleaned.toLowerCase();
+}
+
+function classifySectionHeading(rawName) {
+  const norm = rawName.toLowerCase().replace(/[*_`#]/g, "").trim();
+
+  const isSuggestion = SUGGESTION_KEYWORDS.some((kw) => norm.includes(kw));
+  const isExcluded = EXCLUDE_FROM_SUGGESTIONS.some((kw) => norm.includes(kw));
+
+  if (isSuggestion && !isExcluded) {
+    return "Suggestions";
+  }
+
+  const isFact = FACT_KEYWORDS.some((kw) => norm.includes(kw));
+  if (isFact) {
+    return "Facts";
+  }
+
+  return null;
+}
+
+function isProblematicPhase(facts, gateResult, scoreText) {
+  if (/\bF\b[*_]*:\s*([1-9]\d*)/i.test(facts)) return true;
+  if (/\bM\b[*_]*:\s*([1-9]\d*)/i.test(facts)) return true;
+  if (/\bm\b[*_]*:\s*([1-9]\d*)/i.test(facts)) return true;
+
+  if (/RED\s*CARD/i.test(facts) || /FAIL/i.test(facts) || /REJECT/i.test(facts)) return true;
+  if (/FAIL/i.test(gateResult) || /REJECT/i.test(gateResult) || gateResult.includes("💀") || gateResult.includes("🔴")) return true;
+
+  const scoreMatch = (scoreText || "").match(/(\d+)\s*\/\s*100/);
+  if (scoreMatch) {
+    const scoreVal = parseInt(scoreMatch[1], 10);
+    if (scoreVal < 100) return true;
+  }
+
   return false;
 }
 
-function parseQualitySummary(lines) {
+// ============================================================================
+// Markdown Report Parsers
+// ============================================================================
+
+function parseQualitySummaryTable(lines) {
   let inTable = false;
   const tableHeaders = [];
   const extractedRows = [];
@@ -92,100 +211,111 @@ function parseQualitySummary(lines) {
     if (inTable && line.trim() === "") {
       break;
     }
+
     if (
       !inTable &&
-      (/^\|\s*フェーズ\s*\|/.test(line) || /^\|\s*.*Gate 1/.test(line))
+      (/^\|\s*(?:フェーズ|Phase)/i.test(line) || /^\|\s*.*Gate\s*\d+/i.test(line))
     ) {
       inTable = true;
       tableHeaders.push(line);
       continue;
     }
+
     if (!inTable) continue;
-    if (/^\|\s*:?---\s*:?/.test(line)) {
+
+    if (/^\|\s*:?---/.test(line)) {
       tableHeaders.push(line);
       continue;
     }
+
     if (!line.startsWith("|")) continue;
 
-    const columns = line.split("|");
-    if (columns.length < 6) continue;
+    const columns = line.split("|").map((c) => c.trim());
+    if (columns.length < 5) continue;
 
-    const phaseName = columns[1].trim().replace(/\*\*|\*/g, "");
-    const title = columns[2].trim();
-    const score = columns[3].trim();
-    const gateResult = columns[4].trim();
-    const facts = columns[5].trim();
+    const rawPhaseName = columns[1].replace(/\*\*|\*/g, "").trim();
+    const title = columns[2] || "";
+    const score = columns[3] || "";
+    const gateResult = columns[4] || "";
+    const facts = columns[5] || "";
 
-    if (testIsIssue(facts, gateResult)) {
+    if (isProblematicPhase(facts, gateResult, score)) {
       extractedRows.push(line);
-      targetPhases.push(phaseName);
-      phaseMeta[phaseName] = { title, score, gateResult, facts };
+      targetPhases.push(rawPhaseName);
+      const normKey = normalizePhaseKey(rawPhaseName);
+      phaseMeta[normKey] = {
+        rawPhaseName,
+        title,
+        score,
+        gateResult,
+        facts,
+      };
     }
   }
 
   return { tableHeaders, extractedRows, targetPhases, phaseMeta };
 }
 
-function getSectionType(rawName) {
-  if (
-    rawName.includes("脆弱性") ||
-    rawName.includes("リファクタリング") ||
-    (rawName.includes("改善提案") && !rawName.includes("テスト戦略"))
-  ) {
-    return "Suggestions";
-  }
-  if (rawName.includes("評価プロセス") || rawName.includes("ファクト")) {
-    return "Facts";
-  }
-  return null;
-}
-
-function extractDetailBlocks(lines) {
+function parseDetailPhaseBlocks(lines) {
   const detailBlocks = {};
-  let currentPhase = null;
+  let currentNormKey = null;
   let currentSection = null;
   let sectionBuffer = [];
+  let fullPhaseBuffer = [];
+
+  const flushSection = () => {
+    if (!currentNormKey) return;
+    const text = sectionBuffer.join("\n").trim();
+    if (currentSection && text) {
+      if (!detailBlocks[currentNormKey]) detailBlocks[currentNormKey] = {};
+      if (!detailBlocks[currentNormKey][currentSection]) {
+        detailBlocks[currentNormKey][currentSection] = text;
+      } else {
+        detailBlocks[currentNormKey][currentSection] += "\n\n" + text;
+      }
+    }
+    sectionBuffer = [];
+  };
+
+  const flushPhase = () => {
+    flushSection();
+    if (currentNormKey && fullPhaseBuffer.length > 0) {
+      if (!detailBlocks[currentNormKey]) detailBlocks[currentNormKey] = {};
+      detailBlocks[currentNormKey]["AllContent"] = fullPhaseBuffer.join("\n").trim();
+    }
+    fullPhaseBuffer = [];
+  };
 
   for (const line of lines) {
-    const phaseMatch = line.match(/^#\s*【(Phase\s*\d+-\d+)】/);
+    const phaseMatch =
+      line.match(/^#{1,3}\s*【?(?:Phase|フェーズ)\s*([\d]+(?:[\-_.]\d+)?)】?/i) ||
+      line.match(/^#{1,3}\s*【(Phase\s*[\d\-_\.]+)】/i);
+
     if (phaseMatch) {
-      if (currentPhase && currentSection) {
-        detailBlocks[currentPhase][currentSection] = sectionBuffer
-          .join("\n")
-          .trim();
-      }
-      currentPhase = phaseMatch[1];
-      if (!detailBlocks[currentPhase]) {
-        detailBlocks[currentPhase] = {};
+      flushPhase();
+      currentNormKey = normalizePhaseKey(phaseMatch[1]);
+      if (!detailBlocks[currentNormKey]) {
+        detailBlocks[currentNormKey] = {};
       }
       currentSection = null;
-      sectionBuffer = [];
       continue;
     }
 
-    if (!currentPhase) continue;
+    if (!currentNormKey) continue;
 
-    const sectionMatch = line.match(/^##\s*(.*)$/);
+    fullPhaseBuffer.push(line);
+
+    const sectionMatch = line.match(/^#{2,4}\s+(.*)$/);
     if (sectionMatch) {
-      if (currentSection) {
-        detailBlocks[currentPhase][currentSection] = sectionBuffer
-          .join("\n")
-          .trim();
-      }
-      currentSection = getSectionType(sectionMatch[1]);
-      sectionBuffer = [];
+      flushSection();
+      currentSection = classifySectionHeading(sectionMatch[1]);
       continue;
     }
 
-    if (line.startsWith("---")) {
-      if (currentSection) {
-        detailBlocks[currentPhase][currentSection] = sectionBuffer
-          .join("\n")
-          .trim();
-      }
-      currentPhase = null;
+    if (line.trim() === "---") {
+      flushPhase();
+      currentNormKey = null;
       currentSection = null;
-      sectionBuffer = [];
       continue;
     }
 
@@ -194,50 +324,105 @@ function extractDetailBlocks(lines) {
     }
   }
 
-  if (currentPhase && currentSection) {
-    detailBlocks[currentPhase][currentSection] = sectionBuffer
-      .join("\n")
-      .trim();
-  }
-
+  flushPhase();
   return detailBlocks;
 }
 
-function buildOutputMarkdown(
+// ============================================================================
+// Markdown Document Builder
+// ============================================================================
+
+function buildIssuesMarkdown(
   reportPath,
   tableHeaders,
   extractedRows,
   targetPhases,
   phaseMeta,
   detailBlocks,
-  includeFacts,
+  includeFacts = false,
 ) {
-  let detailsText =
-    "指摘事項（問題ありと判定されたフェーズ）はありませんでした。";
-  if (targetPhases.length > 0) {
-    const details = targetPhases.map((phase) => {
-      const meta = phaseMeta[phase];
-      const sugContent =
-        (detailBlocks[phase] && detailBlocks[phase]["Suggestions"]) ||
-        "具体的な改善提案はありません。";
-      let factSection = "";
-      if (includeFacts && detailBlocks[phase] && detailBlocks[phase]["Facts"]) {
-        factSection = `\n\n#### 📝 検出ファクト\n\n${detailBlocks[phase]["Facts"]}\n`;
-      }
-      return `### 🔴 [${phase}] ${meta.title}\n\n- **スコア**: ${meta.score}\n- **判定**: ${meta.gateResult}\n- **件数サマリー**: ${meta.facts}\n\n#### 💡 改善提案\n\n${sugContent}${factSection}\n---\n`;
-    });
-    detailsText = details.join("\n");
+  const lines = [
+    `# 抽出された指摘事項サマリー (Extracted Issues)`,
+    ``,
+    `元レポート: \`${path.basename(reportPath)}\``,
+    `抽出日時: ${new Date().toISOString().replace("T", " ").replace(/\..+/, "")}`,
+    ``,
+    `## 1. 指摘対象フェーズ一覧 (Quality Gate Rejection / Issue Rows)`,
+    ``,
+  ];
+
+  if (extractedRows.length > 0) {
+    lines.push(...tableHeaders);
+    lines.push(...extractedRows);
+  } else {
+    lines.push(`> 🟢 **合格 / 指摘なし**: すべてのフェーズが合格基準（Gate Pass / 100点）を満たしています。`);
   }
 
-  const reportName = path.basename(reportPath);
-  return `# 抽出された指摘・改善事項一覧\n\n元レポート: [${reportName}](${reportPath})\n\n## 1. 品質評価サマリー（問題ありフェーズのみ）\n\n${tableHeaders.join("\n")}\n${extractedRows.join("\n")}\n\n---\n\n## 2. 指摘・改善提案の詳細\n\n${detailsText}`;
+  lines.push(``, `---`, ``, `## 2. フェーズ別 改善提案詳細 (Detailed Suggestions)`, ``);
+
+  if (targetPhases.length === 0) {
+    lines.push(NO_ISSUES_TEXT, ``);
+  } else {
+    const details = targetPhases.map((rawPhaseName, idx) => {
+      const normKey = normalizePhaseKey(rawPhaseName);
+      const meta = phaseMeta[normKey] || {
+        rawPhaseName,
+        title: "No Title",
+        score: "Unknown",
+        gateResult: "Unknown",
+        facts: "Unknown",
+      };
+
+      let phaseBlock = detailBlocks[normKey];
+      if (!phaseBlock) {
+        const keys = Object.keys(detailBlocks);
+        const matchedKey = keys.find(
+          (k) => k.includes(normKey) || normKey.includes(k),
+        );
+        if (matchedKey) phaseBlock = detailBlocks[matchedKey];
+        else if (keys[idx]) phaseBlock = detailBlocks[keys[idx]];
+      }
+
+      const sugContent =
+        (phaseBlock && phaseBlock["Suggestions"]) ||
+        (phaseBlock && phaseBlock["AllContent"]) ||
+        DEFAULT_FALLBACK_TEXT;
+
+      let factSection = "";
+      if (includeFacts && phaseBlock && phaseBlock["Facts"]) {
+        factSection = `\n\n#### 📝 検出欠陥\n\n${phaseBlock["Facts"]}\n`;
+      }
+
+      return [
+        `### 🔴 [${rawPhaseName}] ${meta.title}`,
+        ``,
+        `- **スコア**: ${meta.score}`,
+        `- **判定**: ${meta.gateResult}`,
+        `- **件数サマリー**: ${meta.facts}`,
+        ``,
+        `#### 💡 改善提案`,
+        ``,
+        `${sugContent}${factSection}`,
+        `---`,
+        ``,
+      ].join("\n");
+    });
+
+    lines.push(...details);
+  }
+
+  return lines.join("\n");
 }
+
+// ============================================================================
+// Main Execution
+// ============================================================================
 
 function main() {
   const { includeFacts, force, sessionId, customReportPath, customOutputPath } =
-    parseArguments();
+    parseCliArgs();
 
-  const { reportPath, outputPath } = resolvePaths(
+  const { reportPath, outputPath } = resolveFilePaths(
     customReportPath,
     customOutputPath,
     sessionId,
@@ -249,10 +434,10 @@ function main() {
   const lines = fs.readFileSync(reportPath, "utf8").split(/\r?\n/);
 
   const { tableHeaders, extractedRows, targetPhases, phaseMeta } =
-    parseQualitySummary(lines);
-  const detailBlocks = extractDetailBlocks(lines);
+    parseQualitySummaryTable(lines);
+  const detailBlocks = parseDetailPhaseBlocks(lines);
 
-  const finalContent = buildOutputMarkdown(
+  const finalContent = buildIssuesMarkdown(
     reportPath,
     tableHeaders,
     extractedRows,
@@ -269,4 +454,15 @@ function main() {
   console.log(`Extracted Issues Count: ${targetPhases.length}`);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  normalizePhaseKey,
+  classifySectionHeading,
+  isProblematicPhase,
+  parseQualitySummaryTable,
+  parseDetailPhaseBlocks,
+  buildIssuesMarkdown,
+};

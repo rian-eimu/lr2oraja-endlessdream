@@ -2,8 +2,34 @@
 const fs = require("fs");
 const path = require("path");
 const { parseArgs } = require("node:util");
+const {
+  checkHelp,
+  ensureDirSync,
+  getTimestampString,
+} = require("./common");
+
+const HELP_TEXT = `
+build-prompt.js - 動的プロンプト＆コンテキスト結合ツール
+
+【概要】
+  コアレビュー基準、言語別仕様プロンプト、プロジェクト固有プロンプトを結合し、
+  動的プロンプトファイル（{SSS}-combined-system.prompt.md）および
+  アクティブセッションファイル（{SSS}-active-context.json）を生成します。
+
+【使用法】
+  node .agents/bin/build-prompt.js [オプション]
+
+【オプション】
+  -s, --session-id <ID>   セッションID（例: 001）。デフォルト: 001
+  -l, --lang <LANG>       言語種別（csharp, ts, python等）。デフォルト: csharp
+  -p, --phase <PHASE>     対象フェーズ（例: Phase 01）。デフォルト: Unknown
+  -f, --files <FILES>     対象ファイル一覧（カンマ区切り）。デフォルト: 空
+  -h, --help, /?, /help   このヘルプメッセージを表示
+`;
 
 function parseArguments() {
+  checkHelp(HELP_TEXT);
+
   const options = {
     "session-id": { type: "string", short: "s", default: "001" },
     lang: { type: "string", short: "l", default: "csharp" },
@@ -13,7 +39,7 @@ function parseArguments() {
 
   const { values } = parseArgs({ options, strict: false });
   return {
-    sessionId: values["session-id"],
+    sessionId: values["session-id"].padStart(3, "0"),
     lang: values.lang,
     phase: values.phase,
     filesStr: values.files,
@@ -73,29 +99,22 @@ function createContextData(
   matchedProjSpec,
 ) {
   const targetFiles = filesStr ? filesStr.split(",").map((f) => f.trim()) : [];
-  const now = new Date();
-  const timestamp =
-    now.getFullYear() +
-    String(now.getMonth() + 1).padStart(2, "0") +
-    String(now.getDate()).padStart(2, "0") +
-    "_" +
-    String(now.getHours()).padStart(2, "0") +
-    String(now.getMinutes()).padStart(2, "0") +
-    String(now.getSeconds()).padStart(2, "0");
+  const timestamp = getTimestampString();
 
   return {
-    sessionId,
+    session_id: sessionId,
     timestamp,
-    targetRepository: path.basename(projectRoot),
-    targetFiles,
-    appliedSpecs: {
+    target_repository: path.basename(projectRoot),
+    current_phase: phase,
+    completed_phases: [],
+    next_target_files: targetFiles,
+    applied_specs: {
       core: path.relative(projectRoot, corePath),
       language: fs.existsSync(langPath)
         ? path.relative(projectRoot, langPath)
         : null,
       project: matchedProjSpec,
     },
-    currentPhase: phase,
     status: "In-Progress",
   };
 }
@@ -106,10 +125,7 @@ function main() {
   const projectRoot = process.cwd();
   const packageDir = path.join(__dirname, "..");
   const tmpDir = path.resolve(projectRoot, "tmp/code-reviews");
-
-  if (!fs.existsSync(tmpDir)) {
-    fs.mkdirSync(tmpDir, { recursive: true });
-  }
+  ensureDirSync(tmpDir);
 
   const { promptContent, corePath, langPath, matchedProjSpec } =
     buildPromptContent(packageDir, projectRoot, lang);
@@ -137,4 +153,11 @@ function main() {
   console.log(`- Combined Prompt: ${promptFile}`);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  buildPromptContent,
+  createContextData,
+};

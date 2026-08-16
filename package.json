@@ -1,7 +1,7 @@
 {
   "scripts": {
     "setup": "npm install && npx antigravity-global-agents",
-    "update-agents": "npm install git+ssh://git@github.com:kassyi/antigravity-global-agents.git#main && npm run setup"
+    "update:agents": "npm install git+ssh://git@github.com:kassyi/antigravity-global-agents.git#main && npm run setup"
   },
   "devDependencies": {
     "antigravity-global-agents": "github:kassyi/antigravity-global-agents#main"

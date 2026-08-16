@@ -2,14 +2,17 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { checkHelp } = require("./common");
 
-// 判定閾値
+// ============================================================================
+// Constants & Configuration
+// ============================================================================
+
 const THRESHOLD_FILES = 10;
 const THRESHOLD_LOC = 2000;
 const THRESHOLD_SIZE = 100 * 1024; // 100KB
-const MAX_READ_SIZE = 10 * 1024 * 1024; // 10MB (読み込み制限)
+const MAX_READ_SIZE = 10 * 1024 * 1024; // 10MB
 
-// スキャンから除外するディレクトリ・ファイル名のリスト
 const EXCLUDE_DIRS = new Set([
   ".git",
   "node_modules",
@@ -23,7 +26,24 @@ const EXCLUDE_DIRS = new Set([
   ".cache",
 ]);
 
-// 再帰的にファイルを収集する関数
+const HELP_TEXT = `
+check-meta-scan.js - メタスキャン要否判定ツール
+
+【概要】
+  レビュー対象のファイル数・コード行数（LOC）・変更差分サイズ等を高速解析し、
+  Flashモデルによるメタスキャン（分割レビュー）が推奨される規模であるかを判定します。
+
+【使用法】
+  node .agents/bin/check-meta-scan.js [対象パス] [オプション]
+
+【オプション】
+  -h, --help, /?, /help   このヘルプメッセージを表示
+`;
+
+// ============================================================================
+// File Discovery & Metrics
+// ============================================================================
+
 function getFilesRecursively(dir, fileList = []) {
   if (!fs.existsSync(dir)) return fileList;
   try {
@@ -46,13 +66,10 @@ function getFilesRecursively(dir, fileList = []) {
         fileList.push(filePath);
       }
     }
-  } catch (e) {
-    // Permission denied or locked files
-  }
+  } catch (_) {}
   return fileList;
 }
 
-// ファイルのメトリクス（サイズとLOC）を取得する関数
 function getFileMetrics(filePath) {
   let size = 0;
   let loc = 0;
@@ -60,26 +77,20 @@ function getFileMetrics(filePath) {
     const stat = fs.statSync(filePath);
     size = stat.size;
 
-    // 巨大すぎるファイルやバイナリの読み込みを防止
     if (stat.isFile() && size < MAX_READ_SIZE) {
       const content = fs.readFileSync(filePath, "utf8");
-      // 簡易バイナリチェック（ヌル文字が含まれている場合は行数カウントから除外）
       if (!content.includes("\u0000")) {
         loc = content.split(/\r?\n/).length;
       }
     }
-  } catch (e) {
-    // ignore read errors
-  }
+  } catch (_) {}
   return { size, loc };
 }
 
-// スキャン対象ファイルを決定するメイン処理
 function getFilesToScan() {
   const args = process.argv.slice(2);
-  const targets = args.filter((arg) => !arg.startsWith("-"));
+  const targets = args.filter((arg) => !arg.startsWith("-") && !arg.startsWith("/"));
 
-  // 1. 引数にディレクトリやファイルのパスが指定されている場合
   if (targets.length > 0) {
     let allFiles = [];
     targets.forEach((t) => {
@@ -89,7 +100,6 @@ function getFilesToScan() {
     return { mode: "TARGET_PATH", files: allFiles, targetName: targets.join(", ") };
   }
 
-  // 2. 引数がなく、かつGitの差分がある場合
   try {
     const filesStr = execSync("git diff --name-only", {
       encoding: "utf8",
@@ -104,11 +114,8 @@ function getFilesToScan() {
         return { mode: "GIT_DIFF", files, targetName: "Git Diff 差分" };
       }
     }
-  } catch (err) {
-    // Git環境でない場合はWorkspaceモードにフォールバック
-  }
+  } catch (_) {}
 
-  // 3. 引数がなく、かつGitの差分もない場合（ソリューション全体）
   const rootDir = process.cwd();
   const files = getFilesRecursively(rootDir);
   return { mode: "WORKSPACE", files, targetName: "ソリューション全体" };
@@ -134,7 +141,6 @@ function analyzeFiles() {
   }
 
   files.forEach((f) => {
-    // 物理ディレクトリ階層が2層以上か（相対パスで検証）
     const relPath = path.relative(process.cwd(), f);
     const normalizedPath = relPath.replace(/\\/g, "/");
     const parts = normalizedPath.split("/");
@@ -147,7 +153,6 @@ function analyzeFiles() {
     result.totalLoc += loc;
   });
 
-  // 判定ルール定義
   const rules = [
     {
       check: (res) => res.filesCount >= THRESHOLD_FILES,
@@ -167,7 +172,6 @@ function analyzeFiles() {
     },
   ];
 
-  // ルールの評価
   rules.forEach((rule) => {
     if (rule.check(result)) {
       result.yesCount++;
@@ -178,7 +182,13 @@ function analyzeFiles() {
   return result;
 }
 
+// ============================================================================
+// Main Execution
+// ============================================================================
+
 function main() {
+  checkHelp(HELP_TEXT);
+
   const result = analyzeFiles();
 
   console.log(`MODE: ${result.mode} (${result.targetName})`);
@@ -208,4 +218,13 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  getFilesRecursively,
+  getFileMetrics,
+  getFilesToScan,
+  analyzeFiles,
+};
