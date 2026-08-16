@@ -465,7 +465,8 @@ public class PlayConfigurationView implements Initializable {
         String lastVersion = config.getLastBootedVersion();
         // If current version is greater than last version
         if (Version.compareToString(lastVersion) > 0) {
-            whatsNewPopup();
+						// /resources/whatsnew.html が更新されておらず、fork元の更新情報が表示されるためコメントアウト
+            // whatsNewPopup();
             config.setLastBootedVersion(currentVersion);
         }
 
