@@ -1,97 +1,138 @@
 <div align="center" style="line-height: 1;">
 
-# LR2oraja \~Endless Dream\~
+# LR2oraja \~Endless Dream\~ (rian版)
 
-<!-- swap this between default and default-inverted to update the number -->
-[![DISCORD](https://dcbadge.limes.pink/api/server/HutCHCZHns?theme=default-inverted)](https://discord.gg/HutCHCZHns)
+
 
 </div>
 
-Endless Dream is a community fork and drop-in replacement for [beatoraja](https://github.com/exch-bms2/beatoraja) that integrates quality of life patches and new features not present in the upstream version of the game.
+Endless Dream は、[beatoraja](https://github.com/exch-bms2/beatoraja) のコミュニティフォークであり、アップストリーム版にはない QoL（快適性向上）パッチや新機能を統合したドロップイン互換クライアントです。
 
-Based on [LR2oraja](https://github.com/wcko87/lr2oraja), which is itself a fork with LR2 judges and gauges, Endless Dream aims to fix some of the outstanding issues with the upstream project while being a central place for modifications and extensions that may never be accepted by upstream.
+LR2 の判定やゲージ仕様を導入した [LR2oraja](https://github.com/wcko87/lr2oraja) をベースとしており、アップストリームに残る課題の解決を目指すとともに、本家へ統合されない可能性のある拡張や改変のハブとなることを目的としています。
 
-### Key Features
-* In-game song downloader
-* LR2 GBATTLE support
-* Osu file support
-* On the fly ratemods/freq
-* Increased performance by using the latest graphics backends available to libgdx
-* Faster Table Processing
-* Compatible with beatoraja 0.8.8 installs
-* Built in Mod Menu, accessible using **`F5` or `Insert`**
+本リポジトリ（**rian版**）は、Endless Dream をベースに、LR2風の操作性・難易度別フィルターの追加、62進数BMS再生の不具合修正、Extra Noteの改善、DX MODE、oraja_helper 連携機能などを独自に追加・統合したカスタムビルドです。
+
+---
+
+## Endless Dream-rian版の主な変更点・新機能
+
+### 1. 選曲画面：LR2風難易度別フィルターの追加
+本カスタムビルド一番の目玉機能です。LR2 に近い挙動の難易度別フィルター機能を用意しました。
+- ボタンを押すことで **BEGINNER → NORMAL → HYPER → ANOTHER → INSANE** の順に素早く絞り込みが可能です。
+- キーコンフィグに対応していますので、お好みのキーに割り当ててご使用いただけます。
+- beatoraja には難易度別フィルターが存在せず、インストールされた BMS が一覧で並ぶ仕様でしたが、本機能により BOF などの数千曲に及ぶ大型イベントフォルダでも快適に選曲できます。
+
+### 2. プレイ画面：矢印キーによるオプション操作 (LR2仕様) & フローティングハイスピード
+プレイ中のキーボード操作を LR2 準拠に変更しました。
+- <kbd>↑</kbd> / <kbd>↓</kbd> : ハイスピードの変更
+- <kbd>←</kbd> / <kbd>→</kbd> : レーンカバーの調整
+
+さらに、「レーンカバー等がOFF」かつ「ハイスピード自動調整（皿チョン）が無効」の場合に限り、
+<kbd>START</kbd> + <disk>Analog Scratch</disk> 操作で、ハイスピードを **0.01 単位で精密に調整** できる機能（フローティングハイスピード）を追加しました。
+
+### 3. プレイ画面：62進数BMSが正常に再生されない不具合を修正
+LR2oraja 0.8.8 において `jbms-parser` が最新版でなかったために生じていた「62進数BMSが正常に再生されない不具合」について、本カスタムビルドでは `jbms-parser` を更新してビルドしているため、正常に再生されます。
+
+### 4. リザルト画面：5鍵/10鍵モードでのリトライバグ修正
+beatoraja に存在した「5鍵モードプレイ時に、リザルト画面で7鍵側のキー（同ランダムリトライ等）が効かない」不具合を修正しました。
+- 5鍵/10鍵楽曲でも当たり譜面のリトライが可能です。
+- 5鍵モードでも6鍵でリザルトのグラフ表示を切り替えられます。
+
+### 5. 練習機能：Extra Note の「無理な縦連打」を抑制
+ノート数を水増しする「Extra Note」オプションを使用した際、完全ランダム生成による物理的に不可能な縦連打が発生していました。
+- ノート間の最小間隔制限を導入することで無理な縦連打を抑制し、より自然な高密度練習が可能になりました（LR2の EXTRA MODE を目指した調整です）。
+
+### 6. システム・その他
+- **スクリーンショットの軽量化**: 保存形式を PNG から JPG に変更し、ファイルサイズを大幅に削減しました（ランチャー設定から PNG / JPG の選択も可能です）。
+- **スコア削除コマンド**: 選曲画面の検索バーに `/deletescore` と入力して Enter を押すことで、選択中の譜面のスコアデータをデータベースから削除できます。
+- **DX MODE**: 某DXなゲームに判定とゲージを極力寄せたおまけモードです。すべての BMS / BMSON ファイルの `JUDGERANK` と `TOTAL` を無視して強制的に適用されるため、使用時は別セーブデータの作成を強く推奨します。[専用IR（rianIR）](https://bms-atelier-kyokufu.blogspot.com/2026/03/rian-ir.html) にも対応しています。
+
+### 7. oraja_helper との連携機能強化
+beatoraja 向けヘルパーツール「oraja_helper」開発者である、かた（[@cold_planet_](https://x.com/cold_planet_)）様のご協力により、本カスタムビルド版と [oraja_helper](https://x.com/cold_planet_) を併用した際の便利な連携機能を実装しています。
+
+---
+
+## Endless Dream 本体の主要機能
+
+* **ゲーム内楽曲ダウンローダー**
+* **LR2 GBATTLE 対応**
+* **osu! ファイル対応**
+* **プレイ中のリアルタイム レート変更・周波数変更 (Rate Mod / Freq)**
+* **libgdx の最新グラフィックバックエンド採用による描画パフォーマンスの向上**
+* **難易度表（Table）の高速処理**
+* **beatoraja 0.8.8 環境との高い互換性**
+* **内蔵 Mod メニュー**（**`F5` または `Insert`** キーでアクセス可能）
 
 > [!CAUTION]
-> Don't use this application to play non-permitted copyrighted contents.
+> 許諾されていない著作権コンテンツのプレイに本アプリケーションを使用しないでください。
 
-## Downloads
+---
+
+## ダウンロード
+
 > [!NOTE]
-> As of 0.3.0 the Java version has changed from 8 to 17, please check the releases page to update your installations java version
-### Download here
-- [**Windows Download**](https://github.com/seraxis/lr2oraja-endlessdream/releases/download/v0.4.0/lr2oraja-0.8.8-endlessdream-windows-0.4.0.jar)
-- [**Linux Download**](https://github.com/seraxis/lr2oraja-endlessdream/releases/download/v0.4.0/lr2oraja-0.8.8-endlessdream-linux-0.4.0.jar)
-- [**Macos Download (Apple Silicon)**](https://github.com/seraxis/lr2oraja-endlessdream/releases/download/v0.4.0/lr2oraja-0.8.8-endlessdream-macos-aarch64-0.4.0.jar)
-- [**Macos Download (Intel)**](https://github.com/seraxis/lr2oraja-endlessdream/releases/download/v0.4.0/lr2oraja-0.8.8-endlessdream-macos-0.4.0.jar)
+> 必要な Java バージョンが Java 8 から **Java 17** に変更されました。環境に合わせて Java バージョンを更新してください。
 
-Development builds are created for every commit and published as [releases](https://github.com/seraxis/lr2oraja-endlessdream/releases)
+### ダウンロードリンク
+- [**Windows 版ダウンロード**](https://github.com/rian-eimu/lr2oraja-endlessdream/releases/download/1.3.0/EndlessDream-rian-windows.zip)
+- [**Linux 版ダウンロード**](https://github.com/rian-eimu/lr2oraja-endlessdream/releases/download/1.3.0/EndlessDream-rian-linux.zip)
+- [**macOS 版ダウンロード (Apple Silicon)**](https://github.com/rian-eimu/lr2oraja-endlessdream/releases/download/1.3.0/EndlessDream-rian-macos.zip)
+- [**macOS 版ダウンロード (Intel)**](https://github.com/rian-eimu/lr2oraja-endlessdream/releases/download/1.3.0/EndlessDream-rian-macos.zip)
 
-### Installation
+コミットごとの開発ビルドは [Releases](https://github.com/rian-eimu/lr2oraja-endlessdream/releases) にて公開されています。
 
-#### From Scratch
+---
 
-1. Download the latest [`beatoraja-0.8.8 JRE`](https://mocha-repository.info/download/beatoraja0.8.8-jre-win64.zip) bundled version.
-2. Unzip the file
-3. Copy the unzipped directory to any directory on your computer where you keep applications
-4. Download the latest Endless Dream for your operating system [from the bottom of the release page](https://github.com/seraxis/lr2oraja-endlessdream/releases/tag/v0.4.0)
-5. Go to your beatoraja directory and delete `beatoraja.jar`.
-6. Copy the downloaded `lr2oraja.*.jar` from Step 4 into your beatoraja directory.
-7. Rename the `lr2oraja.*.jar` file to `beatoraja.jar`
+## インストール手順
 
-#### From an Existing Beatoraja Install
+### ゼロから新規導入する場合
 
-1. Create a copy of your existing beatoraja install directory.
-2. Rename the copy to `endless-dream`.
-3. Download the latest Endless Dream for your operating system [from the bottom of the release page](https://github.com/seraxis/lr2oraja-endlessdream/releases/tag/v0.4.0)
-4. Go to your `endless-dream` directory and delete `beatoraja.jar`.
-5. Copy the downloaded `lr2oraja.*.jar` from Step 3 into your beatoraja directory.
-6. Rename the `lr2oraja.*.jar` file to `beatoraja.jar`
+1. 最新の [`beatoraja-0.8.8 JRE 同梱版`](https://mocha-repository.info/download/beatoraja0.8.8-jre-win64.zip) をダウンロードします。
+2. ダウンロードした zip ファイルを展開します。
+3. 展開したフォルダを、PC 内の任意のアプリケーション配置ディレクトリに移動します。
+4. [リリース一覧](https://github.com/rian-eimu/lr2oraja-endlessdream/releases) から、お使いの OS に対応した最新の Endless Dream-rian をダウンロードします。
+5. beatoraja フォルダ内の既存の `beatoraja.jar` を削除します。
+6. 手順 4 でダウンロードした `lr2oraja.*.jar` を beatoraja フォルダ内にコピーします。
 
-### Post Install
-Once you're set up with a copy of LR2oraja Endless Dream you might want to check out the excellent [Beatoraja English Guide](https://github.com/wcko87/beatoraja-english-guide/wiki) that has answers to all of your questions about beatoraja and BMS, including a list of skins, where to get songs, and how to use tables.
 
-Alternatively you can ask in our [Discord](https://discord.gg/HutCHCZHns) and we'll be happy to help you out.
+### 既存の beatoraja 環境から導入する場合
 
-### BMS-IR compatibility
+1. 既存の beatoraja フォルダをコピーします。
+2. コピーしたフォルダ名を `endless-dream` などに変更します。
+3. [リリース一覧](https://github.com/rian-eimu/lr2oraja-endlessdream/releases) から、お使いの OS に対応した最新の Endless Dream-rian をダウンロードします。
+4. 作成した `endless-dream` フォルダ内の既存の `beatoraja.jar` を削除します。
+5. 手順 3 でダウンロードした `lr2oraja.*.jar` をフォルダ内にコピーします。
 
-When connecting this fork to [BMS-IR](https://www.bms-ir.org/), use the BMS-IR
-plugin build for LR2oraja Endless Dream. The plugin reports the host jar hash
-and `client_kind=lr2oraja-ed`, which lets BMS-IR keep this client in the
-LR2oraja ED bucket.
+### インストール後の参考情報
+LR2oraja Endless Dream の環境構築が完了したら、スキン・楽曲の導入方法や難易度表の使い方などが詳しく解説されている [Beatoraja English Guide](https://github.com/wcko87/beatoraja-english-guide/wiki) を参照することをお勧めします。
 
-BMS-IR plugin `0.0.33` also supports primary-IR table delivery for active
-BMS-IR score attack one-chart courses. Set BMS-IR as the primary IR if you want
-those courses to appear in music select.
+---
 
-Version `0.0.33` is recommended because it also reports wrong BMS-IR
-ID/password combinations as login failures instead of falling back to read-only
-mode, and preserves extended clear types such as EX HARD from BMS-IR ranking
-XML.
+## BMS-IR / rianIR 互換性
 
-For public BMS-IR allowlist registration, publish versioned release jars and
-share their MD5 and SHA-256 hashes. Locally built jars can have different hashes
-and are not suitable as stable allowlist entries.
+[BMS-IR](https://www.bms-ir.org/) に接続する際は、LR2oraja Endless Dream 向けの BMS-IR プラグインビルドを使用してください。本プラグインはホスト jar のハッシュおよび `client_kind=lr2oraja-ed` を送信し、BMS-IR 側で LR2oraja ED バケットとして識別されます。
 
-DX MODE scores should remain excluded from non-rianIR uploads. This matches the
-current `IRUtil.shouldSkipIR` behavior and is required for BMS-IR compatibility.
+BMS-IR プラグイン `0.0.33` 以降では、開催中の BMS-IR スコアアタック（1曲コース）向けの primary-IR テーブル配信に対応しています。これらのコースを選曲画面に表示させたい場合は、BMS-IR を primary IR に設定してください。
 
-## Building from source
-A JDK 17 **with javafx** is required to build and run. Consider using [liberica JDK](https://bell-sw.com/pages/downloads/#jdk-17-lts), ensure that you download `Package: Full JDK` to get the JavaFX version.
+また、バージョン `0.0.33` では BMS-IR の ID/パスワード不一致時に読み取り専用モードへフォールバックせずログイン失敗として正しく通知されるほか、BMS-IR ランキング XML から EX HARD などの拡張クリアタイプを保持できるため、`0.0.33` 以降の使用を推奨します。
 
-Clone this repository with submodules
+公開 BMS-IR の許可リスト（Allowlist）登録には、バージョン指定されたリリース版 jar の MD5 / SHA-256 ハッシュを共有してください。ローカルでビルドした jar はハッシュ値が異なる場合があるため、安定した許可リスト用としては適していません。
+
+> [!NOTE]
+> DX MODE のスコアは、BMS-IR 互換性を保つため非 rianIR（BMS-IR等）への送信から自動的に除外されます（`IRUtil.shouldSkipIR` 仕様準拠）。DX MODE のスコア送信には [rianIR](https://bms-atelier-kyokufu.blogspot.com/2026/03/rian-ir.html) をご利用ください。
+
+---
+
+## ソースコードからのビルド
+
+ビルドおよび実行には **JavaFX 同梱の JDK 17** が必要です。[Liberica JDK](https://bell-sw.com/pages/downloads/#jdk-17-lts) などの利用を検討し、ダウンロード時は必ず `Package: Full JDK`（JavaFX同梱版）を選択してください。
+
+サブモジュールを含めて本リポジトリをクローンします：
 ```sh
-git clone --recurse-submodules git@github.com:seraxis/lr2oraja-endlessdream.git
+git clone --recurse-submodules https://github.com/rian-eimu/lr2oraja-endlessdream.git
 ```
-Run the gradle wrapper for your operating system and specify your desired platform as a [gradle system property](https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_system_properties)
+
+お使いの OS に合わせて Gradle Wrapper を実行し、[Gradle システムプロパティ](https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_system_properties) で対象プラットフォームを指定します：
 
 **Windows:**
 ```powershell
@@ -101,53 +142,55 @@ Run the gradle wrapper for your operating system and specify your desired platfo
 ```sh
 ./gradlew core:shadowJar -Dplatform=linux
 ```
-**MacOS:**
+**macOS:**
 ```sh
 ./gradlew core:shadowJar -Dplatform=macos
 ```
 
 > [!NOTE]
-> For `arm` user: add -Darch=aarch64
+> `ARM` 環境（Apple Silicon 等）の場合は `-Darch=aarch64` を追加してください。
 
-This task will create a jar located in `dist/` that can be used with any working installation of the game.
+ビルドが完了すると、`dist/` ディレクトリ内にゲーム環境で使用可能な jar ファイルが生成されます。
 
-## Working on Endless Dream
-Use of an IDE, such as [IntelliJ Community Edition](https://www.jetbrains.com/idea/download/other.html), is recommended for working on Endless Dream.
+---
 
-### Contributing to the project
-To get started working on Endless Dream [fork the project](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo), and start programming on a new branch.
+## Endless Dream の開発とコントリビューション
 
-Once you're done you can [open a PR](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork) against the main project, and one of the maintainers will review your code.
+開発には [IntelliJ IDEA Community Edition](https://www.jetbrains.com/idea/download/other.html) などの IDE の利用を推奨します。
 
-Before starting it's good to think about what you want to do, and to discuss your ideas with other collaborators. Open an issue, or consider joining the [Discord server](https://discord.gg/HutCHCZHns). It's the place where most communication and collaboration happens.
+### プロジェクトへのコントリビューション
+開発を始める際は、まず [リポジトリをフォーク](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) し、新しいブランチを作成してコードを記述してください。
 
-### Running and building
-The gradle `core:runShadow` task can be used to quickly test and debug changes made to the project. The `core:shadowJar` task builds the project for your operating system. **Do not use the default gradle run tasks, they will not work.**
+作業が完了したらメインプロジェクトに対して [プルリクエスト (PR) を作成](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork) してください。メンテナーがコードをレビューします。
 
-<img width="358" height="281" alt="Expanding the gradle tab on the right shows the available tasks for the project. Expanding `core` and then `application` and `shadow` reveals the tasks you will use to run and build the project" src="https://github.com/user-attachments/assets/0adcd7e7-724f-4653-a1b0-e1a637f623f0" />
+作業着手前に、Issue を作成しアイデアを相談・共有することをお勧めします。
 
-### Running from an existing install of beatoraja
-Configure the `runDir` system property to point to a beatoraja install. If you do not configure this it will run in the `assets/` folder of the git project.
+### 実行とデバッグ
+Gradle の `core:runShadow` タスクを使用すると、変更内容を素早くテスト・デバッグできます。`core:shadowJar` タスクは各 OS 向けの配布用 jar をビルドします。**デフォルトの Gradle run タスクは動作しないため使用しないでください。**
 
-Click the 'Three Dots' next to the run configurations panel in the window bar, Edit the runShadow configuration, and add `-DrunDir="[FULL PATH TO RAJA INSTALL]"`
+<img width="358" height="281" alt="Gradle タスク一覧" src="https://github.com/user-attachments/assets/0adcd7e7-724f-4653-a1b0-e1a637f623f0" />
 
-<img width="1389" height="321" alt="A demonstration of adding a runDir to the runShadow task" src="https://github.com/user-attachments/assets/3dd096b7-6995-4ab7-b7e9-8a18e038dc83" />
+### 既存の beatoraja 環境から実行する場合
+システムプロパティ `runDir` に既存の beatoraja インストール先パスを設定します。これを設定しない場合、Git プロジェクト内の `assets/` フォルダが実行ディレクトリになります。
 
-If you'd like to test IR dependent changes append the `useIR` system property to the run configuration and set it to `true` (e.g. `-DuseIR=true`). Be aware of this [existing bug](https://github.com/seraxis/lr2oraja-endlessdream/issues/189) with this property.
+ウィンドウバーの実行構成パネル横の「3つの点」をクリックし、`runShadow` の構成を編集して `-DrunDir="[beatorajaの絶対パス]"` を追加します。
 
-### Cannot Resolve Symbols for project submodules
-IntelliJ sometimes cannot identify the projects submodules leading to missing classes (e.g. `bms.model.*`). This does not affect building or running the project, but can be quite annoying.
+<img width="1389" height="321" alt="runDir 設定例" src="https://github.com/user-attachments/assets/3dd096b7-6995-4ab7-b7e9-8a18e038dc83" />
 
-First verify that `./core/dependencies` contains the `jbms-parser` and `jbmstable-parser` folders. If they are missing run `git submodule update --init --recursive` to fetch any submodules you may have missed while cloning.
+IR 依存の変更をテストしたい場合は、実行構成に `-DuseIR=true` を追加してください（※プロパティに関する [既知のIssue](https://github.com/seraxis/lr2oraja-endlessdream/issues/189) にご留意ください）。
 
-If submodules are present go to `File --> Project Structure --> Modules --> core --> Dependencies --> Add --> JARs or Directories...` and add both `./core/dependencies/jbms-parser` and `./core/dependencies/jbmstable-parser` then hit Apply.
+### サブモジュールのシンボルが解決できない場合
+IntelliJ がプロジェクトのサブモジュールを認識できず、クラス（`bms.model.*` など）が見つからないエラーが表示されることがあります（ビルドや実行自体には影響しませんが、エディタ上で警告が出ます）。
 
-<img width="1687" height="321" alt="endlessdreamprojectstructure" src="https://github.com/user-attachments/assets/dd1b9d41-d1e6-42db-9139-8adbcada1014" />
+1. まず `./core/dependencies` に `jbms-parser` および `jbmstable-parser` フォルダが存在することを確認します。見つからない場合は `git submodule update --init --recursive` を実行してサブモジュールを取得してください。
+2. サブモジュールが存在する場合は、`File --> Project Structure --> Modules --> core --> Dependencies --> Add --> JARs or Directories...` を開き、`./core/dependencies/jbms-parser` と `./core/dependencies/jbmstable-parser` の両方を追加して Apply をクリックします。
 
-After you are done you should see no further import related errors. If you encounter difficulty join the [Discord server](https://discord.gg/HutCHCZHns) to ask for help.
+<img width="1687" height="321" alt="Project Structure 設定例" src="https://github.com/user-attachments/assets/dd1b9d41-d1e6-42db-9139-8adbcada1014" />
 
-### Running from the command line
-Running from the command line is as simple as building from source, and looks like this:
+設定完了後、インポート関連のエラーが解消されます。解決しない場合は [Discord サーバー](https://discord.gg/HutCHCZHns) でご質問ください。
+
+### コマンドラインからの実行
+ソースコードのビルドと同様に、コマンドラインから直接実行することも可能です：
 
 **Windows:**
 ```powershell
