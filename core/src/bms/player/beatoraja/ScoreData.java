@@ -38,6 +38,11 @@ public class ScoreData implements Validatable {
 	 */
 	private long date = 0;	
 	/**
+	 * 実プレイ経過時間(ミリ秒単位)
+	 */
+	private long playDuration = 0;
+
+	/**
 	 * 総プレイ回数
 	 */
 	private int playcount = 0;
@@ -655,6 +660,14 @@ public class ScoreData implements Validatable {
 			}
 			return null;
 		}
+	}
+
+	public long getPlayDuration() {
+		return playDuration;
+	}
+
+	public void setPlayDuration(long playDuration) {
+		this.playDuration = playDuration;
 	}
 
 	public String toString(){

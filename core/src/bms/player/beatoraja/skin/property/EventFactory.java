@@ -391,13 +391,29 @@ public class EventFactory {
 			}
 		}),
 		notesdisplaytiming(74, (state, arg1) -> {
+			PlayConfig pc = null;
 			if(state instanceof MusicSelector selector) {
-				PlayConfig pc = selector.getSelectedBarPlayConfig();
+				pc = selector.getSelectedBarPlayConfig();
+			} else if (state instanceof bms.player.beatoraja.play.BMSPlayer player) {
+				if (player.getLanerender() != null) {
+					pc = player.getLanerender().getPlayConfig();
+				}
+			} else {
+				pc = state.resource.getPlayerConfig().getPlayConfig(state.resource.getPlayerConfig().getMode()).getPlayconfig();
+			}
+
+			if (pc != null) {
 				int inc = arg1 >= 0 ? (pc.getJudgetiming() < PlayConfig.JUDGETIMING_MAX ? 1 : 0)
 						: (pc.getJudgetiming() > PlayConfig.JUDGETIMING_MIN ? -1 : 0);
 				if(inc != 0) {
 					pc.setJudgetiming(pc.getJudgetiming() + inc);
-				}	
+					if (state instanceof bms.player.beatoraja.play.BMSPlayer player) {
+						state.resource.getPlayerConfig().getPlayConfig(player.getMode()).getPlayconfig().setJudgetiming(pc.getJudgetiming());
+					}
+				}
+			}
+
+			if(state instanceof MusicSelector) {
 				state.play(OPTION_CHANGE);
 			}
 		}),

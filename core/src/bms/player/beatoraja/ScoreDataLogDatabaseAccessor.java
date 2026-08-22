@@ -89,4 +89,24 @@ public class ScoreDataLogDatabaseAccessor extends SQLiteDatabaseAccessor {
 			logger.error("スコア更新時の例外:" + e.getMessage());
 		}
 	}
+
+	public ScoreData getBestScoreData(String hash, int mode) {
+		return getScoreData("sha256 = ? AND mode = ? ORDER BY (epg + lpg) * 2 + egr + lgr DESC, date DESC LIMIT 1",
+				hash, mode);
+	}
+
+	public ScoreData getMinBpScoreData(String hash, int mode) {
+		return getScoreData("sha256 = ? AND mode = ? AND minbp >= 0 ORDER BY minbp ASC, date DESC LIMIT 1", hash, mode);
+	}
+
+	private ScoreData getScoreData(String sql, Object... params) {
+		try {
+			List<ScoreData> score = Validatable.removeInvalidElements(
+					qr.query("SELECT * FROM scoredatalog WHERE " + sql, scoreHandler, params));
+			return score != null && !score.isEmpty() ? score.get(0) : null;
+		} catch (Exception e) {
+			logger.error("スコアデータログ取得時の例外:{}", e.getMessage());
+		}
+		return null;
+	}
 }

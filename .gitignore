@@ -170,3 +170,6 @@ core/bin
 
 util/
 core/src/resources/build.properties
+
+# npm
+node_modules/

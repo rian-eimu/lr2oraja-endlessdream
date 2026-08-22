@@ -313,7 +313,7 @@ public final class ControlInputProcessor {
 			|| (pmsSwitchLaneCover && !lanerender.isEnableLanecover() && !lanerender.isEnableLift() && !lanerender.isEnableHidden())) {
 			if(input.isAnalogInput(key)) {
 				// 【修正】 アナログ入力（スクラッチ）の場合は、変化量 × 0.01 を加算する
-				int dTicks = input.getAnalogDiffAndReset(key, 200) * (up ? 1 : -1);
+				int dTicks = input.getAnalogDiffAndReset(key, 200) * (up ? -1 : 1);
 				if (dTicks != 0) {
 					lanerender.addHispeed(dTicks * 0.01f);
 				}

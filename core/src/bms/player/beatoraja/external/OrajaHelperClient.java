@@ -1,6 +1,7 @@
 package bms.player.beatoraja.external;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,7 +31,12 @@ public final class OrajaHelperClient {
 	}
 
 	public static void sendSelect(SongData song) {
+		sendSelect(song, null, null, null);
+	}
+
+	public static void sendSelect(SongData song, Mode mode, ScoreData bestScore, ScoreData minBpScore) {
 		Map<String, Object> payload = basePayload("song_select", "select", song);
+		addSelectScorePayload(payload, song, mode, bestScore, minBpScore);
 		send(payload);
 	}
 
@@ -117,6 +123,46 @@ public final class OrajaHelperClient {
 		return judges;
 	}
 
+	private static void addSelectScorePayload(Map<String, Object> payload, SongData song, Mode mode,
+			ScoreData bestScore, ScoreData minBpScore) {
+		Map<String, Object> bestPayload = bestScore != null ? scorePayload(bestScore, song, mode) : null;
+		Map<String, Object> minBpPayload = minBpScore != null ? scorePayload(minBpScore, song, mode) : null;
+		if (bestPayload != null) {
+			payload.put("scoreBest", bestPayload);
+		}
+		if (minBpPayload != null) {
+			payload.put("minBpBest", minBpPayload);
+		}
+		if (bestPayload != null && minBpPayload != null && !sameScoreEntry(bestScore, minBpScore)) {
+			payload.put("scores", List.of(bestPayload, minBpPayload));
+		} else if (bestPayload != null) {
+			payload.put("scores", List.of(bestPayload));
+		} else if (minBpPayload != null) {
+			payload.put("scores", List.of(minBpPayload));
+		}
+	}
+
+	private static Map<String, Object> scorePayload(ScoreData score, SongData song, Mode mode) {
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("score", score.getExscore());
+		payload.put("scoreRate", scoreRate(score, song));
+		payload.put("clearLamp", ClearType.getClearTypeByID(score.getClear()).name());
+		payload.put("clearLampId", score.getClear());
+		payload.put("missCount", score.getMinbp());
+		payload.put("date", score.getDate());
+		payload.put("option", scoreOptionName(score, mode));
+		payload.put("optionId", score.getOption());
+		payload.put("randomSeed", score.getSeed());
+		payload.put("randomPlacement", score.getRandom() > 0 ? String.valueOf(score.getRandom()) : "");
+		payload.put("judges", judgePayload(score));
+		return payload;
+	}
+
+	private static boolean sameScoreEntry(ScoreData score1, ScoreData score2) {
+		return score1.getDate() == score2.getDate() && score1.getExscore() == score2.getExscore()
+				&& score1.getMinbp() == score2.getMinbp() && score1.getOption() == score2.getOption();
+	}
+
 	private static float scoreRate(ScoreData score, SongData song) {
 		int notes = song != null ? song.getNotes() : 0;
 		return notes > 0 ? score.getExscore() * 100.0f / (notes * 2.0f) : 0.0f;
@@ -186,7 +232,31 @@ public final class OrajaHelperClient {
 			builder.append('}');
 			return builder.toString();
 		}
+		if (value instanceof Iterable<?> iterable) {
+			StringBuilder builder = new StringBuilder();
+			builder.append('[');
+			boolean first = true;
+			for (Object item : iterable) {
+				if (!first) {
+					builder.append(',');
+				}
+				builder.append(toJson(item));
+				first = false;
+			}
+			builder.append(']');
+			return builder.toString();
+		}
 		return "\"" + escapeJson(String.valueOf(value)) + "\"";
+	}
+
+	private static String scoreOptionName(ScoreData score, Mode mode) {
+		if (mode == null) {
+			return "";
+		}
+		Random option = Random.getRandom(score.getOption() % 10, mode);
+		String name = option != null ? optionName(option) : "";
+		String placement = score.getRandom() > 0 ? String.valueOf(score.getRandom()) : "";
+		return placement.length() > 0 ? name + " " + placement : name;
 	}
 
 	private static void dumpPayload(String body) {

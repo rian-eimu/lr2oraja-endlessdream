@@ -9,7 +9,7 @@ import java.util.Properties;
 public class Version {
     private static final Logger logger = LoggerFactory.getLogger(Version.class);
     public static final int VERSION_MAJOR = 1;
-    public static final int VERSION_MINOR = 2;
+    public static final int VERSION_MINOR = 3;
     public static final int VERSION_PATCH = 0;
 
     public static final BuildType BUILD_TYPE;

@@ -124,4 +124,5 @@
 	</HBox>
 	<CheckBox fx:id="loopResultSound" prefHeight="24.0" prefWidth="300.0" text="%LOOP_RESULT_SOUND"/>
 	<CheckBox fx:id="loopCourseResultSound" prefHeight="24.0" prefWidth="300.0" text="%LOOP_COURSE_RESULT_SOUND"/>
+	<CheckBox fx:id="playKeySoundOnMiss" prefHeight="24.0" prefWidth="400.0" text="%PLAY_KEYSOUND_ON_MISS"/>
 </VBox>

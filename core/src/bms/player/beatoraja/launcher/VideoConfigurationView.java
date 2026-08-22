@@ -29,6 +29,8 @@ public class VideoConfigurationView implements Initializable {
 
 	@FXML
 	private CheckBox vSync;
+	@FXML
+	private CheckBox hideMisslayerOnGood;
 
 	@FXML
 	private Spinner<Integer> maxFps;
@@ -58,6 +60,7 @@ public class VideoConfigurationView implements Initializable {
 
 	public void updatePlayer(PlayerConfig player) {
 		missLayerTime.getValueFactory().setValue(player.getMisslayerDuration());
+		hideMisslayerOnGood.setSelected(player.isHideMisslayerOnGood());
 	}
 
 	public void commit(Config config) {
@@ -72,6 +75,7 @@ public class VideoConfigurationView implements Initializable {
 
 	public void commitPlayer(PlayerConfig player) {
 		player.setMisslayerDuration(missLayerTime.getValue());
+		player.setHideMisslayerOnGood(hideMisslayerOnGood.isSelected());
 	}
 
 	@FXML

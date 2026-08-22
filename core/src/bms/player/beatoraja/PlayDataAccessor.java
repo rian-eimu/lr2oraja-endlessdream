@@ -185,6 +185,14 @@ public final class PlayDataAccessor {
 		return scoredb.getScoreDatas(sql);
 	}
 
+	public ScoreData readBestScoreDataFromLog(String hash, boolean ln, int lnmode) {
+		return scoredatalogdb != null ? scoredatalogdb.getBestScoreData(hash, ln ? lnmode : 0) : null;
+	}
+
+	public ScoreData readMinBpScoreDataFromLog(String hash, boolean ln, int lnmode) {
+		return scoredatalogdb != null ? scoredatalogdb.getMinBpScoreData(hash, ln ? lnmode : 0) : null;
+	}
+
 	/**
 	 * スコアデータを書き込む
 	 * 

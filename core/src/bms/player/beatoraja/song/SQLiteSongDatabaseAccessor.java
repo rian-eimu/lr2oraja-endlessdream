@@ -211,6 +211,25 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		return SongData.EMPTY;
 	}
 
+	private String insertGroupBy(String sql) {
+		if (sql == null) return "1 = 1 GROUP BY song.sha256";
+		String upper = sql.toUpperCase();
+		if (upper.contains("GROUP BY")) {
+			return sql;
+		}
+		int orderByIdx = upper.indexOf("ORDER BY");
+		int limitIdx = upper.indexOf("LIMIT");
+
+		int insertIdx = sql.length();
+		if (orderByIdx >= 0) {
+			insertIdx = orderByIdx;
+		} else if (limitIdx >= 0) {
+			insertIdx = limitIdx;
+		}
+
+		return sql.substring(0, insertIdx) + " GROUP BY song.sha256 " + sql.substring(insertIdx);
+	}
+
 	public SongData[] getSongDatas(String sql, String score, String scorelog, String info) {
       	try (Connection conn = qr.getDataSource().getConnection()) {
             try (Statement stmt = conn.createStatement()) {
@@ -220,18 +239,18 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 
                 if(info != null) {
                     stmt.execute("ATTACH DATABASE '" + info + "' as infodb");
-                    String s = "SELECT DISTINCT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,level,difficulty,"
+                    String s = "SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,level,difficulty,"
                             + "maxbpm,minbpm,song.mode AS mode, judge, feature, content, song.date AS date, favorite, song.notes AS notes, adddate, preview, length, charthash"
                             + " FROM song INNER JOIN (information LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON information.sha256 = score.sha256) "
-                            + "ON song.sha256 = information.sha256 WHERE " + sql;
+                            + "ON song.sha256 = information.sha256 WHERE " + insertGroupBy(sql);
                     ResultSet rs = stmt.executeQuery(s);
                     m = songhandler.handle(rs);
     				// System.out.println(s + " -> result : " + m.size());
                     stmt.execute("DETACH DATABASE infodb");
                 } else {
-                    String s = "SELECT DISTINCT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,level,difficulty,"
+                    String s = "SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,level,difficulty,"
                             + "maxbpm,minbpm,song.mode AS mode, judge, feature, content, song.date AS date, favorite, song.notes AS notes, adddate, preview, length, charthash"
-                            + " FROM song LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON song.sha256 = score.sha256 WHERE " + sql;
+                            + " FROM song LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON song.sha256 = score.sha256 WHERE " + insertGroupBy(sql);
                     ResultSet rs = stmt.executeQuery(s);
                     m = songhandler.handle(rs);
                 }

@@ -1,12 +1,17 @@
 package bms.player.beatoraja.pattern;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
 import bms.model.BMSModel;
 import bms.model.LongNote;
+import bms.model.NormalNote;
 import bms.model.Note;
 import bms.model.TimeLine;
 
 /**
- * BGレーンからノーツを追加する譜面オプション
+ * 演奏ノートがあるタイムラインに追加ノーツを配置する譜面オプション
  *
  * @author exch
  */
@@ -41,80 +46,80 @@ public class ExtraNoteModifier extends PatternModifier {
         TimeLine[] tls = model.getAllTimeLines();
         boolean[] lns = new boolean[model.getMode().key];
         boolean[] blank = new boolean[model.getMode().key];
-        Note[] lastnote = new Note[model.getMode().key];
+        Random random = new Random(getSeed());
 
-        int lastoffset = 0;
-
-        for (int i = 0;i < tls.length;i++) {
+        for (int i = 0; i < tls.length; i++) {
             final TimeLine tl = tls[i];
             long currentTime = tl.getMilliTime();
 
-            for(int key = 0;key < model.getMode().key;key++) {
+            // 演奏ノートもBGノートも存在しないタイムラインは対象外
+            if (!tl.existNote() && tl.getBackGroundNotes().length == 0) {
+                continue;
+            }
+
+            for (int key = 0; key < model.getMode().key; key++) {
                 final Note note = tl.getNote(key);
-                if(note instanceof LongNote ln) {
+                if (note instanceof LongNote ln) {
                     lns[key] = !ln.isEnd();
                 }
                 blank[key] = !lns[key] && note == null && (scratch || !model.getMode().isScratchKey(key));
             }
 
-            for(int d = 0; d < depth;d++) {
-                if(tl.getBackGroundNotes().length > 0) {
-                    final Note note = tl.getBackGroundNotes()[0];
+            for (int d = 0; d < depth; d++) {
+                List<Integer> candidateKeys = new ArrayList<>();
 
-                    int offset = lastoffset;
-                    for(int j = 1;j < model.getMode().key;j++, offset = (offset + 1) % model.getMode().key) {
-                        if(lastnote[offset] != null && lastnote[offset].getWav() == note.getWav()) {
-                            break;
+                for (int key = 0; key < model.getMode().key; key++) {
+                    if (blank[key]) {
+                        // Jack suppression check (縦連発生活用抑止チェック)
+                        boolean tooClose = false;
+                        // Check backward
+                        for (int back = i - 1; back >= 0; back--) {
+                            TimeLine prevTl = tls[back];
+                            long prevTime = prevTl.getMilliTime();
+                            if (currentTime - prevTime >= MIN_NOTE_INTERVAL_MS) {
+                                break;
+                            }
+                            if (prevTl.existNote(key)) {
+                                tooClose = true;
+                                break;
+                            }
                         }
-                    }
-                    lastoffset = offset;
-
-                    for(int j = 0, key = (offset % model.getMode().key);j < model.getMode().key;j++, key = (key + 1) % model.getMode().key) {
-                        if(blank[key]) {
-                            // Jack suppression check
-                            boolean tooClose = false;
-                            // Check backward
-                            for (int back = i - 1; back >= 0; back--) {
-                                TimeLine prevTl = tls[back];
-                                long prevTime = prevTl.getMilliTime();
-                                if (currentTime - prevTime >= MIN_NOTE_INTERVAL_MS) {
+                        if (!tooClose) {
+                            // Check forward
+                            for (int forward = i + 1; forward < tls.length; forward++) {
+                                TimeLine nextTl = tls[forward];
+                                long nextTime = nextTl.getMilliTime();
+                                if (nextTime - currentTime >= MIN_NOTE_INTERVAL_MS) {
                                     break;
                                 }
-                                if (prevTl.existNote(key)) {
+                                if (nextTl.existNote(key)) {
                                     tooClose = true;
                                     break;
                                 }
                             }
-                            if (!tooClose) {
-                                // Check forward
-                                for (int forward = i + 1; forward < tls.length; forward++) {
-                                    TimeLine nextTl = tls[forward];
-                                    long nextTime = nextTl.getMilliTime();
-                                    if (nextTime - currentTime >= MIN_NOTE_INTERVAL_MS) {
-                                        break;
-                                    }
-                                    if (nextTl.existNote(key)) {
-                                        tooClose = true;
-                                        break;
-                                    }
-                                }
-                            }
+                        }
 
-                            if (tooClose) {
-                                continue;
-                            }
-
-                            lastnote[key] = note;
-                            tl.setNote(key, note);
-                            tl.removeBackGroundNote(note);
-                            assist = AssistLevel.ASSIST;
-                            break;
+                        if (!tooClose) {
+                            candidateKeys.add(key);
                         }
                     }
                 }
+
+                if (candidateKeys.isEmpty()) {
+                    break;
+                }
+
+                // 配置可能なキー候補の中からランダムに選択して無音ノーツを配置
+                int chosenKey = candidateKeys.get(random.nextInt(candidateKeys.size()));
+                final Note note = new NormalNote(-1);
+                tl.setNote(chosenKey, note);
+                blank[chosenKey] = false;
+                assist = AssistLevel.ASSIST;
             }
         }
 
         setAssistLevel(assist);
     }
 }
+
+
