@@ -159,15 +159,15 @@ public enum GaugeProperty {
         // 回復値(PG/GR/GD)は基礎倍率(1.2 または 0.6)を指定し、実際の回復量はTOTAL値に基づいて計算されます。
         
         // ASSIST EASY (DX MODEではEASYと同じ)
-        ASSIST_EASY_POP(POP, 2, 120, 30, 65, 0, new float[]{1.2f, 1.2f, 0.6f, -1.02f, -3.0f, -3.0f}, new float[][]{}),
-        // EASY: NORMALから減少量半減。POOR/空POOR -3.0%, BAD -1.02%
-        EASY_POP       (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -1.02f, -3.0f, -3.0f}, new float[][]{}),
-        // NORMAL: POOR/空POOR -6%, BAD -2.04%
-        NORMAL_POP     (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -2.04f, -6.0f, -6.0f}, new float[][]{}),
-        // HARD: POOR/空POOR -12.0%, BAD -4.08% (ノマゲとハードゲージの中間とした)
-        HARD_POP       (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -4.08f, -12.0f, -12.0f}, new float[][]{}),
-        // EXHARD: POOR/空POOR -24.0%, BAD -8.16% (POPN HARDゲージ相当)
-        EXHARD_POP     (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -8.16f, -24.0f, -24.0f}, new float[][]{}),
+        ASSIST_EASY_POP(POP, 2, 120, 30, 65, 0, new float[]{1.2f, 1.2f, 0.6f, -0.937f, -2.929f, -2.929f}, new float[][]{}),
+        // EASY: NORMALから減少量半減。POOR/空POOR -2.929%, BAD -0.937%
+        EASY_POP       (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -0.937f, -2.929f, -2.929f}, new float[][]{}),
+        // NORMAL: POOR/空POOR -5.976%, BAD -1.992%
+        NORMAL_POP     (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -1.992f, -5.976f, -5.976f}, new float[][]{}),
+        // HARD: POOR/空POOR -11.952%, BAD -3.984% (ノマゲとハードゲージの中間とした)
+        HARD_POP       (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -3.984f, -11.952f, -11.952f}, new float[][]{}),
+        // EXHARD: POOR/空POOR -23.906%, BAD -7.968% (POPN HARDゲージ相当)
+        EXHARD_POP     (POP, 2, 120, 30, 85, 0, new float[]{1.2f, 1.2f, 0.6f, -7.968f, -23.906f, -23.906f}, new float[][]{}),
         // HAZARD: 回復量はPMS基準。減少量は BAD/POOR/空POOR 即死(-100%)。
         // GOOD回復量は0%
         HAZARD_POP     (null, 0, 100, 100, 0, 0, new float[]{0.15f, 0.06f, 0, -100.0f, -100.0f, -100.0f}, new float[][]{}),
