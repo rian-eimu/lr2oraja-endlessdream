@@ -249,15 +249,17 @@ public class BMSPlayer extends MainState {
 			playinfo.rand = model.getRandom();
 			logger.info("譜面分岐 : {}", Arrays.toString(playinfo.rand));
 		}
-		// 通常プレイの場合は最後のノーツ、オートプレイの場合はBG/BGAを含めた最後のノーツ
-		playtime = (autoplay.mode == BMSPlayerMode.Mode.AUTOPLAY ? model.getLastTime() : model.getLastNoteTime()) + TIME_MARGIN;
+		// 通常プレイの場合は最後のノーツ、オートプレイまたは「すべての定義音を鳴らし終わってからリザルト画面に移行する」が有効な場合はBG/BGAを含めた最後のノーツ
+		final boolean waitAllNotes = resource.getConfig() != null && resource.getConfig().isWaitAllNotesResult();
+		final int baseEndTime = (autoplay.mode == BMSPlayerMode.Mode.AUTOPLAY || waitAllNotes) ? Math.max(model.getLastTime(), model.getLastNoteTime()) : model.getLastNoteTime();
+		playtime = baseEndTime + TIME_MARGIN;
 
 		resource.setFreqOn(false);
 		resource.setFreqString("");
 		if(FreqTrainerMenu.isFreqTrainerEnabled() && autoplay.mode == BMSPlayerMode.Mode.PLAY && resource.getCourseBMSModels() == null) {
 			int freq = FreqTrainerMenu.getFreq();
 
-			playtime = (model.getLastNoteTime() + 1000) * 100 / freq + TIME_MARGIN;
+			playtime = (baseEndTime + 1000) * 100 / freq + TIME_MARGIN;
 
 			// Chart render scale, note judge is handled by create()::judge.init() later
 			BMSModelUtils.changeFrequency(model, freq / 100f);
