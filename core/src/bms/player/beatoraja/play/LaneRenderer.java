@@ -270,6 +270,7 @@ public class LaneRenderer {
 			offsetH += offset.h;
 		}
 		
+		final long nowtime = time;
 		time = (main.timer.isTimerOn(TIMER_PLAY) ? time - main.timer.getTimer(TIMER_PLAY) : 
 			(main.timer.isTimerOn(141) ? time - main.timer.getTimer(141) : 0)) + playconfig.getJudgetiming();
 		if (main.getState() == BMSPlayer.STATE_PRACTICE) {
@@ -391,7 +392,7 @@ public class LaneRenderer {
 				}
 				if (showTimeline && (i > 0 && (tl.getTime() / 1000) > (timelines[i - 1].getTime() / 1000))) {
 					for (SkinImage line : skin.getTimeLine()) {
-						line.draw(sprite, time, main, 0, (int) (y - hl));
+						line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 					}
 					for (Rectangle r : playerr) {
 						// TODO 数値もスキンベースへ移行
@@ -405,7 +406,7 @@ public class LaneRenderer {
 				if (config.isBpmguide() || showTimeline) {
 					if (tl.getBPM() != nbpm) {
 						for (SkinImage line : skin.getBPMLine()) {
-							line.draw(sprite, time, main, 0, (int) (y - hl));
+							line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 						}
 						for (Rectangle r : playerr) {
 							// TODO 数値もスキンベースへ移行
@@ -418,7 +419,7 @@ public class LaneRenderer {
 					}
 					if (tl.getStop() > 0) {
 						for (SkinImage line : skin.getStopLine()) {
-							line.draw(sprite, time, main, 0, (int) (y - hl));
+							line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 						}
 						for (Rectangle r : playerr) {
 							// TODO 数値もスキンベースへ移行
@@ -432,7 +433,7 @@ public class LaneRenderer {
 				// 小節線描画
 				if (tl.getSectionLine()) {
 					for (SkinImage line : skin.getLine()) {
-						line.draw(sprite, time, main, 0, (int) (y - hl));
+						line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 					}
 				}
 				nbpm = tl.getBPM();
