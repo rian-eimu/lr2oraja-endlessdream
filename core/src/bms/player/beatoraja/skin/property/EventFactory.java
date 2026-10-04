@@ -636,7 +636,7 @@ public class EventFactory {
         }),
 		difficultyfilter(309, (state, arg1) -> {
 			if(state instanceof MusicSelector selector) {
-				selector.getBarManager().toggleDifficultyFilter();
+				selector.getBarManager().toggleDifficultyFilter(arg1 >= 0);
 			}
 		}),
         autosavereplay1(321, changeAutoSaveReplay(0)),

@@ -1006,8 +1006,17 @@ public class BarManager {
 	 * 切り替え時にオプション変更音を鳴らします。
 	 */
 	public void toggleDifficultyFilter() {
+		toggleDifficultyFilter(true);
+	}
+
+	/**
+	 * 難易度フィルターを切り替えます
+	 *
+	 * @param forward trueなら順送り (ALL -> BEG -> ...)、falseなら逆送り (ALL -> INS -> ...)
+	 */
+	public void toggleDifficultyFilter(boolean forward) {
 		PlayerConfig config = select.resource.getPlayerConfig();
-		config.setDifficultyFilter((config.getDifficultyFilter() + 1) % 6);
+		config.setDifficultyFilter((config.getDifficultyFilter() + (forward ? 1 : 5)) % 6);
 		this.updateBar();
 		select.play(OPTION_CHANGE);
 	}
