@@ -258,6 +258,7 @@ public class MusicResult extends AbstractResult {
 								}
 							}
 							// 不合格リザルト
+							restoreMode();
 							main.changeState(MainStateType.COURSERESULT);
 						} else {
 							// コーススコアがない場合は選曲画面へ
@@ -272,9 +273,11 @@ public class MusicResult extends AbstractResult {
 						}
 						resource.setRankingData(songrank);
 
+						restoreMode();
 						main.changeState(MainStateType.PLAY);
 					} else {
 						// 合格リザルト
+						restoreMode();
 						main.changeState(MainStateType.COURSERESULT);
 					}
 				} else {
@@ -295,6 +298,7 @@ public class MusicResult extends AbstractResult {
 						logger.info("オプションを変更せずリプレイ");
 						// オプションを変更せず同じ譜面でリプレイ
 						resource.getReplayData().randomoptionseed = -1;
+						restoreMode();
 						resource.reloadBMSFile();
 						main.changeState(MainStateType.PLAY);
 					} else if (resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY
@@ -306,6 +310,7 @@ public class MusicResult extends AbstractResult {
 							logger.info("アシストモード時は同じ譜面でリプレイできません");
 							resource.getReplayData().randomoptionseed = -1;
 						}
+						restoreMode();
 						resource.reloadBMSFile();
 						main.changeState(MainStateType.PLAY);
 					} else {
