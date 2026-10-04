@@ -49,10 +49,15 @@ public final class PracticeConfiguration {
 	private static final String[] DPRANDOM = { "NORMAL", "FLIP" };
 
 	private PracticeProperty property = new PracticeProperty();
+	private boolean dxMode = false;
 
 	public PracticeConfiguration() {
 		// TODO 描画位置、使用テキスト等をスキン定義できるように
 		// TODO スキン定義がない場合のデフォルト配置の定義
+	}
+
+	public boolean isDxMode() {
+		return dxMode;
 	}
 
 	private SkinNoteDistributionGraph[] graph = { 
@@ -65,14 +70,21 @@ public final class PracticeConfiguration {
 
 	public static final PracticeElement[] elements = PracticeElement.values();
 
+	public void create(BMSModel model, Config config, bms.player.beatoraja.PlayerConfig playerConfig) {
+		this.dxMode = playerConfig != null && playerConfig.isDxMode();
+		create(model, config);
+	}
+
 	public void create(BMSModel model, Config config) {
 		property.judgerank = model.getJudgerank();
 		property.endtime = model.getLastTime() + 1000;
+		boolean hasJson = false;
 		Path p = Paths.get("practice/" + model.getSHA256() + ".json");
 		if (Files.exists(p)) {
 			Json json = new Json();
 			try {
 				property = json.fromJson(PracticeProperty.class, new FileReader(p.toFile()));
+				hasJson = true;
 			} catch (FileNotFoundException | SerializationException e) {
 				e.printStackTrace();
 			}
@@ -84,6 +96,18 @@ public final class PracticeConfiguration {
 		this.model = model;
 		if(property.total == 0) {
 			property.total = model.getTotal();
+		}
+		// DX MODE時の初期ゲージ設定（未保存またはデフォルト値の場合に適用）
+		if (dxMode) {
+			if (property.gaugetype >= 3) {
+				if (!hasJson || property.startgauge == 20) {
+					property.startgauge = 100;
+				}
+			} else {
+				if (!hasJson || property.startgauge == 20) {
+					property.startgauge = (model.getMode() == Mode.POPN_9K ? 30 : 22);
+				}
+			}
 		}
 		try {
 			FreeTypeFontGenerator generator = new FreeTypeFontGenerator(
@@ -120,7 +144,8 @@ public final class PracticeConfiguration {
 	}
 
 	public GrooveGauge getGauge(BMSModel model) {
-		GrooveGauge gauge = GrooveGauge.create(model, property.gaugetype, property.gaugecategory, false);
+		// DX MODE設定を反映してゲージを生成
+		GrooveGauge gauge = GrooveGauge.create(model, property.gaugetype, property.gaugecategory, dxMode);
 		gauge.setValue(property.startgauge);
 		return gauge;
 	}
@@ -161,7 +186,7 @@ public final class PracticeConfiguration {
 		if(titlefont != null) {
 			for(int i = 0;i < elements.length;i++) {
 				if(elements[i].predicate.test(this)) {
-					sprite.draw(titlefont, elements[i].text.apply(property), x, y - 22 * i, cursorpos == i ? Color.YELLOW : Color.CYAN);
+					sprite.draw(titlefont, elements[i].text.apply(this), x, y - 22 * i, cursorpos == i ? Color.YELLOW : Color.CYAN);
 				}
 			}
 
@@ -203,8 +228,8 @@ public final class PracticeConfiguration {
 					property.starttime -= 100;
 				}
 			}
-		}, property -> String.format("START TIME : %2d:%02d.%1d", property.starttime / 60000,
-				(property.starttime / 1000) % 60, (property.starttime / 100) % 10)),
+		}, practice -> String.format("START TIME : %2d:%02d.%1d", practice.property.starttime / 60000,
+				(practice.property.starttime / 1000) % 60, (practice.property.starttime / 100) % 10)),
 		ENDTIME((practice, inc) -> {
 			final TimeLine[] tl = practice.model.getAllTimeLines();
 			final PracticeProperty property = practice.property;
@@ -217,16 +242,27 @@ public final class PracticeConfiguration {
 					property.endtime -= 100;
 				}
 			}
-		}, property -> String.format("END TIME : %2d:%02d.%1d", property.endtime / 60000,
-				(property.endtime / 1000) % 60, (property.endtime / 100) % 10)),
+		}, practice -> String.format("END TIME : %2d:%02d.%1d", practice.property.endtime / 60000,
+				(practice.property.endtime / 1000) % 60, (practice.property.endtime / 100) % 10)),
 		GAUGETYPE((practice, inc) -> {
 			final PracticeProperty property = practice.property;
 			property.gaugetype = (property.gaugetype + (inc ? 1 : 8)) % 9;
-			if ((practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K) && property.gaugetype >= 3 && property.startgauge > 100) {
+			// DX MODE時の初期ゲージ設定（HARD以上は100%、それ以外は22%/POP30%）
+			if (practice.dxMode) {
+				if (property.gaugetype >= 3) {
+					property.startgauge = 100;
+				} else {
+					property.startgauge = (practice.model.getMode() == Mode.POPN_9K ? 30 : 22);
+				}
+			} else if ((practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K) && property.gaugetype >= 3 && property.startgauge > 100) {
 				property.startgauge = 100;
 			}
-		}, property -> "GAUGE TYPE : " + GAUGE[property.gaugetype]),
+		}, practice -> "GAUGE TYPE : " + GAUGE[practice.property.gaugetype]),
 		GAUGECATEGORY((practice, inc) -> {
+			// DX MODE時は固定
+			if (practice.dxMode) {
+				return;
+			}
 			final PracticeProperty property = practice.property;
 			GaugeProperty[] cateories = GaugeProperty.values();
 			for(int i = 0;i < cateories.length;i++) {
@@ -236,45 +272,69 @@ public final class PracticeConfiguration {
 				}
 			}
 			property.startgauge = (int) property.gaugecategory.values[property.gaugetype].init;
-		}, property -> "GAUGE CATEGORY : " + property.gaugecategory.name()),
+		}, practice -> practice.dxMode ? "GAUGE CATEGORY : DX MODE" : "GAUGE CATEGORY : " + practice.property.gaugecategory.name()),
 		GAUGEVALUE((practice, inc) -> {
 			final PracticeProperty property = practice.property;
-			property.startgauge = MathUtils.clamp(property.startgauge + (inc ? 1 : -1), 1, (int)property.gaugecategory.values[property.gaugetype].max);
-		}, property -> "GAUGE VALUE : " + property.startgauge),
+			int max = practice.dxMode ? 100 : (int)property.gaugecategory.values[property.gaugetype].max;
+			if (practice.dxMode && practice.model.getMode() == Mode.POPN_9K) {
+				max = 120;
+			}
+			property.startgauge = MathUtils.clamp(property.startgauge + (inc ? 1 : -1), 1, max);
+		}, practice -> "GAUGE VALUE : " + practice.property.startgauge),
 		JUDGERANK((practice, inc) -> {
+			// DX MODE時は判定ランク固定（無視）
+			if (practice.dxMode) {
+				return;
+			}
 			practice.property.judgerank = MathUtils.clamp(practice.property.judgerank + (inc ? 1 : -1), 1, 400);
-		}, property -> "JUDGERANK : " + property.judgerank),
+		}, practice -> practice.dxMode ? (practice.model.getMode() == Mode.POPN_9K ? "JUDGERANK : POP (DX MODE)" : "JUDGERANK : DX (DX MODE)") : "JUDGERANK : " + practice.property.judgerank),
 		TOTAL((practice, inc) -> {
+			// DX MODE時はAC仕様TOTAL計算固定（無視）
+			if (practice.dxMode) {
+				return;
+			}
 			practice.property.total = MathUtils.clamp(practice.property.total + (inc ? 10 : -10), 20, 5000);
-		}, property -> "TOTAL : " + (int)property.total),
+		}, practice -> {
+			if (practice.dxMode) {
+				int totalNotes = practice.model.getTotalNotes();
+				if (practice.model.getMode() == Mode.POPN_9K) {
+					double popTotal = totalNotes > 3072 ? Math.floor(0.097 * totalNotes) : Math.min(300, Math.floor(3072.0 / totalNotes) * totalNotes / 1024.0 * 100.0);
+					return "TOTAL : " + (int)popTotal + " (DX MODE)";
+				} else {
+					double iidxTotal = Math.max(260, 7.605 * totalNotes / (0.01 * totalNotes + 6.5));
+					return "TOTAL : " + (int)iidxTotal + " (DX MODE)";
+				}
+			}
+			return "TOTAL : " + (int)practice.property.total;
+		}),
 		FREQ((practice, inc) -> {
 			practice.property.freq = MathUtils.clamp(practice.property.freq + (inc ? 5 : -5), 50, 200);
-		}, property -> "FREQUENCY : " + property.freq),
+		}, practice -> "FREQUENCY : " + practice.property.freq),
 		GRAPHTYPE((practice, inc) -> {
 			practice.property.graphtype = (practice.property.graphtype + (inc ? 1 : 2)) % 3;
-		}, property -> "GRAPHTYPE : " + GRAPHTYPESTR[property.graphtype]),
+		}, practice -> "GRAPHTYPE : " + GRAPHTYPESTR[practice.property.graphtype]),
 		OPTION1P((practice, inc) -> {
 			final int options = (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K ? 7 : 10);
 			practice.property.random = (practice.property.random + (inc ? 1 : (options -1))) % options;
-		}, property -> "OPTION-1P : " + RANDOM[property.random]),
+		}, practice -> "OPTION-1P : " + RANDOM[practice.property.random]),
 		OPTION2P((practice, inc) -> {
 			practice.property.random2 = (practice.property.random2 + (inc ? 1 : 9)) % 10;
-		}, property -> "OPTION-2P : " + RANDOM[property.random2], practice -> practice.model.getMode().player == 2),
+		}, practice -> "OPTION-2P : " + RANDOM[practice.property.random2], practice -> practice.model.getMode().player == 2),
 		OPTIONDP((practice, inc) -> {
 			practice.property.doubleop = (practice.property.doubleop + 1) % 2;
-		}, property -> "OPTION-DP : " + DPRANDOM[property.doubleop], practice -> practice.model.getMode().player == 2);
+		}, practice -> "OPTION-DP : " + DPRANDOM[practice.property.doubleop], practice -> practice.model.getMode().player == 2);
 
 		public final BiConsumer<PracticeConfiguration, Boolean> action;
 
-		public final Function<PracticeProperty, String> text;
+		public final Function<PracticeConfiguration, String> text;
 
 		public final Predicate<PracticeConfiguration> predicate;
 
-		private PracticeElement(BiConsumer<PracticeConfiguration, Boolean> action, Function<PracticeProperty, String> text) {
-			this(action, text, property -> true);
+		private PracticeElement(BiConsumer<PracticeConfiguration, Boolean> action, Function<PracticeConfiguration, String> text) {
+			this(action, text, practice -> true);
 		}
 
-		private PracticeElement(BiConsumer<PracticeConfiguration, Boolean> action, Function<PracticeProperty, String> text, Predicate<PracticeConfiguration> predicate) {
+		private PracticeElement(BiConsumer<PracticeConfiguration, Boolean> action, Function<PracticeConfiguration, String> text, Predicate<PracticeConfiguration> predicate) {
 			this.action = action;
 			this.text = text;
 			this.predicate = predicate;

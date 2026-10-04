@@ -582,7 +582,7 @@ public class BMSPlayer extends MainState {
 
 		if (autoplay.mode == BMSPlayerMode.Mode.PRACTICE) {
 			getScoreDataProperty().setTargetScore(0, null, 0, null, model.getTotalNotes());
-			practice.create(model, main.getConfig());
+			practice.create(model, main.getConfig(), config);
 			state = STATE_PRACTICE;
 		} else {
 			
@@ -696,7 +696,19 @@ public class BMSPlayer extends MainState {
 							main.getAudioProcessor().setGlobalPitch(property.freq / 100f);
 						}
 					}
-					model.setTotal(property.total);
+					if (config.isDxMode()) {
+						// DX MODE時はノーツ数に基づくAC仕様のTOTAL値を設定
+						int totalNotes = model.getTotalNotes();
+						if (model.getMode() == Mode.POPN_9K) {
+							double popTotal = totalNotes > 3072 ? Math.floor(0.097 * totalNotes) : Math.min(300, Math.floor(3072.0 / totalNotes) * totalNotes / 1024.0 * 100.0);
+							model.setTotal(popTotal);
+						} else {
+							double iidxTotal = Math.max(260, 7.605 * totalNotes / (0.01 * totalNotes + 6.5));
+							model.setTotal(iidxTotal);
+						}
+					} else {
+						model.setTotal(property.total);
+					}
 					PracticeModifier pm = new PracticeModifier(property.starttime * 100 / property.freq,
 							property.endtime * 100 / property.freq);
 					pm.modify(model);
