@@ -86,6 +86,41 @@ public final class RivalDataAccessor {
     }
 
     /**
+     * 前のライバルに切り替え、該当する {@link PlayerInformation} を返します。現在のライバルが先頭の場合は null を返します（ライバル未選択状態）。
+     *
+     * @return 前のライバルの {@link PlayerInformation}、または未選択状態になった場合は null
+     */
+    @Nullable
+    public PlayerInformation previousRival() {
+        if (rivals.isEmpty()) {
+            return null;
+        }
+
+        if (currentRival == null) {
+            currentRival = rivals.get(rivals.size() - 1);
+            return currentRival.rivalInformation;
+        } else {
+            var index = rivals.indexOf(currentRival);
+            if (index <= 0) {
+                currentRival = null;
+                return null;
+            } else {
+                currentRival = rivals.get(index - 1);
+                return currentRival.rivalInformation;
+            }
+        }
+    }
+
+    /**
+     * テスト用：ライバルを追加する
+     *
+     * @param rivalInformation ライバル情報
+     */
+    void addRivalForTest(PlayerInformation rivalInformation) {
+        rivals.add(new Rival(rivalInformation, null));
+    }
+
+    /**
      * @return true if any rival is currently selected
      */
     public boolean isRivalSelected() {

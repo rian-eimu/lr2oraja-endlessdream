@@ -457,7 +457,7 @@ public class EventFactory {
 		rival(79, (state, arg1) -> {
 			if(state instanceof MusicSelector selector) {
 				var rivalDataAccessor = state.main.getRivalDataAccessor();
-                var rival = rivalDataAccessor.nextRival();
+                var rival = arg1 >= 0 ? rivalDataAccessor.nextRival() : rivalDataAccessor.previousRival();
                 selector.setRival(rival);
 	            selector.play(OPTION_CHANGE);
 			}
