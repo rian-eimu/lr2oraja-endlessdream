@@ -151,11 +151,16 @@ public final class SkinTimingVisualizer extends SkinObject {
 
 	static int[][] getJudgeArea(PlayerResource resource) {
 		BMSModel model = resource.getBMSModel();
+		final PlayerConfig config = resource.getPlayerConfig();
 		JudgeProperty rule = BMSPlayerRule.getBMSPlayerRule(resource.getOriginalMode()).judge;
+		if (config.isDxMode() && model.getMode() == Mode.POPN_9K) {
+			rule = JudgeProperty.POP;
+		} else if (config.isDxMode()) {
+			rule = JudgeProperty.IIDX;
+		}
 
 		final int judgerank = model.getJudgerank();
-		final PlayerConfig config = resource.getPlayerConfig();
-		final int[] judgeWindowRate = config.isCustomJudge()
+		final int[] judgeWindowRate = config.isCustomJudge() && !config.isDxMode()
 				? new int[]{config.getKeyJudgeWindowRatePerfectGreat(), config.getKeyJudgeWindowRateGreat(), config.getKeyJudgeWindowRateGood()}
 				: new int[]{100, 100, 100};
 				
