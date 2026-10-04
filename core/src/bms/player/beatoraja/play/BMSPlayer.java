@@ -641,34 +641,8 @@ public class BMSPlayer extends MainState {
 						lanerender.init(model);
 					}
 					
-					// Wait for the analysis to complete
-					if (!analysisChecked) {
-						adjustedVolume = -1.f;
-						analysisChecked = true;
-						analysisTask = resource.getAnalysisTask();
-						
-						if (analysisTask != null) {
-							try {
-								BMSLoudnessAnalyzer.AnalysisResult result = analysisTask.get(15, TimeUnit.SECONDS);
-								if (result.success) {
-									float configVolume = main.getConfig().getAudioConfig().getKeyvolume();
-									adjustedVolume = result.calculateAdjustedVolume(configVolume);
-									logger.info("Volume set to {} ({} LUFS)",
-										adjustedVolume, result.loudnessLUFS);
-								} else {
-									logger.warn("Analysis failed: {}", result.errorMessage);
-									ImGuiNotify.warning("Loudness analysis failed");
-								}
-							} catch (TimeoutException e) {
-								ImGuiNotify.warning("Chart volume analysis timed out");
-								logger.warn("Loudness analysis timed out after 15 seconds");
-								analysisTask.cancel(true);
-							} catch (Exception e) {
-								ImGuiNotify.warning("Failed to analyze chart volume");
-								logger.warn("Loudness analysis error: {}", e.getMessage());
-							}
-						}
-					}
+					// 音量ノーマライズ解析の完了待機と音量設定
+					checkVolumeAnalysis(true);
 					
 					bga.prepare(this);
 					final long mem = Runtime.getRuntime().freeMemory();
@@ -708,6 +682,8 @@ public class BMSPlayer extends MainState {
 				control.setEnableControl(false);
 				control.setEnableCursor(false);
 				practice.processInput(input);
+				// 設定操作中も非同期の音量解析完了をチェック
+				checkVolumeAnalysis(false);
 
 				if (input.getKeyState(0) && resource.mediaLoadFinished() &&  micronow > (skin.getLoadstart() + skin.getLoadend()) * 1000
 						&& micronow - startpressedtime > 1000000) {
@@ -746,6 +722,8 @@ public class BMSPlayer extends MainState {
 					skin.pomyu.init();
 					starttimeoffset = (property.starttime > 1000 ? property.starttime - 1000 : 0) * 100 / property.freq;
 					playtime = (property.endtime + 1000) * 100 / property.freq + TIME_MARGIN;
+					// 練習プレイ開始前に音量ノーマライズ解析完了を待機・反映
+					checkVolumeAnalysis(true);
 					bga.prepare(this);
 					state = STATE_READY;
 					timer.setTimerOn(TIMER_READY);
@@ -1031,6 +1009,51 @@ public class BMSPlayer extends MainState {
 
 	public int getState() {
 		return state;
+	}
+
+	/**
+	 * 譜面音量ノーマライズ解析タスクの完了確認および音量設定を行う
+	 * 
+	 * @param wait 解析完了を待機するかどうか（true: 最大15秒待機、false: 完了済みの場合のみ反映）
+	 */
+	private void checkVolumeAnalysis(boolean wait) {
+		if (analysisChecked) {
+			return;
+		}
+		if (analysisTask == null) {
+			analysisTask = resource.getAnalysisTask();
+		}
+		if (analysisTask == null) {
+			adjustedVolume = -1.f;
+			analysisChecked = true;
+			return;
+		}
+		if (!wait && !analysisTask.isDone()) {
+			return;
+		}
+
+		adjustedVolume = -1.f;
+		try {
+			BMSLoudnessAnalyzer.AnalysisResult result = analysisTask.get(15, TimeUnit.SECONDS);
+			if (result.success) {
+				float configVolume = main.getConfig().getAudioConfig().getKeyvolume();
+				adjustedVolume = result.calculateAdjustedVolume(configVolume);
+				logger.info("Volume set to {} ({} LUFS)",
+					adjustedVolume, result.loudnessLUFS);
+			} else {
+				logger.warn("Analysis failed: {}", result.errorMessage);
+				ImGuiNotify.warning("Loudness analysis failed");
+			}
+		} catch (TimeoutException e) {
+			ImGuiNotify.warning("Chart volume analysis timed out");
+			logger.warn("Loudness analysis timed out after 15 seconds");
+			analysisTask.cancel(true);
+		} catch (Exception e) {
+			ImGuiNotify.warning("Failed to analyze chart volume");
+			logger.warn("Loudness analysis error: {}", e.getMessage());
+		} finally {
+			analysisChecked = true;
+		}
 	}
 	
 	public float getAdjustedVolume() {
