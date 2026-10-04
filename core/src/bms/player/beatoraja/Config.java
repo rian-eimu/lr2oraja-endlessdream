@@ -195,6 +195,11 @@ public class Config implements Validatable {
 
 	private boolean useDiscordRPC = false;
 	private boolean setClipboardScreenshot = false;
+	/**
+	 * すべての定義音を鳴らし終わってからリザルト画面に移行するかどうか
+	 */
+	private boolean waitAllNotesResult = false;
+
 	private String monitorName = "";
     private int webhookOption = 0; // 0 - Off, 1 - Image, 2 - Rich
     private String webhookName = "";
@@ -607,6 +612,15 @@ public class Config implements Validatable {
 	public void setClipboardWhenScreenshot(boolean setClipboardScreenshot) {
 		this.setClipboardScreenshot = setClipboardScreenshot;
 	}
+
+	public boolean isWaitAllNotesResult() {
+		return waitAllNotesResult;
+	}
+
+	public void setWaitAllNotesResult(boolean waitAllNotesResult) {
+		this.waitAllNotesResult = waitAllNotesResult;
+	}
+
 
 	public boolean isUpdatesong() {
 		return updatesong;

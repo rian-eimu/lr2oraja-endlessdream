@@ -275,6 +275,8 @@ public class PlayConfigurationView implements Initializable {
 	private TextField defaultDownloadURL;
 	@FXML
 	private TextField overrideDownloadURL;
+	@FXML
+	private CheckBox waitAllNotesResult;
 
 	@FXML
 	private VBox skin;
@@ -498,6 +500,7 @@ public class PlayConfigurationView implements Initializable {
 		httpDownloadSource.setValue(config.getDownloadSource());
 		defaultDownloadURL.setText(config.getDefaultDownloadURL());
 		overrideDownloadURL.setText(config.getOverrideDownloadURL());
+		waitAllNotesResult.setSelected(config.isWaitAllNotesResult());
 
 		if(players.getItems().contains(config.getPlayername())) {
 			players.setValue(config.getPlayername());
@@ -653,6 +656,7 @@ public class PlayConfigurationView implements Initializable {
 
 		config.setClipboardWhenScreenshot(clipboardScreenshot.isSelected());
 		config.setScreenshotFormat(screenshotFormat.getValue());
+		config.setWaitAllNotesResult(waitAllNotesResult.isSelected());
 
 		commitPlayer();
 
