@@ -348,15 +348,16 @@ public class BarManager {
 			// 【修正1】 フリーズ対策：リストのバックアップを作成
 			final Array<Bar> originalList = new Array<>(l);
 
+			final ModeFilter[] filters = ModeFilter.values();
 			int modeIndex = 0;
-			for(;modeIndex < MusicSelector.MODE.length && MusicSelector.MODE[modeIndex] != config.getMode();modeIndex++);
-			for(int trialCount = 0; trialCount < MusicSelector.MODE.length; trialCount++, modeIndex++) {
+			for(;modeIndex < filters.length && filters[modeIndex] != config.getModeFilter();modeIndex++);
+			for(int trialCount = 0; trialCount < filters.length; trialCount++, modeIndex++) {
 				// 【修正1の続き】 試行ごとにリストを初期状態にリセット
 				l.clear();
 				l.addAll(originalList);
 
-				final Mode mode = MusicSelector.MODE[modeIndex % MusicSelector.MODE.length];
-				config.setMode(mode);
+				final ModeFilter filter = filters[modeIndex % filters.length];
+				config.setModeFilter(filter);
 				Array<Bar> remove = new Array<Bar>();
 
 				// -------------------------------------------------------------
@@ -366,7 +367,7 @@ public class BarManager {
 					if(b instanceof SongBar && ((SongBar) b).getSongData() != null) {
 						final SongData song = ((SongBar) b).getSongData();
 						if((!showInvisibleCharts && (song.getFavorite() & (SongData.INVISIBLE_SONG | SongData.INVISIBLE_CHART)) != 0)
-								|| (mode != null && song.getMode() != 0 && song.getMode() != mode.id)) {
+								|| (!filter.match(song.getMode()))) {
 							remove.add(b);
 						}
 					}
@@ -452,7 +453,7 @@ public class BarManager {
 					break;
 				} else {
 					// 【修正2】 曲が見つからず、最後の試行だった場合はリストを空にする
-					if (trialCount == MusicSelector.MODE.length - 1) {
+					if (trialCount == filters.length - 1) {
 						l.clear();
 					}
 				}

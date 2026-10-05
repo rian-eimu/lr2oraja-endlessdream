@@ -2,6 +2,7 @@ package bms.player.beatoraja.select.bar;
 
 import java.util.Arrays;
 import bms.model.Mode;
+import bms.player.beatoraja.ModeFilter;
 import bms.player.beatoraja.ScoreDatabaseAccessor.ScoreDataCollector;
 import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.song.SongData;
@@ -96,10 +97,14 @@ public abstract class DirectoryBar extends Bar {
 	public abstract Bar[] getChildren();
 
 	public Bar[] getChildren(Mode mode, boolean containsSameFolder) {
+		return getChildren(ModeFilter.fromMode(mode), containsSameFolder);
+	}
+
+	public Bar[] getChildren(ModeFilter filter, boolean containsSameFolder) {
 		Array<Bar> l = new Array<Bar>();
 		for (Bar b : getChildren()) {
-			if (!(mode != null && b instanceof SongBar && ((SongBar) b).getSongData().getMode() != 0
-					&& ((SongBar) b).getSongData().getMode() != mode.id)) {
+			if (!(b instanceof SongBar && ((SongBar) b).getSongData().getMode() != 0
+					&& filter != null && !filter.match(((SongBar) b).getSongData().getMode()))) {
 				boolean addBar = true;
 				if (!containsSameFolder) {
 					for (Bar bar : l) {
@@ -125,9 +130,9 @@ public abstract class DirectoryBar extends Bar {
 
 	protected void updateFolderStatus(SongData[] songs) {
 		clear();
-		final Mode mode = selector.main.getPlayerConfig().getMode();
+		final ModeFilter filter = selector.main.getPlayerConfig().getModeFilter();
 		final ScoreDataCollector collector = (song, score) -> {
-			if(song.getPath() == null || (mode != null && song.getMode() != 0 && song.getMode() != mode.id)) {
+			if(song.getPath() == null || (filter != null && !filter.match(song.getMode()))) {
 				return;
 			}
 

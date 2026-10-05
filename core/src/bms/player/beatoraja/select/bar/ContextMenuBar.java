@@ -15,6 +15,7 @@ import bms.player.beatoraja.BMSPlayerMode;
 import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.skin.property.EventFactory.EventType;
 import bms.player.beatoraja.ScoreDatabaseAccessor.ScoreDataCollector;
+import bms.player.beatoraja.ModeFilter;
 import bms.model.Mode;
 
 import static bms.player.beatoraja.select.bar.FunctionBar.*;
@@ -358,11 +359,11 @@ public class ContextMenuBar extends DirectoryBar {
                                   .map(e -> e.getSha256().length() > 0 ? e.getSha256() : e.getMd5())
                                   .toArray(String[] ::new);
         songs = selector.getSongDatabase().getSongDatas(songHashes);
-        final Mode mode = selector.main.getPlayerConfig().getMode();
+        final ModeFilter filter = selector.main.getPlayerConfig().getModeFilter();
         int[] lamps = new int[11];
         final ScoreDataCollector collector = (song, score) -> {
             if (song.getPath() == null ||
-                (mode != null && song.getMode() != 0 && song.getMode() != mode.id)) {
+                (filter != null && !filter.match(song.getMode()))) {
                 return;
             }
 

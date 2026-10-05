@@ -100,6 +100,10 @@ public final class PlayerConfig {
      */
 	private Mode mode = null;
 	/**
+	 * 選曲時のモードフィルター（拡張）
+	 */
+	private ModeFilter modeFilter = ModeFilter.ALL;
+	/**
 	 * 指定がない場合のミスレイヤー表示時間(ms)
 	 */
 	private int misslayerDuration = 500;
@@ -583,10 +587,26 @@ public final class PlayerConfig {
 
 	public void setMode(Mode m)  {
 		this.mode = m;
+		this.modeFilter = ModeFilter.fromMode(m);
 	}
 
 	public Mode getMode()  {
+		if (modeFilter != null) {
+			return modeFilter.defaultMode;
+		}
 		return mode;
+	}
+
+	public ModeFilter getModeFilter() {
+		if (modeFilter == null) {
+			modeFilter = ModeFilter.fromMode(mode);
+		}
+		return modeFilter;
+	}
+
+	public void setModeFilter(ModeFilter modeFilter) {
+		this.modeFilter = modeFilter != null ? modeFilter : ModeFilter.ALL;
+		this.mode = this.modeFilter.defaultMode;
 	}
 	
 	public int getSort() {
