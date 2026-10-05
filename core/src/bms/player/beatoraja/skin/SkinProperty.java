@@ -247,6 +247,7 @@ public class SkinProperty {
 	public static final int STRING_IR_USER_NAME = 1021;
 	public static final int STRING_SONG_HASH_MD5 = 1030;
 	public static final int STRING_SONG_HASH_SHA256 = 1031;
+	public static final int STRING_MODE_FILTER = 1060;
 
 	public static final int NUMBER_HISPEED_LR2 = 10;
 	public static final int NUMBER_HISPEED = 310;
@@ -734,6 +735,25 @@ public class SkinProperty {
 	public static final int OPTION_9KEYSONG = 164;
 	public static final int OPTION_24KEYSONG = 1160;
 	public static final int OPTION_24KEYDPSONG = 1161;
+	public static final int OPTION_MODE_ALL = 1162;
+	public static final int OPTION_MODE_7KEYS = 1163;
+	public static final int OPTION_MODE_14KEYS = 1164;
+	public static final int OPTION_MODE_9KEYS = 1165;
+	public static final int OPTION_MODE_5KEYS = 1166;
+	public static final int OPTION_MODE_10KEYS = 1167;
+	public static final int OPTION_MODE_24KEYS = 1168;
+	public static final int OPTION_MODE_24KEYS_DOUBLE = 1169;
+	public static final int OPTION_MODE_5KEYS_7KEYS = 1170;
+	public static final int OPTION_MODE_7KEYS_14KEYS = 1171;
+	public static final int OPTION_MODE_5KEYS_10KEYS = 1172;
+	public static final int OPTION_MODE_5KEYS_7KEYS_10KEYS_14KEYS = 1173;
+	public static final int OPTION_MODE_10KEYS_14KEYS = 1179;
+
+	public static final int OPTION_5KEY_7KEYSONG = 1174;
+	public static final int OPTION_7KEY_14KEYSONG = 1175;
+	public static final int OPTION_5KEY_10KEYSONG = 1176;
+	public static final int OPTION_10KEY_14KEYSONG = 1180;
+	public static final int OPTION_BEAT_ALLSONG = 1178;
 
 	public static final int OPTION_NO_BGA = 170;
 	public static final int OPTION_BGA = 171;

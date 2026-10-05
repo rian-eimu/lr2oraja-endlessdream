@@ -1045,14 +1045,7 @@ public class IntegerPropertyFactory {
 		
 		mode(11, (state) -> {
 			if (state instanceof MusicSelector) {
-				int mode = 0;
-				for (; mode < MusicSelector.MODE.length; mode++) {
-					if (MusicSelector.MODE[mode] == state.main.getPlayerConfig().getMode()) {
-						break;
-					}
-				}
-				final int[] mode_lr2 = { 0, 2, 4, 5, 1, 3 };
-				return mode < mode_lr2.length ? mode_lr2[mode] : mode;
+				return state.main.getPlayerConfig().getModeFilter().skinValue;
 			}
 			return Integer.MIN_VALUE;
 		}),

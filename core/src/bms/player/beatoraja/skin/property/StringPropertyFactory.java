@@ -1,6 +1,7 @@
 package bms.player.beatoraja.skin.property;
 
 import bms.player.beatoraja.*;
+import bms.player.beatoraja.skin.SkinProperty;
 import bms.player.beatoraja.MainController.IRStatus;
 import bms.player.beatoraja.config.KeyConfiguration;
 import bms.player.beatoraja.config.SkinConfiguration;
@@ -286,6 +287,7 @@ public class StringPropertyFactory {
 			final SongData song = state.resource.getSongdata();
 			return song != null ? song.getSha256() : "";
 		}),
+		mode(SkinProperty.STRING_MODE_FILTER, (state) -> state.resource.getPlayerConfig().getModeFilter().name),
 		;
 		
 		/**

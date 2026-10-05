@@ -623,6 +623,26 @@ public class BooleanPropertyFactory {
 		
 		chart_24key(1160, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.KEYBOARD_24K.id))),
 		chart_48key(1161, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.KEYBOARD_24K_DOUBLE.id))),
+
+		mode_filter_all(OPTION_MODE_ALL, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.ALL)),
+		mode_filter_7keys(OPTION_MODE_7KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_7K)),
+		mode_filter_14keys(OPTION_MODE_14KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_14K)),
+		mode_filter_9keys(OPTION_MODE_9KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.POPN_9K)),
+		mode_filter_5keys(OPTION_MODE_5KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_5K)),
+		mode_filter_10keys(OPTION_MODE_10KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_10K)),
+		mode_filter_24keys(OPTION_MODE_24KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.KEYBOARD_24K)),
+		mode_filter_24keys_double(OPTION_MODE_24KEYS_DOUBLE, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.KEYBOARD_24K_DOUBLE)),
+		mode_filter_5keys_7keys(OPTION_MODE_5KEYS_7KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_5K_7K)),
+		mode_filter_10keys_14keys(OPTION_MODE_10KEYS_14KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_10K_14K)),
+		mode_filter_7keys_14keys(OPTION_MODE_7KEYS_14KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_7K_14K)),
+		mode_filter_5keys_10keys(OPTION_MODE_5KEYS_10KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_5K_10K)),
+		mode_filter_5keys_7keys_10keys_14keys(OPTION_MODE_5KEYS_7KEYS_10KEYS_14KEYS, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> state.resource.getPlayerConfig().getModeFilter() == ModeFilter.BEAT_KEYBOARD_ALL)),
+
+		chart_5key_7key(OPTION_5KEY_7KEYSONG, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.BEAT_5K.id || model.getMode() == Mode.BEAT_7K.id))),
+		chart_10key_14key(OPTION_10KEY_14KEYSONG, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.BEAT_10K.id || model.getMode() == Mode.BEAT_14K.id))),
+		chart_7key_14key(OPTION_7KEY_14KEYSONG, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.BEAT_7K.id || model.getMode() == Mode.BEAT_14K.id))),
+		chart_5key_10key(OPTION_5KEY_10KEYSONG, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.BEAT_5K.id || model.getMode() == Mode.BEAT_10K.id))),
+		chart_beat_all(OPTION_BEAT_ALLSONG, new SongDataBooleanProperty((model) -> (model.getMode() == Mode.BEAT_5K.id || model.getMode() == Mode.BEAT_7K.id || model.getMode() == Mode.BEAT_10K.id || model.getMode() == Mode.BEAT_14K.id))),
 		gauge_ex(1046, new DrawConditionProperty(DrawConditionProperty.TYPE_NO_STATIC) {
 			@Override
 			public boolean get(MainState state) {
