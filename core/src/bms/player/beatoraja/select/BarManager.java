@@ -32,7 +32,10 @@ import bms.player.beatoraja.ir.IRTableData;
 import bms.player.beatoraja.select.bar.*;
 import bms.player.beatoraja.skin.property.EventFactory.EventType;
 import bms.player.beatoraja.song.SongData;
+import bms.player.beatoraja.song.SongData;
 import bms.player.beatoraja.song.SongInformationAccessor;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 
 /**
  * 楽曲バー管理用クラス
@@ -958,20 +961,21 @@ public class BarManager {
 				if (bar instanceof SongBar && ((SongBar) bar).existsSong()) {
 					final SongBar songbar = (SongBar) bar;
 					SongData song = songbar.getSongData();
+					SongResource chartResource = SongResources.fromPath(Paths.get(song.getPath()));
 					try {
-						Path bannerfile = Paths.get(song.getPath()).getParent().resolve(song.getBanner());
+						SongResource bannerResource = chartResource.parent().resolve(song.getBanner());
 						// System.out.println(bannerfile.getPath());
-						if (song.getBanner().length() > 0 && Files.exists(bannerfile)) {
-							songbar.setBanner(select.getBannerResource().get(bannerfile.toString()));
+						if (song.getBanner().length() > 0 && bannerResource.exists()) {
+							songbar.setBanner(select.getBannerResource().get(bannerResource));
 						}
 					} catch (Exception e) {
 						logger.warn("banner読み込み失敗 : {}", song.getBanner());
 					}
 					try {
-						Path stagefilefile = Paths.get(song.getPath()).getParent().resolve(song.getStagefile());
+						SongResource stagefileResource = chartResource.parent().resolve(song.getStagefile());
 						// System.out.println(stagefilefile.getPath());
-						if (song.getStagefile().length() > 0 && Files.exists(stagefilefile)) {
-							songbar.setStagefile(select.getStagefileResource().get(stagefilefile.toString()));
+						if (song.getStagefile().length() > 0 && stagefileResource.exists()) {
+							songbar.setStagefile(select.getStagefileResource().get(stagefileResource));
 						}
 					} catch (Exception e) {
 						logger.warn("stagefile読み込み失敗 : {}", song.getStagefile());

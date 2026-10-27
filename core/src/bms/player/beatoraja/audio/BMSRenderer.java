@@ -1,6 +1,8 @@
 package bms.player.beatoraja.audio;
 
 import bms.model.*;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -32,13 +34,25 @@ public class BMSRenderer {
 	public RenderResult render(Path bmsPath, long maxDurationMs) {
 		logger.info("Starting BMS rendering: {}", bmsPath);
 
-		ChartDecoder decoder = ChartDecoder.getDecoder(bmsPath);
+		SongResource resource = SongResources.fromPath(bmsPath);
+		ChartSource source = new ChartSource() {
+			@Override
+			public String location() {
+				return resource.displayPath();
+			}
+
+			@Override
+			public java.io.InputStream openStream() throws java.io.IOException {
+				return resource.openStream();
+			}
+		};
+		ChartDecoder decoder = ChartDecoder.getDecoder(source);
 		if (decoder == null) {
 			logger.warn("Unsupported file format: {}", bmsPath);
 			return null;
 		}
 
-		BMSModel model = decoder.decode(bmsPath);
+		BMSModel model = decoder.decode(new ChartInformation(source, BMSModel.LNTYPE_LONGNOTE, null));
 		if (model == null) {
 			logger.warn("Failed to load BMS file: {}", bmsPath);
 			return null;
@@ -216,7 +230,7 @@ public class BMSRenderer {
 
 		Map<Integer, PCM> result = new HashMap<>();
 		String[] wavList = model.getWavList();
-		Path basePath = Paths.get(model.getPath()).getParent();
+		SongResource basePath = SongResources.fromPath(Paths.get(model.getPath())).parent();
 
 		int loaded = 0;
 		DummyAudioDriver driver = new DummyAudioDriver(sampleRate, channels);
@@ -226,6 +240,34 @@ public class BMSRenderer {
 			}
 
 			// Resolve audio file path
+			SongResource wavResource = null;
+			SongResource resolvedResource = basePath.resolve(wavList[i]);
+			SongResource[] candidates = AudioDriver.getResources(resolvedResource);
+
+			for (SongResource candidate : candidates) {
+				try {
+					if (candidate.exists()) {
+						wavResource = candidate;
+						break;
+					}
+				} catch (java.io.IOException ignored) {
+				}
+			}
+
+			if (wavResource == null) {
+				logger.warn("Audio file not found: {}", wavList[i]);
+				continue;
+			}
+
+			// Load as PCM
+			PCM pcm = PCM.load(wavResource, driver);
+			if (pcm != null) {
+				result.put(i, pcm);
+				loaded++;
+			} else {
+				logger.trace("Failed to load audio file: {}", wavResource.displayPath());
+			}
+			/*
 			Path wavPath = null;
 			Path resolvedPath = basePath.resolve(wavList[i]).toAbsolutePath();
 			Path[] candidates = AudioDriver.getPaths(resolvedPath.toString());
@@ -249,6 +291,7 @@ public class BMSRenderer {
 				loaded++;
 			} else {
 				logger.trace("Failed to load audio file: {}", wavPath);
+			*/ if (false) {
 			}
 		}
 
@@ -270,6 +313,11 @@ public class BMSRenderer {
 			super(1);
 			setSampleRate(sampleRate);
 			this.channels = channels;
+		}
+
+		@Override
+		protected PCM getKeySound(SongResource resource) {
+			return PCM.load(resource, this);
 		}
 
 		@Override

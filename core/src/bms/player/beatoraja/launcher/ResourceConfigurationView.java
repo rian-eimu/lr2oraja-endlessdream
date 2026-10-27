@@ -29,7 +29,9 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Callback;
+import javafx.util.Callback;
 import javafx.util.Pair;
+import javafx.util.StringConverter;
 
 public class ResourceConfigurationView implements Initializable {
 
@@ -43,6 +45,10 @@ public class ResourceConfigurationView implements Initializable {
     private EditableTableView<TableInfo> available_tables;
 	@FXML
 	private CheckBox updatesong;
+	@FXML
+	private CheckBox scanSongArchives;
+	@FXML
+	private ComboBox<Config.SongArchiveExtractMode> songArchiveExtractMode;
 
 	private Config config;
 	
@@ -51,6 +57,19 @@ public class ResourceConfigurationView implements Initializable {
 
 	@Override
 	public void initialize(URL arg0, ResourceBundle arg1) {
+		songArchiveExtractMode.getItems().setAll(Config.SongArchiveExtractMode.values());
+		songArchiveExtractMode.disableProperty().bind(scanSongArchives.selectedProperty().not());
+		songArchiveExtractMode.setConverter(new StringConverter<>() {
+			@Override
+			public String toString(Config.SongArchiveExtractMode value) {
+				return value == null ? "" : arg1.getString("SONG_ARCHIVE_EXTRACT_" + value.name());
+			}
+
+			@Override
+			public Config.SongArchiveExtractMode fromString(String value) {
+				return Config.SongArchiveExtractMode.NO_TEMPORARY_FILES;
+			}
+		});
 		bmsroot.setCellFactory(new Callback<>() {
 			@Override
 			public ListCell<String> call(ListView<String> param) {
@@ -166,6 +185,8 @@ public class ResourceConfigurationView implements Initializable {
 		this.downloadDirectory = config.getDownloadDirectory();
 		bmsroot.getItems().setAll(config.getBmsroot());
 		updatesong.setSelected(config.isUpdatesong());
+		scanSongArchives.setSelected(config.isScanSongArchives());
+		songArchiveExtractMode.setValue(config.getSongArchiveExtractMode());
 
 		// Make sure that all available tables are present in the list prior to deduplicating with the user tables
         String[] intermediate = addUniqueTable(Config.AVAILABLE_TABLEURL, config.getAvailableURL());
@@ -179,6 +200,8 @@ public class ResourceConfigurationView implements Initializable {
 	public void commit() {
 		config.setBmsroot(bmsroot.getItems().toArray(new String[0]));
 		config.setUpdatesong(updatesong.isSelected());
+		config.setScanSongArchives(scanSongArchives.isSelected());
+		config.setSongArchiveExtractMode(songArchiveExtractMode.getValue());
 		config.setTableURL(TableInfo.toUrlArray(tableurl.getItems()));
 		config.setDownloadDirectory(downloadDirectory);
 	}

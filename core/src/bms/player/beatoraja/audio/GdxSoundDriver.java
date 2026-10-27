@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import bms.player.beatoraja.Config;
+import bms.player.beatoraja.song.SongResource;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.files.FileHandle;
@@ -55,6 +56,15 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 			}
 		}
 		return null;		
+	}
+
+	@Override
+	protected Sound getKeySound(SongResource resource) {
+		if (resource.localPath().isPresent()) {
+			return getKeySound(resource.localPath().get());
+		}
+		PCM pcm = PCM.load(resource, this);
+		return pcm != null ? getKeySound(pcm) : null;
 	}
 
 	private Sound getKeySound(String name, String ext) {

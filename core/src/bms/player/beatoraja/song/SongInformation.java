@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
  */
 public class SongInformation implements Validatable {
 	private static final Logger logger = LoggerFactory.getLogger(SongInformation.class);
+	private static final int MAX_ANALYSIS_DURATION_MILLIS = 6 * 60 * 60 * 1000;
 	
 	/**
 	 * 譜面のハッシュ値
@@ -90,21 +91,34 @@ public class SongInformation implements Validatable {
 		s = BMSModelUtils.getTotalNotes(model, BMSModelUtils.TOTALNOTES_SCRATCH);
 		ls = BMSModelUtils.getTotalNotes(model, BMSModelUtils.TOTALNOTES_LONG_SCRATCH);
 		total = model.getTotal();
+		final TimeLine[] tlsCheck = model.getAllTimeLines();
+		final int lastTime = model.getLastTime();
+		if (lastTime < 0 || lastTime > MAX_ANALYSIS_DURATION_MILLIS) {
+			throw new IllegalArgumentException("譜面情報の解析可能時間を超えています : " + lastTime + "ms");
+		}
+		if (tlsCheck.length == 0) {
+			return;
+		}
 		
 		int[][] lanenotes = new int[model.getMode().key][3];
 		int[][] data = new int[model.getLastTime() / 1000 + 2][7];
 		int pos = 0;
-		int border = (int) (model.getTotalNotes() * (1.0 - 100.0 / model.getTotal()));
+		int border = total > 0 ? (int) (model.getTotalNotes() * (1.0 - 100.0 / total)) : 0;
 		int borderpos = 0;
 		for (TimeLine tl : model.getAllTimeLines()) {
-			if (tl.getTime() / 1000 != pos) {
+			final int second = tl.getTime() / 1000;
+			if (second < 0 || second >= data.length) {
+				continue;
+			}
+			if (second != pos) {
 				pos = tl.getTime() / 1000;
 			}
 			for (int i = 0; i < model.getMode().key; i++) {
 				Note n = tl.getNote(i);
 				if (n != null) {
 					if(n instanceof LongNote && !((LongNote)n).isEnd()) {
-						for(int index = tl.getTime() / 1000;index <= ((LongNote)n).getPair().getTime() / 1000;index++) {
+						int endSecond = Math.min(((LongNote)n).getPair().getTime() / 1000, data.length - 1);
+						for(int index = second;index <= endSecond;index++) {
 							data[index][model.getMode().isScratchKey(i) ? 1 : 4]++;
 						}
 					}
@@ -146,7 +160,9 @@ public class SongInformation implements Validatable {
 				count++;
 			}
 		}
-		density /= count;
+		if (count > 0) {
+			density /= count;
+		}
 
 		final int d = Math.min(5, data.length - borderpos - 1);
 		enddensity = 0;
@@ -201,7 +217,12 @@ public class SongInformation implements Validatable {
 	}
 
 	public void setDistribution(String distribution) {
-		this.distribution = distribution;
+		this.distribution = distribution != null ? distribution : "";
+		distribution = this.distribution;
+		if (distribution.isEmpty()) {
+			distributionValues = new int[0][7];
+			return;
+		}
 		int[] index = {0,2,3,5,6};
 		if(distribution.startsWith("#")) {
 			index = new int[]{0,1,2,3,4,5,6};

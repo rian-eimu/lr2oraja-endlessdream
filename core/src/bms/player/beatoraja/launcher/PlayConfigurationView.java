@@ -938,6 +938,9 @@ public class PlayConfigurationView implements Initializable {
         Runnable loadBMSRunnable = () -> {
             try {
                 SongDatabaseAccessor songdb = MainLoader.getScoreDatabaseAccessor();
+                if (songdb instanceof SQLiteSongDatabaseAccessor sqliteSongDb) {
+                    sqliteSongDb.setArchiveConfig(config.isScanSongArchives(), config.getSongArchiveExtractMode());
+                }
                 SongInformationAccessor infodb = config.isUseSongInfo() ?
                         new SongInformationAccessor(Paths.get("songinfo.db").toString()) : null;
                 logger.info("song.db更新開始");

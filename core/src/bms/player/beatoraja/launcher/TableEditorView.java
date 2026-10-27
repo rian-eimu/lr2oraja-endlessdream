@@ -12,6 +12,7 @@ import bms.player.beatoraja.TableData;
 import bms.player.beatoraja.TableData.TableFolder;
 import bms.player.beatoraja.song.SongDatabaseAccessor;
 import bms.player.beatoraja.song.SongData;
+import bms.player.beatoraja.song.archive.SongArchives;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
@@ -156,7 +157,12 @@ public class TableEditorView implements Initializable {
 			openFolderButton.setOnAction((actionEvent) -> {
 				try {
 					if (Desktop.isDesktopSupported()) {
-						Desktop.getDesktop().open(Paths.get(songPath).getParent().toFile());
+						Path path = Paths.get(songPath);
+						Path archive = SongArchives.archivePath(path);
+						Path target = archive != null ? archive.getParent() : path.getParent();
+						if (target != null) {
+							Desktop.getDesktop().open(target.toFile());
+						}
 					}
 				} catch (IOException|IllegalArgumentException e) {
 					e.printStackTrace();
