@@ -68,6 +68,8 @@ public final class PracticeConfiguration {
 	
 	private static final String[] GRAPHTYPESTR = {"NOTETYPE", "JUDGE", "EARLYLATE"};
 
+	private static final String[] SCROLLMODESTR = {"OFF", "REMOVE", "ADD"};
+
 	public static final PracticeElement[] elements = PracticeElement.values();
 
 	public void create(BMSModel model, Config config, bms.player.beatoraja.PlayerConfig playerConfig) {
@@ -191,7 +193,7 @@ public final class PracticeConfiguration {
 			}
 
 			if (state.resource.mediaLoadFinished()) {
-				sprite.draw(titlefont, "PRESS 1KEY TO PLAY", x, y - 276, Color.ORANGE);
+				sprite.draw(titlefont, "PRESS 1KEY TO PLAY", x, y - 298, Color.ORANGE);
 			}
 			
 			String[] judge = {"PGREAT :","GREAT  :","GOOD   :", "BAD    :", "POOR   :", "KPOOR  :"};
@@ -313,6 +315,9 @@ public final class PracticeConfiguration {
 		GRAPHTYPE((practice, inc) -> {
 			practice.property.graphtype = (practice.property.graphtype + (inc ? 1 : 2)) % 3;
 		}, practice -> "GRAPHTYPE : " + GRAPHTYPESTR[practice.property.graphtype]),
+		SCROLLMODE((practice, inc) -> {
+			practice.property.scrollmode = (practice.property.scrollmode + (inc ? 1 : 2)) % 3;
+		}, practice -> "SCROLL MODIFY MODE : " + SCROLLMODESTR[practice.property.scrollmode]),
 		OPTION1P((practice, inc) -> {
 			final int options = (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K ? 7 : 10);
 			practice.property.random = (practice.property.random + (inc ? 1 : (options -1))) % options;
@@ -395,5 +400,9 @@ public final class PracticeConfiguration {
 		 *
 		 */
 		public int graphtype = 0;
+		/**
+		 * スクロール追加/削除モード
+		 */
+		public int scrollmode = 0;
 	}
 }

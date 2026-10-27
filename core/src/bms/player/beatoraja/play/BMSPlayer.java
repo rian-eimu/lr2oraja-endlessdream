@@ -714,6 +714,9 @@ public class BMSPlayer extends MainState {
 					PracticeModifier pm = new PracticeModifier(property.starttime * 100 / property.freq,
 							property.endtime * 100 / property.freq);
 					pm.modify(model);
+					if (property.scrollmode > 0) {
+						new ScrollSpeedModifier(property.scrollmode - 1, config.getScrollSection(), config.getScrollRate()).modify(model);
+					}
 					if (model.getMode().player == 2) {
 						if (property.doubleop == 1) {
 							new PlayerFlipModifier().modify(model);
