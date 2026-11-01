@@ -13,6 +13,8 @@ import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.select.bar.*;
 import bms.player.beatoraja.skin.SkinProperty;
 import bms.player.beatoraja.song.SongData;
+import bms.player.beatoraja.song.archive.SongArchives;
+import org.slf4j.LoggerFactory;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 
@@ -154,7 +156,7 @@ public class EventFactory {
 					paths.filter(p -> !Files.isDirectory(p) && p.toString().toLowerCase().endsWith(".txt")).forEach(p -> {
 						try {
 							Desktop.getDesktop().open(p.toFile());
-						} catch (IOException e) {
+						} catch (Exception e) {
 							e.printStackTrace();
 						}
 					});
@@ -317,14 +319,14 @@ public class EventFactory {
 					if (Desktop.isDesktopSupported()) {
 						if (current instanceof SongBar songbar) {
 							if (songbar.existsSong()) {
-								Desktop.getDesktop().open(Paths.get(songbar.getSongData().getPath()).getParent().toFile());
+								openWithExplorer(songbar.getSongData().getPath(), false);
 							} else if (songbar.getSongData() != null && songbar.getSongData().getOrg_md5() != null) {
 								String[] md5 = songbar.getSongData().getOrg_md5()
 										.toArray(new String[songbar.getSongData().getOrg_md5().size()]);
 								SongData[] songdata = selector.getSongDatabase().getSongDatas(md5);
 								for (SongData sd : songdata) {
 									if (sd.getPath() != null) {
-										Desktop.getDesktop().open(Paths.get(sd.getPath()).getParent().toFile());
+										openWithExplorer(sd.getPath(), false);
 										break;
 									}
 								}
@@ -334,17 +336,17 @@ public class EventFactory {
 									SongData[] songdata = selector.getSongDatabase().getSongDatasByText(m.group());
 									for (SongData sd : songdata) {
 										if (sd.getPath() != null) {
-											Desktop.getDesktop().open(Paths.get(sd.getPath()).getParent().toFile());
+											openWithExplorer(sd.getPath(), false);
 											break;
 										}
 									}
 								}
 							}
 						} else if (current instanceof FolderBar) {
-							Desktop.getDesktop().open(Paths.get(((FolderBar) current).getFolderData().getPath()).toFile());
+							openWithExplorer(((FolderBar) current).getFolderData().getPath(), true);
 						}
 					}
-				} catch (IOException e) {
+				} catch (Exception e) {
 					e.printStackTrace();
 				}				
 			}
@@ -791,6 +793,24 @@ public class EventFactory {
 			this.event = createTwoArgEvent(action, id);
 		}
 		
+		private static void openWithExplorer(String pathText, boolean directory) {
+			if (pathText == null) {
+				return;
+			}
+			try {
+				Path path = Paths.get(pathText);
+				Path archive = SongArchives.archivePath(path);
+				Path target = archive != null ? archive.getParent() : directory ? path : path.getParent();
+				if (target == null || !Files.isDirectory(target)) {
+					LoggerFactory.getLogger(EventFactory.class).warn("エクスプローラーで開く対象が存在しません : {}", pathText);
+					return;
+				}
+				Desktop.getDesktop().open(target.toFile());
+			} catch (IOException | RuntimeException e) {
+				LoggerFactory.getLogger(EventFactory.class).warn("エクスプローラーで開く処理に失敗しました : {} : {}", pathText, e.getMessage());
+			}
+		}
+
 	    private static BiConsumer<MainState, Integer> changeAutoSaveReplay(final int index) {
 	    	return (state, arg1) -> {
 	    		if(state instanceof MusicSelector selector) {

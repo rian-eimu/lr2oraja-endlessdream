@@ -1,5 +1,6 @@
 package bms.player.beatoraja.play.bga;
 
+import java.io.IOException;
 import java.nio.file.*;
 import java.util.Arrays;
 import org.slf4j.Logger;
@@ -13,6 +14,8 @@ import bms.player.beatoraja.ResourcePool;
 import bms.player.beatoraja.play.BMSPlayer;
 import bms.player.beatoraja.play.SkinBGA;
 import bms.player.beatoraja.skin.Skin.SkinObjectRenderer;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.*;
@@ -36,6 +39,7 @@ public class BGAProcessor {
 	private MovieProcessor[] movies = new MovieProcessor[0]; 
 	
 	private final ResourcePool<String, MovieProcessor> mpgresource;
+	private final Config config;
 
 	public static final String[] mov_extension = { "mp4", "wmv", "m4v", "webm", "mpg", "mpeg", "m1v", "m2v", "avi"};
 
@@ -74,6 +78,7 @@ public class BGAProcessor {
 
 	public BGAProcessor(Config config, PlayerConfig player) {
 		this.player = player;
+		this.config = config;
 
 		Pixmap blank = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
 		blank.setColor(Color.BLACK);
@@ -99,6 +104,11 @@ public class BGAProcessor {
 	}
 
 	public synchronized void setModel(BMSModel model) {
+		setModel(model, model != null ? SongResources.fromPath(Path.of(model.getPath())) : null);
+	}
+
+	/** 譜面リソースからの相対パスでBGAファイルを読み込む。 */
+	public synchronized void setModel(BMSModel model, SongResource chartResource) {
 		progress = 0;
 
 		cache.clear();
@@ -116,16 +126,16 @@ public class BGAProcessor {
 			}
 
 			// BMS格納ディレクトリ
-			Path dpath = Paths.get(model.getPath()).getParent();
+			SongResource directory = chartResource.parent();
 
 			movies = new MovieProcessor[model.getBgaList().length];
 			for (String name : model.getBgaList()) {
 				if (progress == 1) {
 					break;
 				}
-				Path f = null;
+				SongResource f = null;
 				try {
-					if (Files.exists(dpath.resolve(name))) {
+					if (directory.resolve(name).exists()) {
 						final int index = name.lastIndexOf('.');
 						String fex = null;
 						if (index != -1) {
@@ -135,8 +145,8 @@ public class BGAProcessor {
 							if (Arrays.asList(mov_extension).contains(fex)){
 								name = name.substring(0, index);
 								for (String mov : mov_extension) {
-									final Path mpgfile = dpath.resolve(name + "." + mov);
-									if (Files.exists(mpgfile)) {
+									final SongResource mpgfile = directory.resolve(name + "." + mov);
+									if (mpgfile.exists()) {
 										f = mpgfile;
 										break;
 									}
@@ -144,14 +154,14 @@ public class BGAProcessor {
 							}else if (Arrays.asList(BGImageProcessor.pic_extension).contains(fex)){
 								name = name.substring(0, index);
 								for (String pic : BGImageProcessor.pic_extension) {
-									final Path picfile = dpath.resolve(name + "." + pic);
-									if (Files.exists(picfile)) {
+									final SongResource picfile = directory.resolve(name + "." + pic);
+									if (picfile.exists()) {
 										f = picfile;
 										break;
 									}
 								}
 							}else{
-								f = dpath.resolve(name);
+								f = directory.resolve(name);
 							}
 						}
 					}
@@ -161,32 +171,37 @@ public class BGAProcessor {
 							name = name.substring(0, index);
 						}
 						for (String mov : mov_extension) {
-							final Path mpgfile = dpath.resolve(name + "." + mov);
-							if (Files.exists(mpgfile)) {
+							final SongResource mpgfile = directory.resolve(name + "." + mov);
+							if (mpgfile.exists()) {
 								f = mpgfile;
 								break;
 							}
 						}
 						if (f == null) {
 							for (String mov : BGImageProcessor.pic_extension) {
-								final Path picfile = dpath.resolve(name + "." + mov);
-								if (Files.exists(picfile)) {
+								final SongResource picfile = directory.resolve(name + "." + mov);
+								if (picfile.exists()) {
 									f = picfile;
 									break;
 								}
 							}
 						}
 					}
-				} catch (InvalidPathException e) {
+				} catch (IOException | IllegalArgumentException e) {
 					logger.warn(e.getMessage());
 				}
 
 				if (f != null) {
 					boolean isMovie = false;
 					for (String mov : mov_extension) {
-						if (f.getFileName().toString().toLowerCase().endsWith(mov)) {
+						if (f.name().toLowerCase().endsWith(mov)) {
 							try {
-								MovieProcessor mm = mpgresource.get(f.toString());
+								SongResource movieResource = f;
+								MovieProcessor mm = mpgresource.get(f.cacheKey(), () -> {
+									FFmpegProcessor processor = new FFmpegProcessor(config.getFrameskip());
+									processor.create(movieResource);
+									return processor;
+								});
 								movies[id] = mm;
 								isMovie = true;
 								break;

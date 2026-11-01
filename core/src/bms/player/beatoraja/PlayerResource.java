@@ -10,6 +10,8 @@ import bms.player.beatoraja.play.BMSPlayerRule;
 import bms.player.beatoraja.play.GrooveGauge;
 import bms.player.beatoraja.play.bga.BGAProcessor;
 import bms.player.beatoraja.song.SongData;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.FloatArray;
 
@@ -35,6 +37,8 @@ public final class PlayerResource {
 	 * 選曲中のBMS
 	 */
 	private BMSModel model;
+	/** {@link #model} の元リソース（ランダム再デコード時にも使用）。 */
+	private SongResource chartResource;
 	
 	private long marginTime;
 	/**
@@ -172,7 +176,8 @@ public final class PlayerResource {
 		// TODO play mode, リプレイデータでの読み込み分岐をここで行う
 		this.mode = mode;
 		replay = new ReplayData();
-		model = loadBMSModel(f, pconfig.getLnmode());
+		chartResource = SongResources.fromPath(f);
+		model = loadBMSModel(chartResource, pconfig.getLnmode());
 		if (model == null) {
 			logger.warn("楽曲が存在しないか、解析時にエラーが発生しました:{}", f.toString());
 			return false;
@@ -188,7 +193,7 @@ public final class PlayerResource {
 		}
 
 		orgmode = model.getMode();
-		bmsresource.setBMSFile(model, f, config, mode);
+		bmsresource.setBMSFile(model, chartResource, config, mode);
 		if(songdata != null) {
 			songdata.setBMSModel(model);
 		} else {
@@ -207,11 +212,19 @@ public final class PlayerResource {
 	}
 
 	public BMSModel loadBMSModel(Path f, int lnmode) {
-		return loadBMSModel(new ChartInformation(f, lnmode, null));
+		return loadBMSModel(SongResources.fromPath(f), lnmode);
+	}
+
+	public BMSModel loadBMSModel(SongResource resource, int lnmode) {
+		return loadBMSModel(new ChartInformation(chartSource(resource), lnmode, null));
 	}
 
 	public BMSModel loadBMSModel(int[] selectedRandom) {
 		if(model != null) {
+			if (chartResource != null) {
+				return loadBMSModel(new ChartInformation(chartSource(chartResource),
+						model.getChartInformation().lntype, selectedRandom));
+			}
 			ChartInformation info = model.getChartInformation();
 			return loadBMSModel(new ChartInformation(info.path, info.lntype, selectedRandom));			
 		}
@@ -219,7 +232,7 @@ public final class PlayerResource {
 	}
 
 	public BMSModel loadBMSModel(ChartInformation info) {
-		ChartDecoder decoder = ChartDecoder.getDecoder(info.path);
+		ChartDecoder decoder = info.source != null ? ChartDecoder.getDecoder(info.source) : ChartDecoder.getDecoder(info.path);
 		if(decoder == null) {
 			return null;
 		}
@@ -249,6 +262,20 @@ public final class PlayerResource {
 		}
 
 		return model;
+	}
+
+	private static ChartSource chartSource(SongResource resource) {
+		return new ChartSource() {
+			@Override
+			public String location() {
+				return resource.displayPath();
+			}
+
+			@Override
+			public java.io.InputStream openStream() throws java.io.IOException {
+				return resource.openStream();
+			}
+		};
 	}
 
 	public BMSModel getBMSModel() {

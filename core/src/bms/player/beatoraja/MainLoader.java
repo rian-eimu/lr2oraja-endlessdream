@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.JOptionPane;
 
 import bms.player.beatoraja.exceptions.PlayerConfigException;
+import bms.player.beatoraja.song.SongResources;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Graphics;
@@ -138,6 +139,7 @@ public class MainLoader extends Application {
                 JOptionPane.showMessageDialog(null, e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+
 
         for (SongData song : getScoreDatabaseAccessor().getSongDatas(SongUtils.illegalsongs)) {
             MainLoader.putIllegalSong(song.getSha256());
@@ -294,7 +296,8 @@ public class MainLoader extends Application {
 			try {
 				Config config = Config.read();
 				Class.forName("org.sqlite.JDBC");
-				songdb = new SQLiteSongDatabaseAccessor(config.getSongpath(), config.getBmsroot());
+				songdb = new SQLiteSongDatabaseAccessor(config.getSongpath(), config.getBmsroot(),
+						config.isScanSongArchives(), config.getSongArchiveExtractMode());
 			} catch (ClassNotFoundException | PlayerConfigException e) {
 				logger.error("Failed to access score database: {}", e.getLocalizedMessage());
 			}

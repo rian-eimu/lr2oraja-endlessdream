@@ -2,6 +2,8 @@ package bms.player.beatoraja.audio;
 
 import bms.model.*;
 import bms.player.beatoraja.ResourcePool;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -58,6 +60,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 	 * オーディオキャッシュデータ
 	 */
 	private final AudioCache cache;
+	private SongResource modelResource;
 	
 	private int sampleRate;
 	int channels;
@@ -73,6 +76,16 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 	 * @return 音源データ
 	 */
 	protected abstract T getKeySound(Path p);
+
+	/** アーカイブやリモートリソースがファイルシステム展開をバイパスできるようにする。 */
+	protected T getKeySound(SongResource resource) {
+		try {
+			return getKeySound(resource.materialize());
+		} catch (Exception e) {
+			logger.warn("音源読み込み失敗。{}", e.getMessage());
+			return null;
+		}
+	}
 
 	/**
 	 * PCMオブジェクトで指定されたキー音の音源データを取得する
@@ -171,6 +184,14 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		}
 	}
 	
+	@Override
+	public void play(SongResource resource, float volume, boolean loop) {
+		final AudioElement<T> sound = getSound(resource);
+		if (sound != null) {
+			play(sound, volume, loop);
+		}
+	}
+
 	private AudioElement<T> getSound(String p) {
 		if (p == null || p.length() == 0) {
 			return null;
@@ -188,6 +209,35 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		return sound;
 	}
 
+	private AudioElement<T> getSound(SongResource resource) {
+		if (resource == null) {
+			return null;
+		}
+		String key = resource.cacheKey();
+		AudioElement<T> sound = soundmap.get(key);
+		if (!soundmap.containsKey(key)) {
+			try {
+				sound = new AudioElement<>(getKeySound(resource));
+				sound = sound.audio != null ? sound : null;
+				soundmap.put(key, sound);
+			} catch (Exception e) {
+				logger.warn("音源読み込み失敗。{}", e.getMessage());
+			}
+		}
+		return sound;
+	}
+
+	@Override
+	public void setVolume(SongResource resource, float volume) {
+		if (resource == null) {
+			return;
+		}
+		AudioElement<T> sound = soundmap.get(resource.cacheKey());
+		if (sound != null) {
+			setVolume(sound, volume);
+		}
+	}
+
 	public void setVolume(String p, float volume) {
 		if (p == null || p.length() == 0) {
 			return;
@@ -196,6 +246,15 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		if (sound != null) {
 			setVolume(sound, volume);
 		}
+	}
+
+	@Override
+	public boolean isPlaying(SongResource resource) {
+		if (resource == null) {
+			return false;
+		}
+		AudioElement<T> sound = soundmap.get(resource.cacheKey());
+		return sound != null && isPlaying(sound.audio);
 	}
 
 	public boolean isPlaying(String p) {
@@ -217,6 +276,17 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		this.sampleRate = sampleRate;
 	}
 	
+	@Override
+	public void stop(SongResource resource) {
+		if (resource == null) {
+			return;
+		}
+		AudioElement<T> sound = soundmap.get(resource.cacheKey());
+		if (sound != null) {
+			stop(sound.audio);
+		}
+	}
+
 	public void stop(String p) {
 		if (p == null || p.length() == 0) {
 			return;
@@ -224,6 +294,17 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		AudioElement<T> sound = soundmap.get(p);
 		if (sound != null) {
 			stop(sound.audio);
+		}
+	}
+
+	@Override
+	public void dispose(SongResource resource) {
+		if (resource == null) {
+			return;
+		}
+		AudioElement<T> sound = soundmap.remove(resource.cacheKey());
+		if (sound != null) {
+			disposeKeySound(sound.audio);
 		}
 	}
 
@@ -244,6 +325,13 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 	 * @param model
 	 */
 	public synchronized void setModel(BMSModel model) {
+		SongResource resource = modelResource != null ? modelResource : SongResources.fromPath(Paths.get(model.getPath()));
+		setModel(model, resource);
+	}
+
+	@Override
+	public synchronized void setModel(BMSModel model, SongResource resource) {
+		modelResource = resource;
 		logger.info("音源ファイル読み込み開始。");
 		String[] wavlist = model.getWavList();
 		final int wavcount = wavlist.length;
@@ -253,7 +341,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		progress = new AtomicInteger();
 		noteMapSize = 0;
 		// BMS格納ディレクトリ
-		Path dpath = Paths.get(model.getPath()).getParent();
+		SongResource directory = resource.parent();
 
 		if (model.getVolwav() > 0 && model.getVolwav() < 100) {
 			volume = model.getVolwav() / 100f;
@@ -305,17 +393,17 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 				return;
 			}
 			try {
-				Path p;
+				SongResource soundResource;
 				if (wavid < wavcount) {
-					p = dpath.resolve(wavlist[wavid]).toAbsolutePath();
+					soundResource = directory.resolve(wavlist[wavid]);
 				} else {
-					p = Paths.get("defaultsound/landmine.wav").toAbsolutePath();
+					soundResource = SongResources.local(Paths.get("defaultsound/landmine.wav").toAbsolutePath());
 				}
 				for (Note note : waventry.getValue()) {
 					// 音切りあり・なし両方のデータが必要になるケースがある
 					if (note.getMicroStarttime() == 0 && note.getMicroDuration() == 0) {
 						// 音切りなしのケース
-						wavmap[wavid] = cache.get(new AudioKey(p.toString(), note));
+						wavmap[wavid] = cache.get(new AudioKey(soundResource, note));
 						if (wavmap[wavid] == null) {
 							break;
 						}
@@ -332,7 +420,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 							}
 						}
 						if (b) {
-							T sliceaudio = cache.get(new AudioKey(p.toString(), note));
+							T sliceaudio = cache.get(new AudioKey(soundResource, note));
 							if (sliceaudio != null) {
 								slicesound[note.getWav()].add(new SliceWav<T>(note, sliceaudio));
 							} else {
@@ -341,7 +429,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 						}
 					}
 				}
-			} catch (InvalidPathException e) {
+			} catch (IllegalArgumentException e) {
 				logger.warn(e.getMessage());
 			}
 			progress.incrementAndGet();
@@ -595,11 +683,22 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		private T loadSlice(AudioKey key) {
             PCM wav = null;
             synchronized(pcmMap) {
-                wav = pcmMap.get(key.path);
-                if (wav == null) {
-                    wav = PCM.load(key.path, AbstractAudioDriver.this);
+				for (SongResource resource : AudioDriver.getResources(key.resource)) {
+					wav = pcmMap.get(resource.cacheKey());
+					if (wav == null) {
+						wav = PCM.load(resource, AbstractAudioDriver.this);
+						if(wav != null) {
+							pcmMap.put(resource.cacheKey(), wav);
+						}
+					}
+					if (wav != null) {
+						break;
+					}
+				}
+                if (false && wav == null) {
+//                    wav = PCM.load(key.path, AbstractAudioDriver.this);
                     if(wav != null) {
-                        pcmMap.put(key.path, wav);
+//                        pcmMap.put(key.path, wav);
                     }
                 }
             }
@@ -623,19 +722,32 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 
 		@Override
 		protected T load(AudioKey key) {
-			logger.trace("音源ファイルを読み込む中：{}", key.path);
+			logger.trace("音源ファイルを読み込む中：{}", key.resource.displayPath());
 
 		    T sound = key.start == 0 && key.duration == 0
-                    ? getKeySound(Paths.get(key.path)) // 音切りなしのケース
+                    ? loadFull(key) // 音切りなしのケース
                     : loadSlice(key);
 
 		    if (sound == null) {
-				logger.warn("音源ファイル読み込み失敗：{}", key.path);
+				logger.warn("音源ファイル読み込み失敗：{}", key.resource.displayPath());
             }
 			return sound;
 		}
 
 		
+		@Override
+		public String toString() { return super.toString(); }
+
+		private T loadFull(AudioKey key) {
+			for (SongResource resource : AudioDriver.getResources(key.resource)) {
+				T sound = getKeySound(resource);
+				if (sound != null) {
+					return sound;
+				}
+			}
+			return null;
+		}
+		private void unusedMethodForOverride() {}
 		@Override
 		public synchronized void disposeOld() {
 			pcmMap.clear();
@@ -670,7 +782,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		/**
 		 * Audio File path
 		 */
-		public final String path;
+		public final SongResource resource;
 		/**
 		 * Audio start time(us)
 		 */
@@ -680,8 +792,9 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		 */
 		public final long duration;
 
-		public AudioKey(String path, Note n) {
-			this.path = path;
+		public AudioKey(SongResource resource, Note n) {
+			this.resource = resource;
+//			this.path = path;
 			this.start = n.getMicroStarttime();
 			this.duration = n.getMicroDuration();
 		}
@@ -689,13 +802,13 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		public boolean equals(Object o) {
 			if (o instanceof AudioKey) {
 				final AudioKey key = (AudioKey) o;
-				return path.equals(key.path) && start == key.start && duration == key.duration;
+				return resource.cacheKey().equals(key.resource.cacheKey()) && start == key.start && duration == key.duration;
 			}
 			return false;
 		}
 		
 		public int hashCode() {
-			return java.util.Objects.hash(path, start, duration);
+			return java.util.Objects.hash(resource.cacheKey(), start, duration);
 		}
 	}
 }

@@ -146,6 +146,18 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 	}
 
 	public void update(BMSModel model) {
+		if (conn == null) {
+			return;
+		}
+		try {
+			SongInformation info = new SongInformation(model);
+			insert(qr, conn, "information", info);
+		} catch (SQLException | RuntimeException e) {
+			logger.warn("楽曲情報の更新をスキップしました : {} : {}", model.getPath(), e.getMessage());
+		}
+	}
+
+	private void update_unused(BMSModel model) {
 		SongInformation info = new SongInformation(model);
 		try {
 			insert(qr, conn, "information", info);

@@ -1,5 +1,7 @@
 package bms.player.beatoraja.play.bga;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.Buffer;
@@ -18,6 +20,8 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Gdx2DPixmap;
 import com.badlogic.gdx.utils.GdxRuntimeException;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 import org.bytedeco.javacv.Java2DFrameConverter;
 
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_RGB24;
@@ -58,8 +62,14 @@ public class FFmpegProcessor implements MovieProcessor {
 		this.fpsd = fpsd;
 	}
 
+
 	public void create(String filepath) {
-		movieseek = new MovieSeekThread(filepath);
+		create(SongResources.fromPath(java.nio.file.Path.of(filepath)));
+	}
+
+	/** アーカイブを展開せずにリソースから動画デコードを開始する。 */
+	public void create(SongResource resource) {
+		movieseek = new MovieSeekThread(resource);
 		movieseek.start();
 	}
 
@@ -129,18 +139,22 @@ public class FFmpegProcessor implements MovieProcessor {
 
 		private Pixmap pixmap;
 
-		private String filepath;
+		private final SongResource resource;
+		private volatile byte[] movieBytes;
 		
 		private long offset;
 		private long framecount;
 
-		public MovieSeekThread(String filepath) {
-			this.filepath = filepath;
+		public MovieSeekThread(SongResource resource) {
+			this.resource = resource;
 		}
 
 		public void run() {
 			try {
-				grabber = new FFmpegFrameGrabber(filepath);
+				try (InputStream input = resource.openStream()) {
+					movieBytes = input.readAllBytes();
+				}
+				grabber = new FFmpegFrameGrabber(new ByteArrayInputStream(movieBytes));
 				// HACK: frame caught by ffmpeg's color order is wrong on macos only
 				// Expected to be RGB, got BGR
 				if (UIUtils.isMac) {
@@ -254,7 +268,8 @@ public class FFmpegProcessor implements MovieProcessor {
 				try {
 					grabber.stop();
 					grabber.close();
-					logger.info("動画リソースの開放 : {}", filepath);
+					movieBytes = null;
+					logger.info("動画リソースの開放 : {}", resource.displayPath());
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}

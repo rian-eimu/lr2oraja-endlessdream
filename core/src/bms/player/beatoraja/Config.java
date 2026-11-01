@@ -175,6 +175,16 @@ public class Config implements Validatable {
 
 	private boolean updatesong = false;
 
+	/**
+	 * 楽曲更新時にzip/rarアーカイブも探索するか
+	 */
+	private boolean scanSongArchives = false;
+
+	/**
+	 * 楽曲アーカイブの展開モード
+	 */
+	private SongArchiveExtractMode songArchiveExtractMode = SongArchiveExtractMode.NO_TEMPORARY_FILES;
+
 	private int skinPixmapGen = 4;
 	private int stagefilePixmapGen = 2;
 	private int bannerPixmapGen = 2;
@@ -630,6 +640,22 @@ public class Config implements Validatable {
 		this.updatesong = updatesong;
 	}
 
+	public boolean isScanSongArchives() {
+		return scanSongArchives;
+	}
+
+	public void setScanSongArchives(boolean scanSongArchives) {
+		this.scanSongArchives = scanSongArchives;
+	}
+
+	public SongArchiveExtractMode getSongArchiveExtractMode() {
+		return songArchiveExtractMode;
+	}
+
+	public void setSongArchiveExtractMode(SongArchiveExtractMode songArchiveExtractMode) {
+		this.songArchiveExtractMode = songArchiveExtractMode;
+	}
+
 	public DisplayMode getDisplaymode() {
 		return displaymode;
 	}
@@ -900,6 +926,9 @@ public class Config implements Validatable {
 			tableURL = DEFAULT_TABLEURL;
 		}
 		tableURL = Validatable.removeInvalidElements(tableURL);
+		if (songArchiveExtractMode == null) {
+			songArchiveExtractMode = SongArchiveExtractMode.NO_TEMPORARY_FILES;
+		}
 
 		bga = MathUtils.clamp(bga, 0, 2);
 		bgaExpand = MathUtils.clamp(bgaExpand, 0, 2);
@@ -1012,6 +1041,12 @@ public class Config implements Validatable {
 
     public enum DisplayMode {
 		FULLSCREEN,BORDERLESS,WINDOW;
+	}
+
+	public enum SongArchiveExtractMode {
+		NO_TEMPORARY_FILES,
+		TEMPORARY,
+		SONG_DIRECTORY
 	}
 
 	public enum SongPreview {
