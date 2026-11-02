@@ -146,4 +146,45 @@ public class ConditionalBMSDecoderTest {
         assertTrue(ChartDecoder.getDecoder("TEST.BMC") instanceof BMSDecoder);
         assertTrue(ChartDecoder.getDecoder(java.nio.file.Path.of("sample.bmc")) instanceof BMSDecoder);
     }
+
+    @Test
+    public void testSongDataAndIRChartDataConditionalFlag() {
+        String conditionalBms = String.join("\r\n",
+                "#PLAYER 1",
+                "#BPM 120",
+                "#WAV01 a.wav",
+                "#CONDITIONAL 1.0",
+                "#WHEN SCORE >= 100",
+                "#00111:0101",
+                "#DEFAULT",
+                "#00111:01",
+                "#ENDCONDITIONAL",
+                "");
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel conditionalModel = decoder.decode(conditionalBms.getBytes(StandardCharsets.UTF_8), false, null);
+        assertNotNull(conditionalModel);
+
+        bms.player.beatoraja.song.SongData conditionalSong = new bms.player.beatoraja.song.SongData(conditionalModel, false);
+        assertTrue(conditionalSong.hasConditionalSequence());
+        assertFalse(conditionalSong.hasRandomSequence());
+
+        bms.player.beatoraja.ir.IRChartData conditionalChart = new bms.player.beatoraja.ir.IRChartData(conditionalSong);
+        assertTrue(conditionalChart.hasConditional);
+        assertFalse(conditionalChart.hasRandom);
+
+        String normalBms = String.join("\r\n",
+                "#PLAYER 1",
+                "#BPM 120",
+                "#WAV01 a.wav",
+                "#00111:01",
+                "");
+        BMSModel normalModel = decoder.decode(normalBms.getBytes(StandardCharsets.UTF_8), false, null);
+        assertNotNull(normalModel);
+
+        bms.player.beatoraja.song.SongData normalSong = new bms.player.beatoraja.song.SongData(normalModel, false);
+        assertFalse(normalSong.hasConditionalSequence());
+
+        bms.player.beatoraja.ir.IRChartData normalChart = new bms.player.beatoraja.ir.IRChartData(normalSong);
+        assertFalse(normalChart.hasConditional);
+    }
 }

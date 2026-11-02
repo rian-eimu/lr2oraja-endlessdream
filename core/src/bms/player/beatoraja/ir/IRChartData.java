@@ -115,6 +115,10 @@ public class IRChartData {
 	 */
 	public final boolean hasRandom;
 	/**
+	 * CONDITIONAL定義が存在するかどうか
+	 */
+	public final boolean hasConditional;
+	/**
 	 * ストップシーケンスが存在するかどうか
 	 */
 	public final boolean hasStop;
@@ -152,6 +156,7 @@ public class IRChartData {
 		this.hasHLN = song.hasHellLongNote();
 		this.hasMine = song.hasMineNote();
 		this.hasRandom = song.hasRandomSequence();
+		this.hasConditional = song.hasConditionalSequence();
 		this.hasStop = song.isBpmstop();
 		this.lntype = lntype;
 

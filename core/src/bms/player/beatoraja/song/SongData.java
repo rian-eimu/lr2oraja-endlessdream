@@ -30,6 +30,7 @@ public class SongData implements Validatable, IpfsInformation {
 	public static final int FEATURE_STOPSEQUENCE = 64;
 	public static final int FEATURE_SCROLL = 128;
 	public static final int FEATURE_HELLLONGNOTE = 256;
+	public static final int FEATURE_CONDITIONAL = 512;
 
 	public static final int CONTENT_TEXT = 1;
 	public static final int CONTENT_BGA = 2;
@@ -220,6 +221,7 @@ public class SongData implements Validatable, IpfsInformation {
 		timelines = model.getAllTimeLines();
 
 		feature |= model.getRandom() != null && model.getRandom().length > 0 ? FEATURE_RANDOM : 0;
+		feature |= model.hasConditional() ? FEATURE_CONDITIONAL : 0;
 		content |= model.getBgaList().length > 0 ? CONTENT_BGA : 0;
 		content |= length >= 30000 && model.getWavList().length <= (length / (50 * 1000)) + 3 ? CONTENT_NOKEYSOUND : 0;
 		
@@ -394,6 +396,10 @@ public class SongData implements Validatable, IpfsInformation {
 
 	public boolean hasRandomSequence() {
 		return (feature & FEATURE_RANDOM) != 0;
+	}
+
+	public boolean hasConditionalSequence() {
+		return (feature & FEATURE_CONDITIONAL) != 0;
 	}
 
 	public boolean hasMineNote() {
