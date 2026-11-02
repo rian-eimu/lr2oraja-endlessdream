@@ -278,5 +278,56 @@ class BMSDecoderTest {
         // 1鍵: 2個, 2鍵: 2個 = 計4個
         assertEquals(4, model.getTotalNotes());
     }
+
+    @Test
+    void testLnMode4AndTotalNotes() {
+        // #LNMODE 4 のパースと無効値の後置き上書き抑止、総ノーツ数（1本1ノーツ）およびSongData特徴フラグの確認
+        String bmsContent = String.join("\n",
+                "#PLAYER 1",
+                "#GENRE TEST",
+                "#TITLE Test LNMODE 4",
+                "#ARTIST Tester",
+                "#BPM 120",
+                "#LNMODE 4",
+                "#LNMODE 5",
+                "#LNMODE 0",
+                "#WAV01 01.wav",
+                "#WAV02 02.wav",
+                "#00151:0102"
+        );
+
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(bmsContent.getBytes(StandardCharsets.US_ASCII), false, null);
+
+        assertNotNull(model);
+        assertEquals(4, model.getLnmode());
+        // HLNは終端をノーツ数に含めないため1ノーツ
+        assertEquals(1, model.getTotalNotes());
+
+        TimeLine[] timelines = model.getAllTimeLines();
+        LongNote startNote = null;
+        LongNote endNote = null;
+        for (TimeLine tl : timelines) {
+            Note n = tl.getNote(0);
+            if (n instanceof LongNote ln) {
+                if (!ln.isEnd()) {
+                    startNote = ln;
+                } else {
+                    endNote = ln;
+                }
+            }
+        }
+        assertNotNull(startNote);
+        assertNotNull(endNote);
+        assertEquals(LongNote.TYPE_HELLLONGNOTE, startNote.getType());
+        assertEquals(LongNote.TYPE_HELLLONGNOTE, endNote.getType());
+
+        bms.player.beatoraja.song.SongData songData = new bms.player.beatoraja.song.SongData(model, false);
+        assertTrue(songData.hasHellLongNote());
+        assertTrue(songData.hasAnyLongNote());
+
+        bms.player.beatoraja.ir.IRChartData chartData = new bms.player.beatoraja.ir.IRChartData(songData);
+        assertTrue(chartData.hasHLN);
+    }
 }
 

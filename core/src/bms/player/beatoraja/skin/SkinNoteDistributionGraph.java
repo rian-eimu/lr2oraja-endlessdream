@@ -262,7 +262,8 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 		final Mode mode = model.getMode();
 		// #LNMODE is explicitly set to 1 (LN)
 		// or #LNMODE is undefined and getLntype (which reflects playconfig) is LN (0)
-		final boolean ignoreLNEnd = model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE);
+		final boolean ignoreLNEnd = model.getLnmode() == 1 || model.getLnmode() == 4
+				|| (model.getLnmode() == 0 && (model.getLntype() == BMSModel.LNTYPE_LONGNOTE || model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE));
 		for (TimeLine tl : model.getAllTimeLines()) {
 			final int index = tl.getTime() / 1000;
 			if(index >= data.length) {

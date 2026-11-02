@@ -66,7 +66,7 @@ public final class SkinBar extends SkinObject {
      */
     private final SkinImage[] label = new SkinImage[BARLABEL_COUNT];
     
-    public static final int BARLABEL_COUNT = 5;
+    public static final int BARLABEL_COUNT = 6;
 
     private SkinDistributionGraph graph;
 

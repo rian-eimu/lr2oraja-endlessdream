@@ -449,10 +449,13 @@ public final class BarRenderer {
 			if((flag & SongData.FEATURE_HELLCHARGENOTE) != 0) {
 				ln = ln > 2 ? ln : 2;
 			}
+			if ((flag & SongData.FEATURE_HELLLONGNOTE) != 0) {
+				ln = ln > 3 ? ln : 3;
+			}
 
 			if(ln >= 0) {
 				// LNラベル描画分岐
-				final int[] lnindex = {0,3,4};
+				final int[] lnindex = {0,3,4,5};
 				if (baro.getLabel(lnindex[ln]) != null) {
 					baro.getLabel(lnindex[ln]).draw(sprite, ba.x, ba.y);
 				} else if (baro.getLabel(0) != null) {

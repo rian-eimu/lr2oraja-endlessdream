@@ -732,6 +732,17 @@ public class LaneRenderer {
 
 	final private void drawLongNote(SkinObjectRenderer sprite, TextureRegion[] longImage, float x, float y, float width, float height, float scale,
 			int lane, LongNote ln) {
+
+		if ((model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+				|| ln.getType() == LongNote.TYPE_HELLLONGNOTE) {
+			// HLN
+			final JudgeManager judge = main.getJudgeManager();
+			sprite.draw(longImage[judge.getHellLongNoteBodyState(lane, ln)], x, y - height + scale, width, height - scale);
+			// 終端は描画しない
+			sprite.draw(longImage[5], x, y - height, width, scale);
+			return;
+		}
+
 		if ((model.getLntype() == BMSModel.LNTYPE_HELLCHARGENOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
 				|| ln.getType() == LongNote.TYPE_HELLCHARGENOTE) {
 			// HCN

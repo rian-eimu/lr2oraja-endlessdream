@@ -790,6 +790,10 @@ public class BMSPlayer extends MainState {
 					}
 				}
 				timer.switchTimer(TIMER_GAUGE_MAX_1P, gauge.getGauge().isMax());
+				timer.switchTimer(TIMER_FULLCOMBO_1P, this.judge.getPastNotes() == resource.getSongdata().getNotes()
+						&& !this.judge.hasActiveHellLongNoteBody()
+						&& !this.judge.hasActiveHellLongNoteBody()
+				&& this.judge.getPastNotes() == this.judge.getCombo());
 
 				skin.pomyu.updateTimer(this);
 
@@ -1172,6 +1176,12 @@ public class BMSPlayer extends MainState {
 				Note n = tl.getNote(i);
 				if (n != null && (n instanceof NormalNote || (n instanceof LongNote ln &&
 						!(((model.getLntype() == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+								|| ln.getType() == LongNote.TYPE_LONGNOTE
+								|| (model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+								|| ln.getType() == LongNote.TYPE_HELLLONGNOTE)
+								&& ((LongNote) n).isEnd())))
+						&& (n instanceof NormalNote || (n instanceof LongNote ln &&
+						!(((model.getLntype() == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
 								|| ln.getType() == LongNote.TYPE_LONGNOTE)
 								&& ((LongNote) n).isEnd())))) {
 					int state = n.getState();
@@ -1240,7 +1250,7 @@ public class BMSPlayer extends MainState {
 			return;
 		}
 		if (state != STATE_FINISHED && 
-				(judge.getPastNotes() == resource.getSongdata().getNotes()
+				((judge.getPastNotes() == resource.getSongdata().getNotes() && !judge.hasActiveHellLongNoteBody())
 				|| resource.getPlayMode().mode == BMSPlayerMode.Mode.AUTOPLAY)) {
 			state = STATE_FINISHED;
 			timer.setTimerOn(TIMER_FADEOUT);
@@ -1294,6 +1304,7 @@ public class BMSPlayer extends MainState {
 
 		//フルコン判定
 		timer.switchTimer(TIMER_FULLCOMBO_1P, this.judge.getPastNotes() == resource.getSongdata().getNotes()
+				&& !this.judge.hasActiveHellLongNoteBody()
 				&& this.judge.getPastNotes() == this.judge.getCombo());
 
 		getScoreDataProperty().update(this.judge.getScoreData(), this.judge.getPastNotes());
@@ -1312,7 +1323,7 @@ public class BMSPlayer extends MainState {
 	}
 
 	public boolean isNoteEnd() {
-		return judge.getPastNotes() == resource.getSongdata().getNotes();
+		return judge.getPastNotes() == resource.getSongdata().getNotes() && !judge.hasActiveHellLongNoteBody();
 	}
 
 	public int getPastNotes() {

@@ -427,7 +427,11 @@ public class MusicResult extends AbstractResult {
 		for (TimeLine tl : model.getAllTimeLines()) {
 			for (int i = 0; i < lanes; i++) {
 				Note n = tl.getNote(i);
-				if (n != null && !((model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE))
+				final boolean isIgnoredLnEnd = n instanceof LongNote ln && ln.isEnd()
+						&& (ln.getType() == LongNote.TYPE_LONGNOTE || ln.getType() == LongNote.TYPE_HELLLONGNOTE
+						|| (ln.getType() == LongNote.TYPE_UNDEFINED && (model.getLnmode() == 1 || model.getLnmode() == 4
+						|| (model.getLnmode() == 0 && (model.getLntype() == BMSModel.LNTYPE_LONGNOTE || model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE)))));
+				if (n != null && !isIgnoredLnEnd && !((model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE))
 						&& n instanceof LongNote && ((LongNote) n).isEnd())) {
 					int state = n.getState();
 					int time = n.getPlayTime();

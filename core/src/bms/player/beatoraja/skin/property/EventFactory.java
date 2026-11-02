@@ -631,7 +631,7 @@ public class EventFactory {
 	     */
         lnmode(308, (state, arg1) -> {
             if(state instanceof MusicSelector selector) {
-				final int lnmodelength = 3;
+				final int lnmodelength = 4;
 	            PlayerConfig config = selector.resource.getPlayerConfig();
 	            config.setLnmode((config.getLnmode() + (arg1 >= 0 ? 1 : lnmodelength - 1)) % lnmodelength);
 	            selector.getBarManager().updateBar();

@@ -587,6 +587,7 @@ public class MainController {
 		String lnModeName = switch (player.getLnmode()) {
 			case 1 -> "CN";
 			case 2 -> "HCN";
+			case 3 -> "HLN";
 			default -> "LN";
 		};
 		if (!lnModeName.equals("LN")) {

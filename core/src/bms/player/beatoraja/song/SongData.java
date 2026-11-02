@@ -29,6 +29,7 @@ public class SongData implements Validatable, IpfsInformation {
 	public static final int FEATURE_HELLCHARGENOTE = 32;
 	public static final int FEATURE_STOPSEQUENCE = 64;
 	public static final int FEATURE_SCROLL = 128;
+	public static final int FEATURE_HELLLONGNOTE = 256;
 
 	public static final int CONTENT_TEXT = 1;
 	public static final int CONTENT_BGA = 2;
@@ -198,6 +199,9 @@ public class SongData implements Validatable, IpfsInformation {
 							break;
 						case LongNote.TYPE_CHARGENOTE:
 							feature |= FEATURE_CHARGENOTE;
+							break;
+						case LongNote.TYPE_HELLLONGNOTE:
+							feature |= FEATURE_HELLLONGNOTE;
 							break;
 						case LongNote.TYPE_HELLCHARGENOTE:
 							feature |= FEATURE_HELLCHARGENOTE;
@@ -413,7 +417,11 @@ public class SongData implements Validatable, IpfsInformation {
 	}
 
 	public boolean hasAnyLongNote() {
-		return (feature & (FEATURE_UNDEFINEDLN | FEATURE_LONGNOTE | FEATURE_CHARGENOTE | FEATURE_HELLCHARGENOTE)) != 0;
+		return (feature & (FEATURE_UNDEFINEDLN | FEATURE_LONGNOTE | FEATURE_CHARGENOTE | FEATURE_HELLCHARGENOTE | FEATURE_HELLLONGNOTE)) != 0;
+	}
+
+	public boolean hasHellLongNote() {
+		return (feature & FEATURE_HELLLONGNOTE) != 0;
 	}
 
 	public boolean isBpmstop() {

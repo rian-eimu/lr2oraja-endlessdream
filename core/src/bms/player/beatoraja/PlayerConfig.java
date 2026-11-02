@@ -990,7 +990,7 @@ public final class PlayerConfig {
 		targetid = targetid!= null ? targetid : "MAX";
 		targetlist = targetlist != null ? targetlist : new String[0];
 		misslayerDuration = MathUtils.clamp(misslayerDuration, 0, 5000);
-		lnmode = MathUtils.clamp(lnmode, 0, 2);
+		lnmode = MathUtils.clamp(lnmode, 0, 3);
 		keyJudgeWindowRatePerfectGreat = MathUtils.clamp(keyJudgeWindowRatePerfectGreat, 25, 400);
 		keyJudgeWindowRateGreat = MathUtils.clamp(keyJudgeWindowRateGreat, 0, 400);
 		keyJudgeWindowRateGood = MathUtils.clamp(keyJudgeWindowRateGood, 0, 400);

@@ -63,7 +63,7 @@ public class IRChartData {
 	 */
 	public final Mode mode;
 	/**
-	 * LN TYPE(-1: 未指定, 0: LN, 1: CN, 2: HCN)
+	 * LN TYPE(-1: 未指定, 0: LN, 1: CN, 2: HCN, 3: HLN)
 	 */
 	public final int lntype;
 	/**
@@ -102,6 +102,10 @@ public class IRChartData {
 	 * HCNが存在するかどうか
 	 */
 	public final boolean hasHCN;
+	/**
+	 * HLNが存在するかどうか
+	 */
+	public final boolean hasHLN;
 	/**
 	 * 地雷ノーツが存在するかどうか
 	 */
@@ -145,6 +149,7 @@ public class IRChartData {
 		this.hasLN = song.hasLongNote();
 		this.hasCN = song.hasChargeNote();
 		this.hasHCN = song.hasHellChargeNote();
+		this.hasHLN = song.hasHellLongNote();
 		this.hasMine = song.hasMineNote();
 		this.hasRandom = song.hasRandomSequence();
 		this.hasStop = song.isBpmstop();

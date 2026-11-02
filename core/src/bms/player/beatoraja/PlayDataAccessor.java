@@ -62,7 +62,7 @@ public final class PlayDataAccessor {
 	private ScoreDataLogDatabaseAccessor scoredatalogdb;
 
 
-	private static final String[] replay = { "", "C", "H" };
+	private static final String[] replay = { "", "C", "H", "HL" };
 
 	public PlayDataAccessor(Config config) {
 		this.player = config.getPlayername();

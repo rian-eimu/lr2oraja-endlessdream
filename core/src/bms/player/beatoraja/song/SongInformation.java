@@ -123,7 +123,11 @@ public class SongInformation implements Validatable {
 						}
 					}
 
-					if(!((model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE))
+					final boolean isIgnoredLnEnd = n instanceof LongNote ln && ln.isEnd()
+							&& (ln.getType() == LongNote.TYPE_LONGNOTE || ln.getType() == LongNote.TYPE_HELLLONGNOTE
+							|| (ln.getType() == LongNote.TYPE_UNDEFINED && (model.getLnmode() == 1 || model.getLnmode() == 4
+							|| (model.getLnmode() == 0 && (model.getLntype() == BMSModel.LNTYPE_LONGNOTE || model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE)))));
+					if(!isIgnoredLnEnd && !((model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE))
 							&& n instanceof LongNote && ((LongNote) n).isEnd())){
 						if (n instanceof NormalNote) {
 							data[tl.getTime() / 1000][model.getMode().isScratchKey(i) ? 2 : 5]++;

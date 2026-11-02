@@ -179,6 +179,7 @@ public class JudgeManager {
 
         states = IntStream.range(0, lanes.length).mapToObj(i -> new LaneState(i, main.getLaneProperty(), lanes[i])).toArray(LaneState[]::new);
         
+
         for (int key = 0; key < keyassign.length; key++) {
             auto_presstime[key] = Long.MIN_VALUE;
         }
@@ -230,6 +231,198 @@ public class JudgeManager {
         multiBadCollector = new MultiBadCollector();
     }
     
+    /**
+     * 指定のロングノートがLNであるか判定する
+     */
+    private boolean isLongNote(LongNote ln) {
+        return (lntype == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+                || ln.getType() == LongNote.TYPE_LONGNOTE;
+    }
+
+    /**
+     * 指定のロングノートがHLNであるか判定する
+     */
+    private boolean isHellLongNote(LongNote ln) {
+        return (lntype == BMSModel.LNTYPE_HELLLONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+                || ln.getType() == LongNote.TYPE_HELLLONGNOTE;
+    }
+
+    /**
+     * 指定のロングノートがHCNであるか判定する
+     */
+    private boolean isHellChargeNote(LongNote ln) {
+        return (lntype == BMSModel.LNTYPE_HELLCHARGENOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+                || ln.getType() == LongNote.TYPE_HELLCHARGENOTE;
+    }
+
+    /**
+     * 指定のロングノートがCNまたはHCNであるか判定する
+     */
+    private boolean isChargeOrHellChargeNote(LongNote ln) {
+        return !isLongNote(ln) && !isHellLongNote(ln);
+    }
+
+    /**
+     * 指定レーンのいずれかのキーが押下されているか判定する
+     */
+    private boolean isLanePressed(LaneState state, BMSPlayerInputProcessor input) {
+        for (int key : state.laneassign) {
+            if (input.getKeyState(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * HLNの明示終端音を終点時刻で1回だけ再生する
+     */
+    private void playHlnEndSoundIfNeeded(LaneState state, LongNote endNote) {
+        if (endNote == null || !state.hlnEndSoundPlayed.add(endNote)) {
+            return;
+        }
+        if (endNote.getWav() >= 0 || endNote.getLayeredNotes().length > 0) {
+            keysound.play(endNote, getKeyVolume(), 0);
+        }
+    }
+
+    /**
+     * HLNのBODY管理状態をクリアする
+     */
+    private void clearHlnBodyState(LaneState state) {
+        state.hlnStart = null;
+        state.passing = null;
+        state.mpassingcount = 0;
+        state.hlnLastGaugeTime = Long.MIN_VALUE;
+        state.hlnSoundPlayed = false;
+        state.hlnReactive = false;
+    }
+
+    /**
+     * HLNの保持ゲージを指定時刻まで精算する
+     */
+    private void advanceHlnGauge(LaneState state, long targetTime, boolean held) {
+        if (state.hlnStart == null || state.hlnLastGaugeTime == Long.MIN_VALUE) {
+            return;
+        }
+        final long endTime = state.hlnStart.getPair().getMicroTime();
+        final long toTime = Math.min(targetTime, endTime);
+        if (toTime <= state.hlnLastGaugeTime) {
+            return;
+        }
+        final long elapsed = toTime - state.hlnLastGaugeTime;
+        state.hlnLastGaugeTime = toTime;
+        if (held) {
+            state.mpassingcount += elapsed;
+            while (state.mpassingcount > hcnmduration) {
+                main.getGauge().update(1, 0.5f);
+                state.mpassingcount -= hcnmduration;
+            }
+        } else {
+            state.mpassingcount -= elapsed;
+            while (state.mpassingcount < -hcnmduration) {
+                main.getGauge().update(3, 0.5f);
+                state.mpassingcount += hcnmduration;
+            }
+        }
+    }
+
+    /**
+     * 指定時刻までのHLNイベント（早離し猶予期限、始点見逃しPOOR、終点到達、保持ゲージ、終端音）を時系列順に精算する
+     */
+    private void settleHlnUpTo(LaneState state, long targetTime, boolean playOnMiss) {
+        final long releasemargin = state.sckey >= 0 ? sreleasemargin : nreleasemargin;
+        final long[][] mjudge = state.sckey >= 0 ? smjudge : nmjudge;
+        final boolean held = state.hlnHeld || autoplay;
+
+        if (state.hlnStart != null) {
+            final LongNote start = state.hlnStart;
+            final LongNote end = start.getPair();
+            final long endTime = end.getMicroTime();
+
+            if (state.processing == end && state.releasetime != Long.MIN_VALUE) {
+                final long marginTime = state.releasetime + releasemargin;
+                if (marginTime <= endTime && marginTime <= targetTime) {
+                    advanceHlnGauge(state, marginTime, held);
+                    if (state.hlnSoundPlayed) {
+                        keysound.setVolume(start, 0.0f);
+                    }
+                    this.updateMicro(state, start, marginTime, state.lnendJudge, endTime - state.releasetime, true);
+                    state.processing = null;
+                    state.releasetime = Long.MIN_VALUE;
+                    state.lnendJudge = Integer.MIN_VALUE;
+                }
+            }
+
+            if (endTime <= targetTime) {
+                advanceHlnGauge(state, endTime, held);
+                if (state.processing == end) {
+                    this.updateMicro(state, start, endTime, state.lnstartJudge, state.lnstartDuration, true);
+                    state.processing = null;
+                    state.releasetime = Long.MIN_VALUE;
+                    state.lnendJudge = Integer.MIN_VALUE;
+                }
+                playHlnEndSoundIfNeeded(state, end);
+                clearHlnBodyState(state);
+                if (!hasActiveHellLongNoteBody() && score.getPassnotes() == score.getNotes() && score.getPassnotes() == combo) {
+                    main.timer.switchTimer(TIMER_FULLCOMBO_1P, true);
+                }
+            } else {
+                advanceHlnGauge(state, targetTime, held);
+            }
+        }
+
+        for (Note note : state.lanemodel.getNotes()) {
+            if (note.getMicroTime() > targetTime) {
+                break;
+            }
+            if (!(note instanceof LongNote)) {
+                continue;
+            }
+            final LongNote ln = (LongNote) note;
+            if (!isHellLongNote(ln)) {
+                continue;
+            }
+            if (ln.isEnd()) {
+                playHlnEndSoundIfNeeded(state, ln);
+                continue;
+            }
+            if (ln.getState() != 0 || state.hlnStart == ln || state.processing == ln.getPair()) {
+                continue;
+            }
+            if (!autoplay && ln.getMicroTime() < targetTime + mjudge[3][0]) {
+                final long missTime = ln.getMicroTime() - mjudge[3][0] + 1;
+                final int mjud = (int) (ln.getMicroTime() - missTime);
+                this.updateMicro(state, ln, missTime, 4, mjud, true);
+                boolean soundPlayed = false;
+                if (playOnMiss) {
+                    keysound.play(ln, getKeyVolume(), 0);
+                    soundPlayed = true;
+                }
+                final LongNote end = ln.getPair();
+                final long endTime = end.getMicroTime();
+                if (missTime < endTime) {
+                    state.hlnStart = ln;
+                    state.passing = ln;
+                    state.mpassingcount = 0;
+                    state.hlnLastGaugeTime = missTime;
+                    state.hlnSoundPlayed = soundPlayed;
+                    state.hlnReactive = true;
+                    if (soundPlayed && !held) {
+                        keysound.setVolume(ln, 0.0f);
+                    }
+                    if (endTime <= targetTime) {
+                        advanceHlnGauge(state, endTime, held);
+                        playHlnEndSoundIfNeeded(state, end);
+                        clearHlnBodyState(state);
+                    } else {
+                        advanceHlnGauge(state, targetTime, held);
+                    }
+                }
+            }
+        }
+    }
+
     private float getKeyVolume() {
         float adjusted = main.getAdjustedVolume();
         if (adjusted < 0) {
@@ -288,11 +481,34 @@ public class JudgeManager {
                     }
                     if (note instanceof LongNote) {
                         final LongNote ln = (LongNote) note;
+                        if (isHellLongNote(ln)) {
+                            if (!ln.isEnd() && ln.getState() == 0 && state.hlnStart != ln) {
+                                settleHlnUpTo(state, ln.getMicroTime(), false);
+                                auto_presstime[state.laneassign[0]] = now;
+                                keysound.play(note, getKeyVolume(), 0);
+                                state.lnstartJudge = 0;
+                                state.lnstartDuration = 0;
+                                state.processing = ln.getPair();
+                                state.releasetime = Long.MIN_VALUE;
+                                state.lnendJudge = Integer.MIN_VALUE;
+                                state.hlnStart = ln;
+                                state.passing = ln;
+                                state.mpassingcount = 0;
+                                state.hlnLastGaugeTime = ln.getMicroTime();
+                                state.hlnSoundPlayed = true;
+                                state.hlnReactive = false;
+                                state.hlnHeld = true;
+                                this.judge[state.player][state.offset] = 8;
+                            } else if (ln.isEnd()) {
+                                settleHlnUpTo(state, ln.getMicroTime(), false);
+                            }
+                            continue;
+                        }
                         if (!ln.isEnd() && ln.getState() == 0 && state.processing == null) {
                             auto_presstime[state.laneassign[0]] = now;
                             keysound.play(note, getKeyVolume(), 0);
                             if ((lntype == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
-                                    || ln.getType() == LongNote.TYPE_LONGNOTE) {
+                                    || ln.getType() == LongNote.TYPE_LONGNOTE || isHellLongNote(ln)) {
                                 state.mpassingcount = 0;
                                 //LN時のレーザー色変更処理
                                 this.judge[state.player][state.offset] = 8;
@@ -327,7 +543,7 @@ public class JudgeManager {
             if (autoplay) {
                 for (int key : state.laneassign) {
                     if (auto_presstime[key] != Long.MIN_VALUE && now - auto_presstime[key] > auto_minduration
-                            && state.processing == null) {
+                            && state.processing == null && state.hlnStart == null) {
                         auto_presstime[key] = Long.MIN_VALUE;
                     }
                 }
@@ -336,6 +552,9 @@ public class JudgeManager {
         }
 
         for (LaneState state : states) {
+            if (state.passing != null && isHellLongNote(state.passing)) {
+                continue;
+            }
             if (state.passing == null || state.passing.getState() == 0) {
                 timer.setTimerOff(state.timerActive);
                 timer.setTimerOff(state.timerDamage);
@@ -369,6 +588,8 @@ public class JudgeManager {
             }
         }
         prevmtime = mtime;
+        final boolean playOnMiss = main.resource.getConfig().getAudioConfig().isPlayKeySoundOnMiss();
+
 
         for (int key = 0; key < keyassign.length; key++) {
             final int lane = keyassign[key];
@@ -380,12 +601,23 @@ public class JudgeManager {
                 continue;
             }
             final LaneState state = states[lane];
+            settleHlnUpTo(state, pmtime, playOnMiss);
             state.lanemodel.reset();
             final int sc = state.sckey;
             if (input.getKeyState(key)) {
                 // キーが押されたときの処理
+                state.hlnHeld = true;
                 if (state.processing != null) {
-                    if (((lntype != BMSModel.LNTYPE_LONGNOTE && state.processing.getType() == LongNote.TYPE_UNDEFINED)
+                    if (isHellLongNote(state.processing)) {
+                        if (state.hlnSoundPlayed) {
+                            keysound.setVolume(state.hlnStart, getKeyVolume());
+                        }
+                        if (sc >= 0) {
+                            sckey[sc] = key;
+                        }
+                        state.releasetime = Long.MIN_VALUE;
+                        state.lnendJudge = Integer.MIN_VALUE;
+                    } else if (((lntype != BMSModel.LNTYPE_LONGNOTE && state.processing.getType() == LongNote.TYPE_UNDEFINED)
                             || state.processing.getType() == LongNote.TYPE_CHARGENOTE
                             || state.processing.getType() == LongNote.TYPE_HELLCHARGENOTE)) {
                         if(sc >= 0 && key != sckey[sc]) {
@@ -413,6 +645,15 @@ public class JudgeManager {
                     }
                 } else {
                     final long[][] mjudge = sc >= 0 ? smjudge : nmjudge;
+                    if (state.hlnStart != null) {
+                        state.hlnReactive = true;
+                        if (state.hlnSoundPlayed) {
+                            keysound.setVolume(state.hlnStart, getKeyVolume());
+                        }
+                        if (sc >= 0) {
+                            sckey[sc] = key;
+                        }
+                    }
                     // 対象ノーツの抽出
                     state.lanemodel.reset();
                     Note tnote = null;
@@ -428,7 +669,7 @@ public class JudgeManager {
                             continue;
                         }
                         if (judgenote instanceof MineNote || (judgenote instanceof LongNote
-                                && ((LongNote) judgenote).isEnd())) {
+                                && ((LongNote) judgenote).isEnd()) || judgenote == state.hlnStart) {
                             continue;
                         }
                         if (judgenote.getState() == 0) {
@@ -462,11 +703,22 @@ public class JudgeManager {
                         }
                     }
                     multiBadCollector.filter(tnote);
+                    if (tnote != null && state.passing != null && judge >= 4) {
+                        tnote = null;
+                    }
 
                     if (tnote != null) {
                         // process multiBad
                         for (int i=multiBadCollector.arrayStart; i<multiBadCollector.size; i++) {
-                            this.updateMicroMultiBad(state, multiBadCollector.noteList[i], mtime, 3, multiBadCollector.timeList[i], judgeVanish[3]);
+                            final Note mbNote = multiBadCollector.noteList[i];
+                            if (mbNote instanceof LongNote && isHellLongNote((LongNote) mbNote)) {
+                                final LongNote mbLn = (LongNote) mbNote;
+                                if (pmtime >= mbLn.getPair().getMicroTime()) {
+                                    this.updateMicroMultiBad(state, mbLn, mtime, 3, multiBadCollector.timeList[i], true);
+                                }
+                                continue;
+                            }
+                            this.updateMicroMultiBad(state, mbNote, mtime, 3, multiBadCollector.timeList[i], judgeVanish[3]);
                         }
 
                         // TODO この時点で空POOR処理を分岐させるべきか
@@ -476,8 +728,34 @@ public class JudgeManager {
                             final long dmtime = tnote.getMicroTime() - pmtime;
                             keysound.play(tnote, getKeyVolume(), 0);
                             if ((lntype == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
-                                    || ln.getType() == LongNote.TYPE_LONGNOTE) {
-                                // LN処理
+                                    || ln.getType() == LongNote.TYPE_LONGNOTE || isHellLongNote(ln)) {
+                                // HLN・LN処理
+                                if (isHellLongNote(ln)) {
+                                    if (judge <= 3) {
+                                        if (pmtime >= ln.getPair().getMicroTime()) {
+                                            this.updateMicro(state, ln, mtime, judge, dmtime, true);
+                                        } else {
+                                            state.lnstartJudge = judge;
+                                            state.lnstartDuration = dmtime;
+                                            state.processing = ln.getPair();
+                                            state.releasetime = Long.MIN_VALUE;
+                                            state.lnendJudge = Integer.MIN_VALUE;
+                                            state.hlnStart = ln;
+                                            state.passing = ln;
+                                            state.mpassingcount = 0;
+                                            state.hlnLastGaugeTime = Math.max(ln.getMicroTime(), pmtime);
+                                            state.hlnSoundPlayed = true;
+                                            state.hlnReactive = judge >= 3;
+                                            state.hlnHeld = true;
+                                            if (sc >= 0) {
+                                                sckey[sc] = key;
+                                            }
+                                            this.judge[state.player][state.offset] = 8;
+                                        }
+                                    } else {
+                                        this.updateMicro(state, tnote, mtime, judge, dmtime, false);
+                                    }
+                                } else
                                 if(judgeVanish[judge]) {
                                     state.lnstartJudge = judge;
                                     state.lnstartDuration = dmtime;
@@ -493,6 +771,7 @@ public class JudgeManager {
                                     this.updateMicro(state, tnote, mtime, judge, dmtime, false);
                                 }
                             } else {
+                            // unused
                                 // CN,HCN処理
                                 if (judgeVanish[judge]) {
                                     state.processing = ln.getPair();
@@ -542,6 +821,18 @@ public class JudgeManager {
                 main.getKeyinput().inputKeyOn(lane);
             } else {
                 // キーが離されたときの処理
+                state.hlnHeld = isLanePressed(state, input);
+                if (state.processing == null && state.hlnStart != null) {
+                    if (sc >= 0 && key == sckey[sc]) {
+                        sckey[sc] = 0;
+                    }
+                    if (!state.hlnHeld) {
+                        state.hlnReactive = true;
+                        if (state.hlnSoundPlayed) {
+                            keysound.setVolume(state.hlnStart, 0.0f);
+                        }
+                    }
+                }
                 if (state.processing != null) {
                     final long[][] mjudge = sc >= 0 ? scnendmjudge : cnendmjudge;
                     long dmtime = state.processing.getMicroTime() - pmtime;
@@ -552,8 +843,54 @@ public class JudgeManager {
                     if ((lntype != BMSModel.LNTYPE_LONGNOTE
                             && state.processing.getType() == LongNote.TYPE_UNDEFINED)
                             || state.processing.getType() == LongNote.TYPE_CHARGENOTE
-                            || state.processing.getType() == LongNote.TYPE_HELLCHARGENOTE) {
+                            || state.processing.getType() == LongNote.TYPE_HELLCHARGENOTE
+                            || isHellLongNote(state.processing)) {
                         // CN, HCN離し処理
+                        if (isHellLongNote(state.processing)) {
+                            boolean release = true;
+                            if (sc >= 0) {
+                                if (key != sckey[sc]) {
+                                    release = false;
+                                } else {
+                                    sckey[sc] = 0;
+                                }
+                            } else if (state.hlnHeld) {
+                                release = false;
+                            }
+                            if (!state.hlnHeld) {
+                                state.hlnReactive = true;
+                                if (state.hlnSoundPlayed) {
+                                    keysound.setVolume(state.hlnStart, 0.0f);
+                                }
+                            }
+                            if (release) {
+                                final long endDmtime = dmtime;
+                                judge = Math.max(judge, state.lnstartJudge);
+                                if (Math.abs(state.lnstartDuration) > Math.abs(dmtime)) {
+                                    dmtime = state.lnstartDuration;
+                                }
+                                if (judge >= 3 && endDmtime > 0) {
+                                    final long releasemargin = sc >= 0 ? sreleasemargin : nreleasemargin;
+                                    if (releasemargin > 0) {
+                                        state.releasetime = pmtime;
+                                        state.lnendJudge = 3;
+                                    } else {
+                                        if (state.hlnSoundPlayed) {
+                                            keysound.setVolume(state.processing.getPair(), 0.0f);
+                                        }
+                                        this.updateMicro(state, state.processing.getPair(), mtime, 3, endDmtime, true);
+                                        state.processing = null;
+                                        state.releasetime = Long.MIN_VALUE;
+                                        state.lnendJudge = Integer.MIN_VALUE;
+                                    }
+                                } else {
+                                    this.updateMicro(state, state.processing.getPair(), mtime, Math.min(judge, 3), dmtime, true);
+                                    state.processing = null;
+                                    state.releasetime = Long.MIN_VALUE;
+                                    state.lnendJudge = Integer.MIN_VALUE;
+                                }
+                            }
+                        } else {
                         boolean release = true;
                         if (sc >= 0) {
                             if (judge != 4 || key != sckey[sc]) {
@@ -569,6 +906,15 @@ public class JudgeManager {
                                 state.lnendJudge = judge;
                             } else {
                                 this.updateMicro(state, state.processing, mtime, judge, dmtime, true);
+                                keysound.play(state.processing, getKeyVolume(), 0);
+                                state.processing = null;
+                                state.releasetime = Long.MIN_VALUE;
+                                state.lnendJudge = Integer.MIN_VALUE;
+                            }
+                        }
+                    }
+                    if (false) {
+                        if (false) {
                                 keysound.play(state.processing, getKeyVolume(), 0);
                                 state.processing = null;
                                 state.releasetime = Long.MIN_VALUE;
@@ -613,9 +959,13 @@ public class JudgeManager {
             final long[][] mjudge = state.sckey >= 0 ? smjudge : nmjudge;
             final long releasemargin = state.sckey >= 0 ? sreleasemargin : nreleasemargin;
 
+            state.hlnHeld = isLanePressed(state, input);
+            settleHlnUpTo(state, mtime, playOnMiss);
             // LN終端判定
             if (state.processing != null) {
-                if((lntype == BMSModel.LNTYPE_LONGNOTE && state.processing.getType() == LongNote.TYPE_UNDEFINED)
+                if (isHellLongNote(state.processing)) {
+                    // HLNはsettleHlnUpToで精算済み
+                } else if((lntype == BMSModel.LNTYPE_LONGNOTE && state.processing.getType() == LongNote.TYPE_UNDEFINED)
                     || state.processing.getType() == LongNote.TYPE_LONGNOTE) {
                     if(state.releasetime != Long.MIN_VALUE && state.releasetime + releasemargin <= mtime) {
                         keysound.setVolume(state.processing.getPair(), 0.0f);
@@ -645,7 +995,7 @@ public class JudgeManager {
                 }
             }
             // 見逃しPOOR判定
-            final boolean playOnMiss = main.resource.getConfig().getAudioConfig().isPlayKeySoundOnMiss();
+    
             state.lanemodel.reset();
             for (Note note = state.lanemodel.getNote(); note != null
                     && note.getMicroTime() < mtime + mjudge[3][0]; note = state.lanemodel.getNote()) {
@@ -657,6 +1007,9 @@ public class JudgeManager {
                     }
                 } else if (note instanceof LongNote) {
                     final LongNote ln = (LongNote) note;
+                    if (isHellLongNote(ln)) {
+                        continue;
+                    }
                     if (!ln.isEnd() && ln.getState() == 0) {
                         if ((lntype != BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
                                 || ln.getType() == LongNote.TYPE_CHARGENOTE
@@ -696,6 +1049,19 @@ public class JudgeManager {
                 }
             }
             // LN処理タイマー
+            if (state.hlnStart != null) {
+                state.inclease = state.hlnHeld || autoplay;
+                if (state.inclease) {
+                    timer.switchTimer(state.timerActive, true);
+                    timer.setTimerOff(state.timerDamage);
+                } else {
+                    timer.setTimerOff(state.timerActive);
+                    timer.switchTimer(state.timerDamage, true);
+                }
+            } else if (state.passing == null) {
+                timer.setTimerOff(state.timerActive);
+                timer.setTimerOff(state.timerDamage);
+            }
             // TODO processing値の変化のときのみ実行したい
             // TODO HCNは別タイマーにするかも
             timer.switchTimer(SkinPropertyMapper.holdTimerId(state.player, state.offset),
@@ -821,6 +1187,36 @@ public class JudgeManager {
 
     public LongNote getPassingLongNote(int lane) {
         return states[lane].passing;
+    }
+
+    /**
+     * HLNのBODY描画状態インデックスを返す (6: ACTIVE, 7: INACTIVE, 8: REACTIVE, 9: DAMAGE)
+     */
+    public int getHellLongNoteBodyState(int lane, LongNote ln) {
+        final LaneState state = states[lane];
+        final LongNote start = ln.isEnd() ? ln.getPair() : ln;
+        if (state.hlnStart != start) {
+            return 7;
+        }
+        if (state.hlnHeld || autoplay) {
+            return state.hlnReactive ? 8 : 6;
+        }
+        return 9;
+    }
+
+    /**
+     * いずれかのレーンでHLNのBODYがまだ終点時刻未到達で有効かどうかを返す
+     */
+    public boolean hasActiveHellLongNoteBody() {
+        if (states == null) {
+            return false;
+        }
+        for (LaneState state : states) {
+            if (state.hlnStart != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean getHellChargeJudge(int lane) {
@@ -957,6 +1353,31 @@ public class JudgeManager {
         
         public long releasetime = Long.MIN_VALUE;
         public int lnendJudge = Integer.MIN_VALUE;
+
+        /**
+         * 現在有効なHLN始点ノーツ
+         */
+        public LongNote hlnStart;
+        /**
+         * HLNゲージを前回精算した時刻(us)
+         */
+        public long hlnLastGaugeTime = Long.MIN_VALUE;
+        /**
+         * HLN始点音が再生済みかどうか
+         */
+        public boolean hlnSoundPlayed;
+        /**
+         * HLNがREACTIVE状態（BAD捕捉、途中離し経験、または見逃しPOOR後）かどうか
+         */
+        public boolean hlnReactive;
+        /**
+         * HLNの直近の保持状態
+         */
+        public boolean hlnHeld;
+        /**
+         * 終端音を自動再生済みのHLN終端ノーツ
+         */
+        public final java.util.Set<LongNote> hlnEndSoundPlayed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         
         public LaneState(int lane, LaneProperty property, Lane lanemodel) {
             this.lane = lane;
