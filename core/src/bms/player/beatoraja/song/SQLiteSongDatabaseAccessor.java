@@ -564,7 +564,7 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 						}
 					}
 				}
-				if (filename.endsWith(".bms") || filename.endsWith(".bme") || filename.endsWith(".bml")
+				if (filename.endsWith(".bms") || filename.endsWith(".bme") || filename.endsWith(".bml") || filename.endsWith(".bmc")
 						|| filename.endsWith(".pms") || filename.endsWith(".bmson") || filename.endsWith(".osu")) {
 					bmsfiles.add(SongArchives.virtualPath(archive, entry, contents.rootDirectory()));
 				}
@@ -648,7 +648,7 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 								}
 							}
 						}
-						if (s.endsWith(".bms") || s.endsWith(".bme") || s.endsWith(".bml") || s.endsWith(".pms")
+						if (s.endsWith(".bms") || s.endsWith(".bme") || s.endsWith(".bml") || s.endsWith(".pms") || s.endsWith(".bmc")
 								|| s.endsWith(".bmson") || s.endsWith(".osu")) {
 							bmsfiles.add(p);
 						}

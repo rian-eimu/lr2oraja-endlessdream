@@ -139,4 +139,11 @@ public class ConditionalBMSDecoderTest {
         assertFalse(model.containsMineNote());
         assertTrue(model.isConditionalContainsMineNote());
     }
+
+    @Test
+    public void testBmcExtensionDecoder() {
+        assertTrue(ChartDecoder.getDecoder("test.bmc") instanceof BMSDecoder);
+        assertTrue(ChartDecoder.getDecoder("TEST.BMC") instanceof BMSDecoder);
+        assertTrue(ChartDecoder.getDecoder(java.nio.file.Path.of("sample.bmc")) instanceof BMSDecoder);
+    }
 }

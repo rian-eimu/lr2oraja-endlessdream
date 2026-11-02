@@ -309,7 +309,7 @@ public final class SongArchives {
 
 	private static boolean isChartEntry(String entry) {
 		String lowerCase = entry.toLowerCase(Locale.ROOT);
-		return lowerCase.endsWith(".bms") || lowerCase.endsWith(".bme") || lowerCase.endsWith(".bml")
+		return lowerCase.endsWith(".bms") || lowerCase.endsWith(".bme") || lowerCase.endsWith(".bml") || lowerCase.endsWith(".bmc")
 				|| lowerCase.endsWith(".pms") || lowerCase.endsWith(".bmson") || lowerCase.endsWith(".osu");
 	}
 
