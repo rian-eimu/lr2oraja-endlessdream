@@ -153,6 +153,28 @@ public class LaneRenderer {
 		this.hispeedmargin = playconfig.getHispeedMargin();
 	}
 
+	public synchronized void updateModel(BMSModel model) {
+		this.model = model;
+		List<TimeLine> tls = new ArrayList<TimeLine>();
+		double cbpm = model.getBpm();
+		double cscr = 1.0;
+		double cspd = 1.0;
+		for (TimeLine tl : model.getAllTimeLines()) {
+			if (cbpm != tl.getBPM() || tl.getStop() > 0 || cscr != tl.getScroll() || cspd != tl.getSpeed() || tl.hasSpeedObj() || tl.getSectionLine()) {
+				tls.add(tl);
+			} else if (tl.existNote() || tl.existHiddenNote()) {
+				tls.add(tl);
+			}
+			cbpm = tl.getBPM();
+			cscr = tl.getScroll();
+			cspd = tl.getSpeed();
+		}
+		this.timelines = tls.toArray(new TimeLine[tls.size()]);
+		this.pos = 0;
+		this.minbpm = model.getMinBPM();
+		this.maxbpm = model.getMaxBPM();
+	}
+
 	public float getHispeed() {
 		return playconfig.getHispeed();
 	}
@@ -295,7 +317,7 @@ public class LaneRenderer {
 		return speed + (next.getSpeed() - speed) * progress;
 	}
 
-	public void drawLane(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets) {
+	public synchronized void drawLane(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets) {
 		float offsetX = 0;
 		float offsetY = 0;
 		float offsetW = 0;

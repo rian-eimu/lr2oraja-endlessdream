@@ -17,9 +17,14 @@ public class RhythmTimerProcessor {
 	private long[] quarterNoteTimes;
 	private int quarterNote = 0;
 	private long nowQuarterNoteTime = 0;
+	private final boolean useQuarterNoteTime;
 
 	public RhythmTimerProcessor(BMSModel model, boolean useQuarterNoteTime) {
+		this.useQuarterNoteTime = useQuarterNoteTime;
+		buildTimes(model);
+	}
 
+	private void buildTimes(BMSModel model) {
 		LongArray sectiontimes = new LongArray();
 		LongArray quarterNoteTimes = new LongArray();
 		TimeLine[] timelines = model.getAllTimeLines();
@@ -54,10 +59,23 @@ public class RhythmTimerProcessor {
 		}
 		this.sectiontimes = sectiontimes.toArray();
 		this.quarterNoteTimes = quarterNoteTimes.toArray();
+	}
 
+	public synchronized void updateModel(BMSModel model, long currentPlayMicroTime, int freq) {
+		buildTimes(model);
+		int secIdx = 0;
+		while (secIdx < sectiontimes.length && (sectiontimes[secIdx] * (100 / freq)) <= currentPlayMicroTime) {
+			secIdx++;
+		}
+		this.sections = secIdx;
+		int qIdx = 0;
+		while (qIdx < quarterNoteTimes.length && (quarterNoteTimes[qIdx] * (100 / freq)) <= currentPlayMicroTime) {
+			qIdx++;
+		}
+		this.quarterNote = qIdx;
 	}
 	
-	public void update(BMSPlayer player, long deltatime, double nowbpm, int freq) {
+	public synchronized void update(BMSPlayer player, long deltatime, double nowbpm, int freq) {
 		final long now = player.timer.getNowTime();
 		final long micronow = player.timer.getNowMicroTime();
 

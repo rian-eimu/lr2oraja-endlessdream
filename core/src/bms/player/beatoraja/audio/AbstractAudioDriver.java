@@ -372,6 +372,26 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 				addNoteList(notemap, n);
 			}
 		}
+		if (model.hasConditional()) {
+			for (int condWavId : model.getConditionalWavIds()) {
+				if (condWavId >= 0 && condWavId < wavcount) {
+					addNoteList(notemap, new NormalNote(condWavId));
+				}
+			}
+			if (!use_defaultsound && model.isConditionalContainsMineNote()) {
+				boolean wav0Loaded = false;
+				for (int condWavId : model.getConditionalWavIds()) {
+					if (condWavId == 0) {
+						wav0Loaded = true;
+						break;
+					}
+				}
+				if (!wav0Loaded) {
+					use_defaultsound = true;
+					addNoteList(notemap, new MineNote(wavcount, 0));
+				}
+			}
+		}
 		if (use_defaultsound) {
 			wavmap = (T[]) new Object[wavcount+1];
 			this.slicesound = new SliceWav[wavcount+1][];

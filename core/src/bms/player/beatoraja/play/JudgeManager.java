@@ -106,6 +106,7 @@ public class JudgeManager {
     private boolean[] judgeVanish;
 
     private long prevmtime;
+    private long lastBranchEvalTime = Long.MIN_VALUE;
 
     private boolean autoplay = false;
     private long[] auto_presstime;
@@ -138,6 +139,7 @@ public class JudgeManager {
     public void init(BMSModel model, PlayerResource resource) {
         final Mode orgmode = resource.getOriginalMode();
         prevmtime = 0;
+        lastBranchEvalTime = Long.MIN_VALUE;
         final int  judgeregion = main.getSkin() instanceof PlaySkin ? ((PlaySkin) main.getSkin()).getJudgeregion() : 0;
         judgenow = new int[judgeregion];
         judgecombo = new int[judgeregion];
@@ -596,7 +598,14 @@ public class JudgeManager {
             if (lane == -1) {
                 continue;
             }
-            final long pmtime = input.getKeyChangedTime(key);
+            long pmtime = input.getKeyChangedTime(key);
+            if (pmtime != Long.MIN_VALUE && pmtime > mtime) {
+                continue;
+            }
+            if (pmtime != Long.MIN_VALUE && lastBranchEvalTime != Long.MIN_VALUE && pmtime < lastBranchEvalTime
+                    && main.resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY) {
+                pmtime = lastBranchEvalTime;
+            }
             if (pmtime == Long.MIN_VALUE) {
                 continue;
             }
@@ -1317,6 +1326,39 @@ public class JudgeManager {
         return ghost;
     }
     
+    /**
+     * 指定レーンの指定ロングノート始点が現在アクティブ（保持中・通過中）かどうかを返す
+     */
+    public boolean isLongNoteActive(int lane, LongNote lnStart) {
+        if (states == null || lane < 0 || lane >= states.length || lnStart == null) {
+            return false;
+        }
+        final LaneState state = states[lane];
+        return state.processing == lnStart.getPair() || state.passing == lnStart || state.hlnStart == lnStart;
+    }
+
+    /**
+     * 動的条件分岐による譜面差し替え時の状態更新
+     */
+    public void onConditionalBranchSwitched(BMSModel model, long evalMicroTime) {
+        lastBranchEvalTime = Math.max(lastBranchEvalTime, evalMicroTime);
+        if (states != null) {
+            final int seekTime = (int) ((prevmtime + mjudgestart - 100000) / 1000);
+            for (LaneState state : states) {
+                state.lanemodel.update(model, state.lane, seekTime);
+            }
+        }
+        final int newTotalNotes = model.getTotalNotes();
+        score.setNotes(newTotalNotes);
+        if (ghost != null && ghost.length != newTotalNotes) {
+            final int oldLen = ghost.length;
+            ghost = Arrays.copyOf(ghost, newTotalNotes);
+            if (newTotalNotes > oldLen) {
+                Arrays.fill(ghost, oldLen, newTotalNotes, 4);
+            }
+        }
+    }
+
     private static class LaneState {
         
         public final int lane;

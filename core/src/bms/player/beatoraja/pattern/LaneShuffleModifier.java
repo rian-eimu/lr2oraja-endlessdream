@@ -60,6 +60,20 @@ public abstract class LaneShuffleModifier extends PatternModifier {
             );
         }
 
+		applyRandomToModel(model);
+	}
+
+	/**
+	 * 前回生成されたレーン入れ替え配列(random)をそのまま別モデルに適用する
+	 */
+	public void applyLastRandom(BMSModel model) {
+		if (random == null || random.length == 0) {
+			return;
+		}
+		applyRandomToModel(model);
+	}
+
+	private void applyRandomToModel(BMSModel model) {
 		final int lanes = model.getMode().key;
 		final Note[] notes = new Note[lanes];
 		final Note[] hnotes = new Note[lanes];
