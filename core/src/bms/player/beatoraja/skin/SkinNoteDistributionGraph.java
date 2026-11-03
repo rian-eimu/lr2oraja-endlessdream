@@ -278,7 +278,7 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 			}
 			for (int i = 0; i < mode.key; i++) {
 				Note n = tl.getNote(i);
-				if (n != null) {
+				if (n != null && !n.isDummy()) {
 					final int st = n.getState();
 					final int t = n.getPlayTime();
 					switch (type) {

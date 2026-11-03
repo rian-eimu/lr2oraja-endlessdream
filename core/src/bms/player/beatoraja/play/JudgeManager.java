@@ -378,7 +378,7 @@ public class JudgeManager {
             if (note.getMicroTime() > targetTime) {
                 break;
             }
-            if (!(note instanceof LongNote)) {
+            if (!(note instanceof LongNote) || note.isDummy()) {
                 continue;
             }
             final LongNote ln = (LongNote) note;
@@ -571,7 +571,7 @@ public class JudgeManager {
                 }
             }
             for (Note note = state.lanemodel.getNote(); note != null && note.getMicroTime() <= mtime; note = state.lanemodel.getNote()) {
-                if (note.getMicroTime() <= prevmtime) {
+                if (note.getMicroTime() <= prevmtime || note.isDummy()) {
                     continue;
                 }
                 if (note instanceof LongNote) {
@@ -819,7 +819,7 @@ public class JudgeManager {
                         if (dmtime < mjudgestart) {
                             continue;
                         }
-                        if (judgenote instanceof MineNote || judgenote instanceof PotionNote || (judgenote instanceof LongNote
+                        if (judgenote.isDummy() || judgenote instanceof MineNote || judgenote instanceof PotionNote || (judgenote instanceof LongNote
                                 && ((LongNote) judgenote).isEnd()) || judgenote == state.hlnStart) {
                             continue;
                         }
@@ -982,12 +982,12 @@ public class JudgeManager {
                                 break;
                             }
                             if ((n == null || n.getMicroTime() <= note.getMicroTime())
-                                    && !(note instanceof LongNote && note.getState() != 0)) {
+                                    && !note.isDummy() && !(note instanceof LongNote && note.getState() != 0)) {
                                 n = note;
                             }
                         }
 
-                        if (!inFreeZone && n != null && state.passing == null && !(n instanceof MineNote || n instanceof PotionNote)) {
+                        if (!inFreeZone && n != null && !n.isDummy() && state.passing == null && !(n instanceof MineNote || n instanceof PotionNote)) {
                             keysound.play(n, getKeyVolume(), 0);
                         }
                     }
@@ -1174,6 +1174,9 @@ public class JudgeManager {
             for (Note note = state.lanemodel.getNote(); note != null
                     && note.getMicroTime() < mtime + mjudge[3][0]; note = state.lanemodel.getNote()) {
                 final int mjud = (int) (note.getMicroTime() - mtime);
+                if (note.isDummy()) {
+                    continue;
+                }
                 if (note instanceof NormalNote && note.getState() == 0) {
                     if (((NormalNote) note).isFreeZoneInner()) {
                         note.setState(5);

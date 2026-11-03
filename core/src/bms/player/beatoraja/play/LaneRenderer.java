@@ -595,7 +595,7 @@ public class LaneRenderer {
 					}
 					// 判定ラインへのノーツ滞留設定(noteretention)または過去ノート表示設定(showpastnote)がONかつ未処理(State 0)なら常に pos を維持
 					if (note != null && ((note instanceof LongNote ln && (ln.isEnd() ? ln : ln.getPair()).getMicroTime() >= microtime)
-							|| ((config.isNoteretention() || config.isShowpastnote()) && note instanceof NormalNote && note.getState() == 0))) {
+							|| ((config.isNoteretention() || config.isShowpastnote()) && note instanceof NormalNote && !note.isDummy() && note.getState() == 0))) {
 						b = false;
 						break;
 					}
@@ -682,7 +682,7 @@ public class LaneRenderer {
 					}
 					if (note instanceof NormalNote) {
 						// draw normal note
-						if (((NormalNote) note).isFreeZoneInner()) {
+						if (((NormalNote) note).isFreeZoneInner() || note.isDummy()) {
 							if (tl.getMicroTime() >= microtime) {
 								sprite.draw(lanes[lane].noteImage, dstx, dsty, dstw, dsth);
 							}
@@ -805,7 +805,7 @@ public class LaneRenderer {
 					final float scale = lanes[lane].scale;
 					final Note note = tl.getNote(lane);
 					if (note != null) {
-						if (note instanceof NormalNote && !((NormalNote) note).isFreeZoneInner()) {
+						if (note instanceof NormalNote && !((NormalNote) note).isFreeZoneInner() && !note.isDummy()) {
 							// draw normal note
 							//4分のタイミングでノートを拡大する
 							float dstx = lanes[lane].region.x;

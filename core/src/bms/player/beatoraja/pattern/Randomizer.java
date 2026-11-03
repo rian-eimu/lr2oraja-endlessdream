@@ -204,7 +204,7 @@ abstract class TimeBasedRandomizer extends Randomizer {
 		primaryLane = new ArrayList<>();
 		inferiorLane = new ArrayList<>();
 		for (Integer cl : changeableLane) {
-			if (tl.getNote(cl) == null || tl.getNote(cl) instanceof MineNote || tl.getNote(cl) instanceof PotionNote) {
+			if (tl.getNote(cl) == null || tl.getNote(cl).isDummy() || tl.getNote(cl) instanceof MineNote || tl.getNote(cl) instanceof PotionNote) {
 				emptyLane.add(cl);
 			} else {
 				noteLane.add(cl);
@@ -250,7 +250,7 @@ abstract class TimeBasedRandomizer extends Randomizer {
 
 	protected void updateNoteTime(TimeLine tl, Map<Integer, Integer> randomMap) {
 		for (Map.Entry<Integer, Integer> el : randomMap.entrySet()) {
-			if (tl.getNote(el.getKey()) != null && !(tl.getNote(el.getKey()) instanceof MineNote || tl.getNote(el.getKey()) instanceof PotionNote)) {
+			if (tl.getNote(el.getKey()) != null && !tl.getNote(el.getKey()).isDummy() && !(tl.getNote(el.getKey()) instanceof MineNote || tl.getNote(el.getKey()) instanceof PotionNote)) {
 				lastNoteTime.put(el.getValue(), tl.getTime());
 			}
 		}
@@ -384,7 +384,7 @@ class AllScratchRandomizer extends TimeBasedRandomizer {
 
 			Integer l = -1;
 			for (Integer cl : changeableLane) {
-				if (tl.getNote(cl) != null && !(tl.getNote(cl) instanceof MineNote || tl.getNote(cl) instanceof PotionNote)) {
+				if (tl.getNote(cl) != null && !tl.getNote(cl).isDummy() && !(tl.getNote(cl) instanceof MineNote || tl.getNote(cl) instanceof PotionNote)) {
 					l = cl;
 					break;
 				}
@@ -548,7 +548,7 @@ class NoMurioshiRandomizer extends TimeBasedRandomizer {
 		List<Integer> l = new ArrayList<>();
 		for (int i = 0; i < modifyLanes.length; i++) {
 			// nullでない、地雷ノートでない
-			if (tl.getNote(modifyLanes[i]) != null && !(tl.getNote(modifyLanes[i]) instanceof MineNote || tl.getNote(modifyLanes[i]) instanceof PotionNote)) {
+			if (tl.getNote(modifyLanes[i]) != null && !tl.getNote(modifyLanes[i]).isDummy() && !(tl.getNote(modifyLanes[i]) instanceof MineNote || tl.getNote(modifyLanes[i]) instanceof PotionNote)) {
 				l.add(modifyLanes[i]);
 			}
 		}

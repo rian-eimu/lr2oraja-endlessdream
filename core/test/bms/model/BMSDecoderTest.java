@@ -725,5 +725,123 @@ class BMSDecoderTest {
         }
         assertEquals(3, totalRestoredPotion, "シリアライズ文字列からポーションノーツ数が復元されること");
     }
+
+    @Test
+    public void testDummyNotesDecodeAndModifiers() throws Exception {
+        String bmsContent = String.join("\n",
+                "#PLAYER 1",
+                "#TITLE Dummy Note Test",
+                "#BPM 120",
+                "#LNMODE 2",
+                "#WAV01 a.wav",
+                "#001H1:01",
+                "#001J2:0101",
+                "#001L3:10",
+                "#001N4:10",
+                "#001O8:05",
+                "#00211:01",
+                "#002H1:01"
+        );
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(bmsContent.getBytes(StandardCharsets.US_ASCII), false, null);
+        assertNotNull(model);
+        // O8 (2P 6鍵のダミーポーション) により BEAT_14K に昇格すること
+        assertEquals(Mode.BEAT_14K, model.getMode());
+        // 総ノーツ数は小節002の1P 1鍵の本物通常ノーツ1個のみであること
+        assertEquals(1, model.getTotalNotes());
+        assertEquals(0, BMSModelUtils.getTotalNotes(model, BMSModelUtils.TOTALNOTES_LONG_KEY));
+        assertEquals(0, BMSModelUtils.getTotalNotes(model, BMSModelUtils.TOTALNOTES_MINE));
+        assertFalse(model.containsLongNote(), "ダミーLNのみの場合はcontainsLongNoteがfalseであること");
+        assertFalse(model.containsMineNote(), "ダミー地雷のみの場合はcontainsMineNoteがfalseであること");
+
+        Note dummyNormal = null;
+        LongNote dummyLnStart = null;
+        LongNote dummyLnEnd = null;
+        MineNote dummyMine = null;
+        PotionNote dummyPotion1P = null;
+        PotionNote dummyPotion2P = null;
+        Note bar2Key1 = null;
+
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (Math.abs(tl.getSection() - 1.0) < 1e-6) {
+                dummyNormal = tl.getNote(0);
+                if (tl.getNote(1) instanceof LongNote ln) dummyLnStart = ln;
+                if (tl.getNote(2) instanceof MineNote mn) dummyMine = mn;
+                if (tl.getNote(3) instanceof PotionNote pn) dummyPotion1P = pn;
+                if (tl.getNote(13) instanceof PotionNote pn2) dummyPotion2P = pn2;
+            } else if (Math.abs(tl.getSection() - 1.5) < 1e-6) {
+                if (tl.getNote(1) instanceof LongNote ln) dummyLnEnd = ln;
+            } else if (Math.abs(tl.getSection() - 2.0) < 1e-6) {
+                bar2Key1 = tl.getNote(0);
+            }
+        }
+
+        assertTrue(dummyNormal instanceof NormalNote && dummyNormal.isDummy(), "H1がダミー通常ノーツとして配置されること");
+        assertEquals(-1, dummyNormal.getWav(), "ダミー通常ノーツは無音(-1)であること");
+
+        assertNotNull(dummyLnStart, "J2始点がダミーLNとして配置されること");
+        assertTrue(dummyLnStart.isDummy());
+        assertEquals(LongNote.TYPE_CHARGENOTE, dummyLnStart.getType(), "#LNMODE 2がダミーLNに反映されること");
+        assertNotNull(dummyLnEnd, "J2終点がダミーLNとして配置されること");
+        assertTrue(dummyLnEnd.isDummy() && dummyLnEnd.isEnd());
+        assertSame(dummyLnEnd, dummyLnStart.getPair());
+
+        assertNotNull(dummyMine, "L3がダミー地雷として配置されること");
+        assertTrue(dummyMine.isDummy());
+        assertEquals(0.0, dummyMine.getDamage(), 1e-6);
+        assertEquals(-1, dummyMine.getWav());
+
+        assertNotNull(dummyPotion1P, "N4がダミーポーションとして配置されること");
+        assertTrue(dummyPotion1P.isDummy());
+        assertEquals(0.0, dummyPotion1P.getRecovery(), 1e-6);
+
+        assertNotNull(dummyPotion2P, "O8が2P 6鍵(lane 13)にダミーポーションとして配置されること");
+        assertTrue(dummyPotion2P.isDummy());
+
+        assertTrue(bar2Key1 instanceof NormalNote && !bar2Key1.isDummy(), "本物ノーツとダミーノーツの衝突時は本物が優先されること");
+
+        // SongInformation の集計からダミーノーツが除外されていること
+        bms.player.beatoraja.song.SongInformation info = new bms.player.beatoraja.song.SongInformation(model);
+        assertEquals(1, info.getN());
+        assertEquals(0, info.getLn());
+        int totalDistCount = 0;
+        for (int[] sec : info.getDistributionValues()) {
+            for (int v : sec) totalDistCount += v;
+        }
+        assertEquals(1, totalDistCount, "分布グラフ配列にダミーノーツが一切計上されないこと");
+
+        // LongNoteModifier(REMOVE) でダミーLNがダミー通常ノーツに変換され、ASSISTにならないこと
+        bms.player.beatoraja.pattern.LongNoteModifier lnMod = new bms.player.beatoraja.pattern.LongNoteModifier(0, 1.0);
+        lnMod.modify(model);
+        assertEquals(bms.player.beatoraja.pattern.PatternModifier.AssistLevel.NONE, lnMod.getAssistLevel());
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (Math.abs(tl.getSection() - 1.0) < 1e-6) {
+                assertTrue(tl.getNote(1) instanceof NormalNote && tl.getNote(1).isDummy(), "REMOVE時にダミーLN始点がダミー通常ノーツになること");
+            } else if (Math.abs(tl.getSection() - 1.5) < 1e-6) {
+                assertNull(tl.getNote(1), "REMOVE時にダミーLN終点が消去されること");
+            }
+        }
+
+        // MineNoteModifier(REMOVE) でダミー地雷が消去され、LIGHT_ASSISTにならないこと
+        bms.player.beatoraja.pattern.MineNoteModifier mineMod = new bms.player.beatoraja.pattern.MineNoteModifier(0);
+        mineMod.modify(model);
+        assertEquals(bms.player.beatoraja.pattern.PatternModifier.AssistLevel.NONE, mineMod.getAssistLevel());
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (Math.abs(tl.getSection() - 1.0) < 1e-6) {
+                assertNull(tl.getNote(2), "mineMode REMOVE時にダミー地雷も消去されること");
+            }
+        }
+
+        // ExtraNoteModifier で残りの全ダミーノーツが除去されること
+        bms.player.beatoraja.pattern.ExtraNoteModifier extraMod = new bms.player.beatoraja.pattern.ExtraNoteModifier(0, 1, false);
+        extraMod.modify(model);
+        for (TimeLine tl : model.getAllTimeLines()) {
+            for (int lane = 0; lane < model.getMode().key; lane++) {
+                if (tl.existNote(lane)) {
+                    assertFalse(tl.getNote(lane).isDummy(), "EXTRAモード適用後にダミーノーツが残っていないこと");
+                }
+            }
+        }
+    }
 }
 

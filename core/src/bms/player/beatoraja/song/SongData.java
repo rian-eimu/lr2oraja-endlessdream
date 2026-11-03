@@ -191,7 +191,7 @@ public class SongData implements Validatable, IpfsInformation {
 			}
 
 			for(int i = 0;i < keys;i++) {
-				if(tl.getNote(i) instanceof LongNote) {
+				if(tl.getNote(i) instanceof LongNote && !tl.getNote(i).isDummy()) {
 					switch(((LongNote) tl.getNote(i)).getType()) {
 						case LongNote.TYPE_UNDEFINED:
 							feature |= FEATURE_UNDEFINEDLN;
@@ -213,7 +213,7 @@ public class SongData implements Validatable, IpfsInformation {
 				if(tl.existFreeZone(i)) {
 					feature |= FEATURE_FREEZONE;
 				}
-				if(tl.getNote(i) instanceof MineNote) {
+				if(tl.getNote(i) instanceof MineNote && !tl.getNote(i).isDummy()) {
 					feature |= FEATURE_MINENOTE;
 				}
 			}

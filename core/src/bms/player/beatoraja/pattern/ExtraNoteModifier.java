@@ -48,6 +48,15 @@ public class ExtraNoteModifier extends PatternModifier {
         boolean[] blank = new boolean[model.getMode().key];
         Random random = new Random(getSeed());
 
+        for (TimeLine tl : tls) {
+            for (int key = 0; key < model.getMode().key; key++) {
+                final Note note = tl.getNote(key);
+                if (note != null && note.isDummy()) {
+                    tl.setNote(key, null);
+                }
+            }
+        }
+
         for (int i = 0; i < tls.length; i++) {
             final TimeLine tl = tls[i];
             long currentTime = tl.getMilliTime();

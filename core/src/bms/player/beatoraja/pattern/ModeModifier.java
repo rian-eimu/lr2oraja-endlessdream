@@ -84,7 +84,7 @@ public class ModeModifier extends PatternModifier {
 						}
 					} else {
 						tl.setNote(i, n);
-						if (n != null) {
+						if (n != null && !n.isDummy()) {
 							lastNoteTime[i] = tl.getTime();
 						}
 					}

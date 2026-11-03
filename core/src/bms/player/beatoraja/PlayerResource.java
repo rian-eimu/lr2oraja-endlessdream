@@ -254,7 +254,7 @@ public final class PlayerResource {
 			for (int i = 0; i < lanes; i++) {
 				final Note n = tl.getNote(i);
 				if (n != null) {
-					if (n instanceof MineNote && n.getWav() < 0) {
+					if (n instanceof MineNote && !n.isDummy() && n.getWav() < 0) {
 						n.setWav(wavcount);
 					}
 				}

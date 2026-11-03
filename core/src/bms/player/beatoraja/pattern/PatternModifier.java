@@ -160,6 +160,19 @@ public abstract class PatternModifier {
 			tl.setFreeZone(lane, null);
 		}
 		Note n = tl.getNote(lane);
+		if(n != null && n.isDummy()) {
+			if(n instanceof LongNote) {
+				LongNote pln = ((LongNote) n).getPair();
+				for(TimeLine tl2 : tls) {
+					if(tl2.getNote(lane) == pln) {
+						tl2.setNote(lane, null);
+						break;
+					}
+				}
+			}
+			tl.setNote(lane, null);
+			return;
+		}
 		if(n == null || n instanceof PotionNote) {
 			return;
 		}

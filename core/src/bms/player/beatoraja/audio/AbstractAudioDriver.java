@@ -354,7 +354,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		for (TimeLine tl : model.getAllTimeLines()) {
 			for (int i = 0; i < lanes; i++) {
 				final Note n = tl.getNote(i);
-				if (n != null) {
+				if (n != null && !n.isDummy()) {
 					// 地雷ノートに音が定義されていない場合のみ、本体側で音の定義を追加
 					if (!use_defaultsound && n instanceof MineNote && n.getWav() == wavcount) {
 						use_defaultsound = true;

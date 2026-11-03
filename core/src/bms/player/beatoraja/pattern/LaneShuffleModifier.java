@@ -123,7 +123,7 @@ public abstract class LaneShuffleModifier extends PatternModifier {
 										tl.setFreeZone(i, fz.getPair());
 										List<NormalNote> inner = new ArrayList<>();
 										for (int k = j; k <= index; k++) {
-											if (timelines[k].getNote(i) instanceof NormalNote nn) {
+											if (timelines[k].getNote(i) instanceof NormalNote nn && !nn.isDummy()) {
 												nn.setFreeZoneInner(true);
 												inner.add(nn);
 											}
@@ -310,7 +310,7 @@ public abstract class LaneShuffleModifier extends PatternModifier {
 					//LN
 					for (int i = 0; i < lanes; i++) {
 						Note n = tl.getNote(i);
-						if (n instanceof LongNote ln2) {
+						if (n instanceof LongNote ln2 && !n.isDummy()) {
 							if (ln2.isEnd() && tl.getTime() == endLnNoteTime[i]) {
 								ln[i] = -1;
 								endLnNoteTime[i] = -1;
@@ -326,7 +326,7 @@ public abstract class LaneShuffleModifier extends PatternModifier {
 					List<Integer> noteLane = new ArrayList<>(keys.length);
 					for (int i = 0; i < lanes; i++) {
 						Note n = tl.getNote(i);
-						if (n != null && n instanceof NormalNote || ln[i] != -1) {
+						if ((n != null && n instanceof NormalNote && !n.isDummy()) || ln[i] != -1) {
 							noteLane.add(i);
 						}
 					}

@@ -123,7 +123,7 @@ public class SongInformation implements Validatable {
 						borderpos = pos;
 					}
 				}
-				if (n != null && n.isFreeZoneInner()) {
+				if (n != null && (n.isFreeZoneInner() || n.isDummy())) {
 					n = null;
 				}
 				if (n != null) {
