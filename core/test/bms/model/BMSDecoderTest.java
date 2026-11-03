@@ -832,13 +832,22 @@ class BMSDecoderTest {
             }
         }
 
-        // ExtraNoteModifier で残りの全ダミーノーツが除去されること
+        // ExtraNoteModifier で残りの全ダミーノーツおよび通常の地雷・ポーションノートが除去されること
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (Math.abs(tl.getSection() - 2.0) < 1e-6) {
+                tl.setNote(4, new MineNote(-1, 10.0));
+                tl.setNote(5, new PotionNote(-1, 15.0));
+            }
+        }
         bms.player.beatoraja.pattern.ExtraNoteModifier extraMod = new bms.player.beatoraja.pattern.ExtraNoteModifier(0, 1, false);
         extraMod.modify(model);
         for (TimeLine tl : model.getAllTimeLines()) {
             for (int lane = 0; lane < model.getMode().key; lane++) {
                 if (tl.existNote(lane)) {
-                    assertFalse(tl.getNote(lane).isDummy(), "EXTRAモード適用後にダミーノーツが残っていないこと");
+                    Note n = tl.getNote(lane);
+                    assertFalse(n.isDummy(), "EXTRAモード適用後にダミーノーツが残っていないこと");
+                    assertFalse(n instanceof MineNote, "EXTRAモード適用後に地雷ノーツが残っていないこと");
+                    assertFalse(n instanceof PotionNote, "EXTRAモード適用後にポーションノーツが残っていないこと");
                 }
             }
         }

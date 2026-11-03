@@ -6,8 +6,10 @@ import java.util.Random;
 
 import bms.model.BMSModel;
 import bms.model.LongNote;
+import bms.model.MineNote;
 import bms.model.NormalNote;
 import bms.model.Note;
+import bms.model.PotionNote;
 import bms.model.TimeLine;
 
 /**
@@ -51,7 +53,10 @@ public class ExtraNoteModifier extends PatternModifier {
         for (TimeLine tl : tls) {
             for (int key = 0; key < model.getMode().key; key++) {
                 final Note note = tl.getNote(key);
-                if (note != null && note.isDummy()) {
+                if (note != null && (note.isDummy() || note instanceof MineNote || note instanceof PotionNote)) {
+                    if (!note.isDummy() && note instanceof MineNote && assist == AssistLevel.NONE) {
+                        assist = AssistLevel.LIGHT_ASSIST;
+                    }
                     tl.setNote(key, null);
                 }
             }
