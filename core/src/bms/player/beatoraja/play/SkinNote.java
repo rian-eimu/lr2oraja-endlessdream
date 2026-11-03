@@ -8,6 +8,7 @@ import bms.player.beatoraja.skin.Skin.SkinObjectRenderer;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.TextureData;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 
@@ -59,6 +60,28 @@ public class SkinNote extends SkinObject {
 
 		@Override
 		public void dispose() {
+		}
+	}
+
+	public SkinNote(SkinSource[] note, SkinSource[][] longnote, SkinSource[] minenote, SkinSource[] potionnote) {
+		lanes = new SkinLane[note.length];
+		for(int i = 0;i < lanes.length;i++) {
+			lanes[i] = new SkinLane(note[i], longnote[i], minenote[i], potionnote != null && i < potionnote.length ? potionnote[i] : null);
+		}
+		this.setDestination(0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 0, 0, 0, 0, 0, 0, new int[0]);
+	}
+
+	public void setPotionNote(SkinSource[] potionnote) {
+		if (potionnote == null || lanes == null) {
+			return;
+		}
+		for (int i = 0; i < lanes.length && i < potionnote.length; i++) {
+			if (potionnote[i] != null && lanes[i].potionnote != potionnote[i]) {
+				if (lanes[i].potionnote != null) {
+					lanes[i].potionnote.dispose();
+				}
+				lanes[i].potionnote = potionnote[i];
+			}
 		}
 	}
 
@@ -121,6 +144,10 @@ public class SkinNote extends SkinObject {
 		 * 地雷ノーツ画像
 		 */
 		SkinSource minenote;
+		/**
+		 * ポーションノーツ画像
+		 */
+		SkinSource potionnote;
 
 		float scale;
 		int dstnote2;
@@ -137,8 +164,13 @@ public class SkinNote extends SkinObject {
 		TextureRegion noteImage;
 		TextureRegion[] longImage = new TextureRegion[10];
 		TextureRegion mineImage;
+		TextureRegion potionImage;
 		TextureRegion hiddenImage;
 		TextureRegion processedImage;
+
+		public SkinLane(SkinSource note, SkinSource[] longnote, SkinSource minenote, SkinSource potionnote) {
+			init(note, longnote, minenote, potionnote, null, null);
+		}
 
 		public SkinLane(SkinSource note, SkinSource[] longnote, SkinSource minenote) {
 			init(note, longnote, minenote, null, null);
@@ -149,6 +181,67 @@ public class SkinNote extends SkinObject {
 		}
 		
 		private void init(SkinSource note, SkinSource[] longnote, SkinSource minenote, SkinSource hiddennote, SkinSource processednote) {
+			init(note, longnote, minenote, null, hiddennote, processednote);
+		}
+
+		private static SkinSource createSolidColorSource(Color color) {
+			Pixmap p = new Pixmap(32, 8, Pixmap.Format.RGBA8888);
+			p.setColor(color);
+			p.fillRectangle(0, 0, p.getWidth(), p.getHeight());
+			SkinSource src = new SkinSourceImage(new TextureRegion(new Texture(p)));
+			p.dispose();
+			return src;
+		}
+
+		private static SkinSource createInvertedSource(SkinSource source) {
+			if (source instanceof SkinSourceImage srcImg && srcImg.getImages() != null) {
+				try {
+					TextureRegion[] srcRegions = srcImg.getImages();
+					TextureRegion[] dstRegions = new TextureRegion[srcRegions.length];
+					for (int i = 0; i < srcRegions.length; i++) {
+						TextureRegion tr = srcRegions[i];
+						if (tr == null) {
+							continue;
+						}
+						TextureData td = tr.getTexture().getTextureData();
+						if (!td.isPrepared()) {
+							td.prepare();
+						}
+						Pixmap srcPixmap = td.consumePixmap();
+						int rx = tr.getRegionX();
+						int ry = tr.getRegionY();
+						int rw = tr.getRegionWidth();
+						int rh = tr.getRegionHeight();
+						Pixmap dstPixmap = new Pixmap(rw, rh, Pixmap.Format.RGBA8888);
+						dstPixmap.setBlending(Pixmap.Blending.None);
+						for (int y = 0; y < rh; y++) {
+							for (int x = 0; x < rw; x++) {
+								int pixel = srcPixmap.getPixel(rx + x, ry + y);
+								int inverted = (~pixel & 0xffffff00) | (pixel & 0x000000ff);
+								dstPixmap.drawPixel(x, y, inverted);
+							}
+						}
+						if (td.disposePixmap()) {
+							srcPixmap.dispose();
+						}
+						Texture invertedTex = new Texture(dstPixmap);
+						dstPixmap.dispose();
+						TextureRegion invertedRegion = new TextureRegion(invertedTex);
+						if (tr.isFlipX() || tr.isFlipY()) {
+							invertedRegion.flip(tr.isFlipX(), tr.isFlipY());
+						}
+						dstRegions[i] = invertedRegion;
+					}
+					return new SkinSourceImage(dstRegions, srcImg.getTimer(), srcImg.getCycle());
+				} catch (Throwable e) {
+					// フォールバックとして単色生成を行う
+				}
+			}
+			return createSolidColorSource(Color.CYAN);
+		}
+
+		private void init(SkinSource note, SkinSource[] longnote, SkinSource minenote, SkinSource potionnote, SkinSource hiddennote, SkinSource processednote) {
+			final boolean hasMineSource = (minenote != null);
 			if(note == null) {
 				Pixmap p = new Pixmap(32, 8, Pixmap.Format.RGBA8888);
 				p.setColor(Color.WHITE);
@@ -179,6 +272,11 @@ public class SkinNote extends SkinObject {
 				p.dispose();	
 			}
 			this.minenote = minenote;
+
+			if (potionnote == null) {
+				potionnote = hasMineSource ? createInvertedSource(this.minenote) : createSolidColorSource(Color.CYAN);
+			}
+			this.potionnote = potionnote;
 			
 			if(hiddennote == null) {
 				Pixmap hn = new Pixmap(32, 8, Pixmap.Format.RGBA8888);
@@ -209,6 +307,7 @@ public class SkinNote extends SkinObject {
 				longImage[type] = longnote[type].getImage(time, state);
 			}
 			mineImage = minenote.getImage(time, state);
+			potionImage = potionnote.getImage(time, state);
 			hiddenImage = hiddennote.getImage(time, state);
 			processedImage = processednote.getImage(time, state);
 			super.prepare(time, state);
@@ -230,6 +329,10 @@ public class SkinNote extends SkinObject {
 			if (minenote != null) {
 				minenote.dispose();
 				minenote = null;
+			}
+			if (potionnote != null) {
+				potionnote.dispose();
+				potionnote = null;
 			}
 			if (hiddennote != null) {
 				hiddennote.dispose();

@@ -650,5 +650,80 @@ class BMSDecoderTest {
         assertTrue(lane8Note instanceof NormalNote, "PMSのch17はレーン8の通常ノーツとして配置されること");
         assertFalse(((NormalNote) lane8Note).isFreeZoneInner());
     }
+
+    @Test
+    void testPotionNoteDecodingAndModeUpgradeAndCollisionAndTotalExclusion() {
+        // F1-F9 (1P), G1-G9 (2P) のポーションノーツ解析・モード昇格・衝突優先順位・総ノーツ数除外の検証
+        String bms = String.join("\n",
+                "#PLAYER 1",
+                "#BPM 120",
+                "#WAV01 note.wav",
+                // 小節001: 1P 1鍵(F1)に回復量0A(10%), 6鍵(F8)に1E(50%), 2P 1鍵(G1)に05(5%) -> 14KEYSへ昇格
+                "#001F1:0A00",
+                "#001F8:1E00",
+                "#001G1:0500",
+                // 小節002: 同一座標での衝突検証 (1鍵で通常ノーツ11とF1が衝突、2鍵で地雷D2とF2が衝突)
+                "#00211:01",
+                "#002F1:0A",
+                "#002D2:0F",
+                "#002F2:0A"
+        );
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(bms.getBytes(StandardCharsets.US_ASCII), false, null);
+        assertNotNull(model);
+        assertEquals(Mode.BEAT_14K, model.getMode(), "F8およびG1定義によりBEAT_14Kへ昇格すること");
+
+        // 総ノーツ数にはポーションノーツも地雷ノーツも含まれず、小節002の通常ノーツ1個のみであること
+        assertEquals(1, model.getTotalNotes(), "ポーションノーツが総ノーツ数に含まれないこと");
+
+        PotionNote p1Key1 = null;
+        PotionNote p1Key6 = null;
+        PotionNote p2Key1 = null;
+        Note bar2Key1 = null;
+        Note bar2Key2 = null;
+
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (Math.abs(tl.getSection() - 1.0) < 1e-6) {
+                if (tl.getNote(0) instanceof PotionNote pn) p1Key1 = pn;
+                if (tl.getNote(5) instanceof PotionNote pn) p1Key6 = pn;
+                if (tl.getNote(8) instanceof PotionNote pn) p2Key1 = pn;
+            } else if (Math.abs(tl.getSection() - 2.0) < 1e-6) {
+                bar2Key1 = tl.getNote(0);
+                bar2Key2 = tl.getNote(1);
+            }
+        }
+
+        assertNotNull(p1Key1, "F1が1P 1鍵(lane 0)に配置されること");
+        assertEquals(10.0, p1Key1.getRecovery(), 1e-6);
+        assertEquals(-1, p1Key1.getWav(), "ポーションノーツは無音(-1)であること");
+
+        assertNotNull(p1Key6, "F8が1P 6鍵(lane 5)に配置されること");
+        assertEquals(50.0, p1Key6.getRecovery(), 1e-6);
+
+        assertNotNull(p2Key1, "G1が2P 1鍵(lane 8)に配置されること");
+        assertEquals(5.0, p2Key1.getRecovery(), 1e-6);
+
+        assertTrue(bar2Key1 instanceof NormalNote, "通常ノーツとポーションノーツの衝突時は通常ノーツが優先されること");
+        assertTrue(bar2Key2 instanceof MineNote, "地雷ノーツとポーションノーツの衝突時は地雷ノーツが優先されること");
+
+        // SongInformation のノーツ分布データ(index 7)への計上および文字列シリアライズ往復の検証
+        bms.player.beatoraja.song.SongInformation info = new bms.player.beatoraja.song.SongInformation(model);
+        int[][] dist = info.getDistributionValues();
+        int totalPotionInDist = 0;
+        for (int[] sec : dist) {
+            assertEquals(8, sec.length);
+            totalPotionInDist += sec[7];
+        }
+        assertEquals(3, totalPotionInDist, "小節001の3個のポーションノーツが分布データ(index 7)に記録されること");
+        assertTrue(info.getDistribution().startsWith("$"), "ポーションノーツを含む分布文字列は$プレフィックスで保存されること");
+
+        bms.player.beatoraja.song.SongInformation restored = new bms.player.beatoraja.song.SongInformation();
+        restored.setDistribution(info.getDistribution());
+        int totalRestoredPotion = 0;
+        for (int[] sec : restored.getDistributionValues()) {
+            totalRestoredPotion += sec[7];
+        }
+        assertEquals(3, totalRestoredPotion, "シリアライズ文字列からポーションノーツ数が復元されること");
+    }
 }
 

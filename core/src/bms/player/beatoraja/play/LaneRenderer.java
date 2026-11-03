@@ -732,6 +732,11 @@ public class LaneRenderer {
 							}
 							// System.out.println(dy);
 						}
+					} else if (note instanceof PotionNote) {
+						// ポーションノーツの描画
+						if (tl.getMicroTime() >= microtime) {
+							sprite.draw(lanes[lane].potionImage, dstx, dsty, dstw, dsth);
+						}
 					} else if (note instanceof MineNote) {
 						// draw mine note
 						if (tl.getMicroTime() >= microtime) {

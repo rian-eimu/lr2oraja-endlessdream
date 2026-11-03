@@ -586,6 +586,10 @@ public class JudgeManager {
                             state.passing = lnote;
                         }
                     }
+                } else if (note instanceof PotionNote && pressed) {
+                    final PotionNote pnote = (PotionNote) note;
+                    // ポーションノーツ判定
+                    main.getGauge().addValue((float) pnote.getRecovery());
                 } else if (note instanceof MineNote && pressed) {
                     final MineNote mnote = (MineNote) note;
                     // 地雷ノート判定
@@ -815,7 +819,7 @@ public class JudgeManager {
                         if (dmtime < mjudgestart) {
                             continue;
                         }
-                        if (judgenote instanceof MineNote || (judgenote instanceof LongNote
+                        if (judgenote instanceof MineNote || judgenote instanceof PotionNote || (judgenote instanceof LongNote
                                 && ((LongNote) judgenote).isEnd()) || judgenote == state.hlnStart) {
                             continue;
                         }
@@ -983,7 +987,7 @@ public class JudgeManager {
                             }
                         }
 
-                        if (!inFreeZone && n != null && state.passing == null && !(n instanceof MineNote)) {
+                        if (!inFreeZone && n != null && state.passing == null && !(n instanceof MineNote || n instanceof PotionNote)) {
                             keysound.play(n, getKeyVolume(), 0);
                         }
                     }

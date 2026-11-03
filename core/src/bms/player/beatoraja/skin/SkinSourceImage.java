@@ -70,6 +70,14 @@ public final class SkinSourceImage extends SkinSource {
 		return image;
 	}
 
+	public TimerProperty getTimer() {
+		return timer;
+	}
+
+	public int getCycle() {
+		return cycle;
+	}
+
 	private int getImageIndex(int length, long time, MainState state) {
 		if (cycle == 0) {
 			return 0;

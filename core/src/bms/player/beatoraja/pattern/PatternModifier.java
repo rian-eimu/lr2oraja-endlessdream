@@ -160,7 +160,7 @@ public abstract class PatternModifier {
 			tl.setFreeZone(lane, null);
 		}
 		Note n = tl.getNote(lane);
-		if(n == null) {
+		if(n == null || n instanceof PotionNote) {
 			return;
 		}
 		if(n instanceof LongNote) {

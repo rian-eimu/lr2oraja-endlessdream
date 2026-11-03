@@ -64,7 +64,7 @@ public class SongInformation implements Validatable {
 	 */
 	private String distribution = "";
 	
-	private int[][] distributionValues = new int[0][7];
+	private int[][] distributionValues = new int[0][8];
 
 	/**
 	 * BPM遷移
@@ -101,7 +101,7 @@ public class SongInformation implements Validatable {
 		}
 		
 		int[][] lanenotes = new int[model.getMode().key][3];
-		int[][] data = new int[model.getLastTime() / 1000 + 2][7];
+		int[][] data = new int[model.getLastTime() / 1000 + 2][8];
 		int pos = 0;
 		int border = total > 0 ? (int) (model.getTotalNotes() * (1.0 - 100.0 / total)) : 0;
 		int borderpos = 0;
@@ -149,12 +149,15 @@ public class SongInformation implements Validatable {
 							data[tl.getTime() / 1000][model.getMode().isScratchKey(i) ? 1 : 4]--;
 							lanenotes[i][1]++;
 						}
+						if (n instanceof PotionNote) {
+							data[tl.getTime() / 1000][7]++;
+						}
 						if (n instanceof MineNote) {
 							data[tl.getTime() / 1000][6]++;
 							lanenotes[i][2]++;
 						}
 						
-						border--;
+						if (!(n instanceof PotionNote)) border--;
 						if(border == 0) {
 							borderpos = pos;
 						}						
@@ -235,11 +238,14 @@ public class SongInformation implements Validatable {
 		this.distribution = distribution != null ? distribution : "";
 		distribution = this.distribution;
 		if (distribution.isEmpty()) {
-			distributionValues = new int[0][7];
+			distributionValues = new int[0][8];
 			return;
 		}
 		int[] index = {0,2,3,5,6};
-		if(distribution.startsWith("#")) {
+		if (distribution.startsWith("$")) {
+			index = new int[]{0, 1, 2, 3, 4, 5, 6, 7};
+			distribution = distribution.substring(1);
+		} else if(distribution.startsWith("#")) {
 			index = new int[]{0,1,2,3,4,5,6};
 			distribution = distribution.substring(1);
 		}
@@ -247,7 +253,7 @@ public class SongInformation implements Validatable {
 		if(count == 0) {
 			logger.warn("distributionのString超が不正です");
 		}
-		distributionValues = new int[count][7];
+		distributionValues = new int[count][8];
 		for(int i = 0;i < count;i++) {
 			for(int j = 0;j < index.length;j++) {
 				try {
@@ -266,10 +272,18 @@ public class SongInformation implements Validatable {
 
 	public void setDistributionValues(int[][] values) {
 		distributionValues = values;
+		boolean hasPotion = false;
+		for (int i = 0; i < values.length; i++) {
+			if (values[i].length > 7 && values[i][7] > 0) {
+				hasPotion = true;
+				break;
+			}
+		}
+		final int cols = hasPotion ? 8 : 7;
 		StringBuilder sb = new StringBuilder(values.length * 14 + 1);
-		sb.append("#");
+		sb.append(hasPotion ? "$" : "#");
 		for(int i = 0;i < values.length;i++) {
-			for(int j = 0;j < 7;j++) {
+			for(int j = 0;j < cols;j++) {
 				int value = Math.min(distributionValues[i][j], 36 * 36 - 1);
 				int val1 = value / 36;
 				sb.append((char) (val1 >= 10 ? val1 - 10 + 'a' : val1 + '0'));

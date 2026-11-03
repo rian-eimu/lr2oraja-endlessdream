@@ -78,6 +78,7 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 			}
 
 			SkinSource[] mines = getNoteTexture(sk.note.mine, p);
+			SkinSource[] potions = getNoteTexture(sk.note.potion, p);
 
 			Rectangle[] region = new Rectangle[sk.note.dst.length];
 			float[] scale = new float[region.length];
@@ -175,7 +176,7 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 			if(sk.note.dst2 != Integer.MIN_VALUE) {
 				Arrays.fill(dstnote2, Math.round(sk.note.dst2 * dy));
 			}
-			SkinNote sn = new SkinNote(notes, lnss, mines);
+			SkinNote sn = new SkinNote(notes, lnss, mines, potions);
 			sn.setLaneRegion(region, scale, dstnote2, skin);
 			skin.setLaneRegion(region);
 			skin.setLaneGroupRegion(gregion);
