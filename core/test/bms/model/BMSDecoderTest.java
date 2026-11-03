@@ -727,6 +727,72 @@ class BMSDecoderTest {
     }
 
     @Test
+    public void testSectionLineChannelST() {
+        String bmsContent = String.join("\n",
+                "#PLAYER 1",
+                "#TITLE Section Line ST Test",
+                "#BPM 120",
+                "#SCROLL01 2.0",
+                "#STOP01 48",
+                "#WAV01 a.wav",
+                // 小節001: 4分位置(0.25, 0.5, 0.75)にST定義 (01, FF, 0A)、0.5でSCROLL変化、0.25でSTOP
+                "#00109:00010000",
+                "#001SC:0001",
+                "#001ST:0001FF0A",
+                // 小節002: 小節倍率1.5倍、中間(pos=0.5 -> section=2.75)にST定義、ノーツは1個のみ
+                "#00202:1.5",
+                "#00211:01",
+                "#002ST:0001"
+        );
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(bmsContent.getBytes(StandardCharsets.US_ASCII), false, null);
+        assertNotNull(model);
+        assertEquals(Mode.BEAT_5K, model.getMode(), "STチャンネルが鍵盤モード判別に影響しないこと");
+        assertEquals(1, model.getTotalNotes(), "STチャンネルが総ノーツ数に計上されないこと");
+
+        TimeLine tlBar0 = null;
+        TimeLine tlBar1 = null;
+        TimeLine tlBar1Pos25 = null;
+        TimeLine tlBar1Pos50 = null;
+        TimeLine tlBar1Pos75 = null;
+        TimeLine tlBar2 = null;
+        TimeLine tlBar2Pos50 = null;
+
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (Math.abs(tl.getSection() - 0.0) < 1e-6) tlBar0 = tl;
+            else if (Math.abs(tl.getSection() - 1.0) < 1e-6) tlBar1 = tl;
+            else if (Math.abs(tl.getSection() - 1.25) < 1e-6) tlBar1Pos25 = tl;
+            else if (Math.abs(tl.getSection() - 1.5) < 1e-6) tlBar1Pos50 = tl;
+            else if (Math.abs(tl.getSection() - 1.75) < 1e-6) tlBar1Pos75 = tl;
+            else if (Math.abs(tl.getSection() - 2.0) < 1e-6) tlBar2 = tl;
+            else if (Math.abs(tl.getSection() - 2.75) < 1e-6) tlBar2Pos50 = tl;
+        }
+
+        assertNotNull(tlBar0);
+        assertTrue(tlBar0.getSectionLine(), "小節000先頭の自動小節線が維持されること");
+        assertNotNull(tlBar1);
+        assertTrue(tlBar1.getSectionLine(), "小節001先頭の自動小節線が維持されること");
+
+        assertNotNull(tlBar1Pos25, "001STのpos=0.25にTimeLineが生成されること");
+        assertTrue(tlBar1Pos25.getSectionLine(), "001STのpos=0.25に小節線が設定されること");
+        assertTrue(tlBar1Pos25.getStop() > 0, "同位置のSTOP定義と共存できること");
+
+        assertNotNull(tlBar1Pos50, "001STのpos=0.50にTimeLineが生成されること");
+        assertTrue(tlBar1Pos50.getSectionLine(), "001STのpos=0.50に小節線が設定されること");
+        assertEquals(2.0, tlBar1Pos50.getScroll(), 1e-6, "同位置の#SCROLL定義が反映されること");
+
+        assertNotNull(tlBar1Pos75, "001STのpos=0.75にTimeLineが生成されること");
+        assertTrue(tlBar1Pos75.getSectionLine(), "001STのpos=0.75に小節線が設定されること");
+        assertEquals(2.0, tlBar1Pos75.getScroll(), 1e-6, "直前の#SCROLL定義を引き継いでいること");
+
+        assertNotNull(tlBar2);
+        assertTrue(tlBar2.getSectionLine(), "小節002先頭の自動小節線が維持されること");
+
+        assertNotNull(tlBar2Pos50, "小節倍率1.5倍の小節002のpos=0.5(section=2.75)にTimeLineが生成されること");
+        assertTrue(tlBar2Pos50.getSectionLine(), "002STのpos=0.5に小節線が設定されること");
+    }
+
+    @Test
     public void testDummyNotesDecodeAndModifiers() throws Exception {
         String bmsContent = String.join("\n",
                 "#PLAYER 1",
