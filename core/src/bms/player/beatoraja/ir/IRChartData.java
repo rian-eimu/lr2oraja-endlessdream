@@ -122,6 +122,10 @@ public class IRChartData {
 	 * ストップシーケンスが存在するかどうか
 	 */
 	public final boolean hasStop;
+	/**
+	 * フリーゾーンが存在するかどうか
+	 */
+	public final boolean hasFreeZone;
 	
 	public final Map<String, String> values = new HashMap<String, String>();
 	
@@ -158,6 +162,7 @@ public class IRChartData {
 		this.hasRandom = song.hasRandomSequence();
 		this.hasConditional = song.hasConditionalSequence();
 		this.hasStop = song.isBpmstop();
+		this.hasFreeZone = song.hasFreeZone();
 		this.lntype = lntype;
 
 		if(model != null) {

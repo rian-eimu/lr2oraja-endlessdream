@@ -115,6 +115,17 @@ public class SongInformation implements Validatable {
 			}
 			for (int i = 0; i < model.getMode().key; i++) {
 				Note n = tl.getNote(i);
+				if (tl.existFreeZone(i) && !tl.getFreeZone(i).isEnd()) {
+					data[tl.getTime() / 1000][model.getMode().isScratchKey(i) ? 2 : 5]++;
+					lanenotes[i][0]++;
+					border--;
+					if (border == 0) {
+						borderpos = pos;
+					}
+				}
+				if (n != null && n.isFreeZoneInner()) {
+					n = null;
+				}
 				if (n != null) {
 					if(n instanceof LongNote && !((LongNote)n).isEnd()) {
 						int endSecond = Math.min(((LongNote)n).getPair().getTime() / 1000, data.length - 1);

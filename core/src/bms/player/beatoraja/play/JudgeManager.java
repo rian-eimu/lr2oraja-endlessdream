@@ -425,6 +425,126 @@ public class JudgeManager {
         }
     }
 
+    /**
+     * 指定時刻がいずれかのフリーゾーン区間内にあるかを判定する
+     */
+    private boolean isInsideFreeZone(LaneState state, long time) {
+        for (FreeZoneNote fz : state.lanemodel.getFreeZones()) {
+            if (fz.getMicroTime() <= time && time <= fz.getPair().getMicroTime()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 指定時刻のスクラッチ入力により対象フリーゾーンをスクラッチ済みにする
+     */
+    private void markFreeZoneScratchedAtTime(LaneState state, long time) {
+        for (FreeZoneNote fz : state.lanemodel.getFreeZones()) {
+            if (fz.getPair().getState() == 0 && fz.getMicroTime() <= time && time <= fz.getPair().getMicroTime()) {
+                fz.setScratched(true);
+            }
+        }
+    }
+
+    /**
+     * フリーゾーン内包ノーツが判定された際に対象フリーゾーンをスクラッチ済みにする
+     */
+    private void markFreeZoneScratchedForNote(LaneState state, Note note) {
+        final Note target = (note instanceof LongNote ln && ln.isEnd()) ? ln.getPair() : note;
+        for (FreeZoneNote fz : state.lanemodel.getFreeZones()) {
+            if (fz.getPair().getState() == 0) {
+                for (Note inner : fz.getInnerNotes()) {
+                    if (inner == target) {
+                        fz.setScratched(true);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 終端に到達したフリーゾーンの最終判定を確定させる
+     */
+    private void settleFreeZones(LaneState state, long mtime, long now) {
+        for (FreeZoneNote fz : state.lanemodel.getFreeZones()) {
+            final FreeZoneNote fzEnd = fz.getPair();
+            if (fzEnd.getState() != 0) {
+                continue;
+            }
+            if (autoplay && mtime >= fz.getMicroTime()) {
+                fz.setScratched(true);
+                if (fz.getInnerNotes().length == 0 && mtime <= fzEnd.getMicroTime() && state.laneassign.length > 0) {
+                    auto_presstime[state.laneassign[0]] = now;
+                }
+            }
+            if (mtime < fzEnd.getMicroTime()) {
+                continue;
+            }
+            final Note[] inners = fz.getInnerNotes();
+            boolean allSettled = true;
+            for (Note inner : inners) {
+                if (inner instanceof LongNote ln) {
+                    if (ln.getState() == 0 || state.processing == ln.getPair()
+                            || (isChargeOrHellChargeNote(ln) && ln.getPair().getState() == 0)) {
+                        allSettled = false;
+                        break;
+                    }
+                } else if (inner.getState() == 0) {
+                    allSettled = false;
+                    break;
+                }
+            }
+            if (!allSettled) {
+                continue;
+            }
+            final int finalJudge;
+            if (inners.length > 0) {
+                boolean allPg = true;
+                boolean allGrOrBetter = true;
+                for (Note inner : inners) {
+                    final int st = inner.getState();
+                    if (st != 1) {
+                        allPg = false;
+                    }
+                    if (st != 1 && st != 2) {
+                        allGrOrBetter = false;
+                    }
+                    if (inner instanceof LongNote ln && isChargeOrHellChargeNote(ln)) {
+                        final int endSt = ln.getPair().getState();
+                        if (endSt != 1) {
+                            allPg = false;
+                        }
+                        if (endSt != 1 && endSt != 2) {
+                            allGrOrBetter = false;
+                        }
+                    }
+                }
+                if (allPg) {
+                    finalJudge = 0;
+                } else if (allGrOrBetter) {
+                    finalJudge = 1;
+                } else if (fz.isScratched()) {
+                    finalJudge = 2;
+                } else {
+                    finalJudge = 4;
+                }
+            } else {
+                if (autoplay) {
+                    finalJudge = 0;
+                } else if (fz.isScratched()) {
+                    finalJudge = 2;
+                } else {
+                    finalJudge = 4;
+                }
+            }
+            fz.setState(finalJudge + 1);
+            this.updateMicro(state, fzEnd, mtime, finalJudge, 0, true);
+        }
+    }
+
     private float getKeyVolume() {
         float adjusted = main.getAdjustedVolume();
         if (adjusted < 0) {
@@ -479,7 +599,13 @@ public class JudgeManager {
                     if (note instanceof NormalNote && note.getState() == 0) {
                         auto_presstime[state.laneassign[0]] = now;
                         keysound.play(note, getKeyVolume(), 0);
-                        this.updateMicro(state, note, mtime, 0, 0, true);
+                        if (((NormalNote) note).isFreeZoneInner()) {
+                            note.setState(1);
+                            note.setMicroPlayTime(0);
+                            markFreeZoneScratchedForNote(state, (NormalNote) note);
+                        } else {
+                            this.updateMicro(state, note, mtime, 0, 0, true);
+                        }
                     }
                     if (note instanceof LongNote) {
                         final LongNote ln = (LongNote) note;
@@ -500,7 +626,12 @@ public class JudgeManager {
                                 state.hlnSoundPlayed = true;
                                 state.hlnReactive = false;
                                 state.hlnHeld = true;
+                                state.lnstartJudge = 0;
+                                state.lnstartDuration = 0;
                                 this.judge[state.player][state.offset] = 8;
+                                if (ln.isFreeZoneInner()) {
+                                    markFreeZoneScratchedForNote(state, ln);
+                                }
                             } else if (ln.isEnd()) {
                                 settleHlnUpTo(state, ln.getMicroTime(), false);
                             }
@@ -513,7 +644,12 @@ public class JudgeManager {
                                     || ln.getType() == LongNote.TYPE_LONGNOTE || isHellLongNote(ln)) {
                                 state.mpassingcount = 0;
                                 //LN時のレーザー色変更処理
+                                state.lnstartJudge = 0;
+                                state.lnstartDuration = 0;
                                 this.judge[state.player][state.offset] = 8;
+                                if (ln.isFreeZoneInner()) {
+                                    markFreeZoneScratchedForNote(state, ln);
+                                }
                             } else {
                                 this.updateMicro(state, ln, mtime, 0, 0, true);
                             }
@@ -615,6 +751,8 @@ public class JudgeManager {
             final int sc = state.sckey;
             if (input.getKeyState(key)) {
                 // キーが押されたときの処理
+                markFreeZoneScratchedAtTime(state, pmtime);
+                final boolean inFreeZone = isInsideFreeZone(state, pmtime);
                 state.hlnHeld = true;
                 if (state.processing != null) {
                     if (isHellLongNote(state.processing)) {
@@ -700,6 +838,9 @@ public class JudgeManager {
                                     judge = (judge >= 4 ? judge + 1 : judge);
                                 }
                                 
+                                if (judge >= 4 && (inFreeZone || judgenote.isFreeZoneInner())) {
+                                    judge = 6;
+                                }
                                 if(judge < 6) {
                                     if (judge < 6 && (judge < 4 || tnote == null
                                             || Math.abs(tnote.getMicroTime() - pmtime) > Math.abs(judgenote.getMicroTime() - pmtime))) {
@@ -725,6 +866,12 @@ public class JudgeManager {
                                 if (pmtime >= mbLn.getPair().getMicroTime()) {
                                     this.updateMicroMultiBad(state, mbLn, mtime, 3, multiBadCollector.timeList[i], true);
                                 }
+                                continue;
+                            }
+                            if (mbNote instanceof NormalNote nn && nn.isFreeZoneInner()) {
+                                nn.setState(4);
+                                nn.setMicroPlayTime(multiBadCollector.timeList[i]);
+                                markFreeZoneScratchedForNote(state, nn);
                                 continue;
                             }
                             this.updateMicroMultiBad(state, mbNote, mtime, 3, multiBadCollector.timeList[i], judgeVanish[3]);
@@ -760,6 +907,9 @@ public class JudgeManager {
                                                 sckey[sc] = key;
                                             }
                                             this.judge[state.player][state.offset] = 8;
+                                            if (ln.isFreeZoneInner()) {
+                                                markFreeZoneScratchedForNote(state, ln);
+                                            }
                                         }
                                     } else {
                                         this.updateMicro(state, tnote, mtime, judge, dmtime, false);
@@ -775,7 +925,10 @@ public class JudgeManager {
                                         sckey[sc] = key;
                                     }
                                     //LN時のレーザー色変更処理
-                                    this.judge[state.player][state.offset] = 8;                                 
+                                    this.judge[state.player][state.offset] = 8;
+                                    if (ln.isFreeZoneInner()) {
+                                        markFreeZoneScratchedForNote(state, ln);
+                                    }                                 
                                 } else {
                                     this.updateMicro(state, tnote, mtime, judge, dmtime, false);
                                 }
@@ -796,7 +949,15 @@ public class JudgeManager {
                             keysound.play(tnote, getKeyVolume(), 0);
                             // 通常ノート処理
                             final long dmtime = tnote.getMicroTime() - pmtime;
-                            this.updateMicro(state, tnote, mtime, judge, dmtime, judgeVanish[judge]);
+                            if (tnote instanceof NormalNote nn && nn.isFreeZoneInner()) {
+                                nn.setState(judge + 1);
+                                nn.setMicroPlayTime(dmtime);
+                                if (judge <= 3) {
+                                    markFreeZoneScratchedForNote(state, nn);
+                                }
+                            } else {
+                                this.updateMicro(state, tnote, mtime, judge, dmtime, judgeVanish[judge]);
+                            }
                         }
                     } else {
                         // 空POOR判定がないときのレーザー色変更処理
@@ -822,7 +983,7 @@ public class JudgeManager {
                             }
                         }
 
-                        if (n != null && state.passing == null && !(n instanceof MineNote)) {
+                        if (!inFreeZone && n != null && state.passing == null && !(n instanceof MineNote)) {
                             keysound.play(n, getKeyVolume(), 0);
                         }
                     }
@@ -1010,7 +1171,12 @@ public class JudgeManager {
                     && note.getMicroTime() < mtime + mjudge[3][0]; note = state.lanemodel.getNote()) {
                 final int mjud = (int) (note.getMicroTime() - mtime);
                 if (note instanceof NormalNote && note.getState() == 0) {
-                    this.updateMicro(state, note, mtime, 4, mjud, true);
+                    if (((NormalNote) note).isFreeZoneInner()) {
+                        note.setState(5);
+                        note.setMicroPlayTime(mjud);
+                    } else {
+                        this.updateMicro(state, note, mtime, 4, mjud, true);
+                    }
                     if (playOnMiss) {
                         keysound.play(note, getKeyVolume(), 0);
                     }
@@ -1057,6 +1223,7 @@ public class JudgeManager {
                     }
                 }
             }
+            settleFreeZones(state, mtime, now);
             // LN処理タイマー
             if (state.hlnStart != null) {
                 state.inclease = state.hlnHeld || autoplay;
@@ -1090,6 +1257,16 @@ public class JudgeManager {
     }
 
     private void updateMicro(LaneState state, Note n, long mtime, int judge, long mfast, boolean judgeVanish, boolean multiBad) {
+        if (n.isFreeZoneInner()) {
+            if (judgeVanish) {
+                n.setState(judge + 1);
+            }
+            n.setMicroPlayTime(mfast);
+            if (judge <= 3) {
+                markFreeZoneScratchedForNote(state, n);
+            }
+            return;
+        }
         if (judgeVanish) {
             if (score.getPassnotes() < ghost.length) {
                 ghost[score.getPassnotes()] = judge;

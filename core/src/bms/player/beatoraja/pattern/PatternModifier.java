@@ -59,14 +59,17 @@ public abstract class PatternModifier {
 				int lanes = model.getMode().key;
 				Note[] notes = new Note[lanes];
 				Note[] hnotes = new Note[lanes];
+				FreeZoneNote[] fznotes = new FreeZoneNote[lanes];
 				for (int i = 0; i < lanes; i++) {
 					final int mod = i < pm.modify.length ? pm.modify[i] : i;
 					notes[i] = tl.getNote(mod);
 					hnotes[i] = tl.getHiddenNote(mod);
+					fznotes[i] = tl.getFreeZone(mod);
 				}
 				for (int i = 0; i < lanes; i++) {
 					tl.setNote(i, notes[i]);
 					tl.setHiddenNote(i, hnotes[i]);
+					tl.setFreeZone(i, fznotes[i]);
 				}
 			}
 		}
@@ -145,6 +148,17 @@ public abstract class PatternModifier {
 	}
 
 	protected static void moveToBackground(TimeLine[] tls, TimeLine tl, int lane) {
+		FreeZoneNote fz = tl.getFreeZone(lane);
+		if (fz != null) {
+			FreeZoneNote pfz = fz.getPair();
+			for (TimeLine tl2 : tls) {
+				if (tl2.getFreeZone(lane) == pfz) {
+					tl2.setFreeZone(lane, null);
+					break;
+				}
+			}
+			tl.setFreeZone(lane, null);
+		}
 		Note n = tl.getNote(lane);
 		if(n == null) {
 			return;

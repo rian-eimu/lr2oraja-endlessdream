@@ -71,7 +71,7 @@ public class AutoplayModifier extends PatternModifier {
 
 			if(remove) {
 				for(int lane : lanes) {
-					if(tl.existNote(lane)) {
+					if(tl.existNote(lane) || tl.existFreeZone(lane)) {
 						assist = AssistLevel.ASSIST;
 					}
 					moveToBackground(tls, tl, lane);

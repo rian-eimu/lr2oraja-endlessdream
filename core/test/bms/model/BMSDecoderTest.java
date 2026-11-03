@@ -510,5 +510,145 @@ class BMSDecoderTest {
         // 5x終点と同位置のマーカーに重ねた通常ノーツ (02 -> index 1) が終端音として付与されること
         assertEquals(1, endNote.getWav());
     }
+
+    @Test
+    void testLegacyFreeZoneBeforeAndAfterCutoff() {
+        // 旧形式 (#xxx17 / #xxx27) の更新日時によるフリーゾーン判定と無視時のモード昇格抑止の確認
+        String bms = String.join("\n",
+                "#PLAYER 1",
+                "#BPM 120",
+                "#WAV01 fz.wav",
+                "#00117:01000000",
+                "#00127:00000100"
+        );
+        byte[] bytes = bms.getBytes(StandardCharsets.US_ASCII);
+
+        // 2000-12-31 以前: フリーゾーンとして認識され、#00127 により BEAT_10K へ昇格
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel legacyModel = decoder.decode(new ChartInformation(new ByteArrayChartSource("test.bms", bytes, BMSDecoder.LEGACY_FREEZONE_CUTOFF_MILLIS), BMSModel.LNTYPE_LONGNOTE, null));
+        assertNotNull(legacyModel);
+        assertEquals(Mode.BEAT_10K, legacyModel.getMode());
+        assertTrue(legacyModel.containsFreeZone());
+        assertEquals(2, legacyModel.getTotalNotes());
+        assertEquals(2, BMSModelUtils.getTotalNotes(legacyModel, BMSModelUtils.TOTALNOTES_SCRATCH));
+        assertEquals(0, BMSModelUtils.getTotalNotes(legacyModel, BMSModelUtils.TOTALNOTES_KEY));
+
+        bms.player.beatoraja.song.SongData songData = new bms.player.beatoraja.song.SongData(legacyModel, false);
+        assertTrue(songData.hasFreeZone());
+        bms.player.beatoraja.ir.IRChartData irChartData = new bms.player.beatoraja.ir.IRChartData(songData);
+        assertTrue(irChartData.hasFreeZone);
+
+        // 2001-01-01 以降: 無視され、モードも BEAT_5K のまま
+        BMSModel modernModel = decoder.decode(new ChartInformation(new ByteArrayChartSource("test.bms", bytes, BMSDecoder.LEGACY_FREEZONE_CUTOFF_MILLIS + 1000L), BMSModel.LNTYPE_LONGNOTE, null));
+        assertNotNull(modernModel);
+        assertEquals(Mode.BEAT_5K, modernModel.getMode());
+        assertFalse(modernModel.containsFreeZone());
+        assertEquals(0, modernModel.getTotalNotes());
+    }
+
+    @Test
+    void testExplicitFreeZoneMergeInnerNotesAndCompetingBssMine() {
+        // 明示形式 (#xxxSF / #xxxSG)、区間結合、内部皿ノーツの非計上、および競合BSS・地雷ノーツの共存確認
+        String bms = String.join("\n",
+                "#PLAYER 1",
+                "#BPM 120",
+                "#LNMODE 1",
+                "#WAV01 scr.wav",
+                "#WAV02 fz_marker.wav",
+                // 小節001: 0.0からSF(4分=0.25長) + 0.25から0.50までSGペア -> [1.0, 1.5] の1本のフリーゾーンに結合
+                "#001SF:02000000",
+                "#001SG:00020200",
+                // 始点(1.0)、中間(1.25)、終点(1.5)の皿ノーツ(16)と、区間外(1.75)の通常皿ノーツ
+                "#00116:01010101",
+                // 小節002: SGペア [2.0, 2.75] 内にBSS (#00256: [2.0, 2.25]) と地雷 (#002D6: 2.50) が共存
+                "#002SG:02000002",
+                "#00256:01010000",
+                "#002D6:00000100"
+        );
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(bms.getBytes(StandardCharsets.US_ASCII), false, null);
+        assertNotNull(model);
+        assertEquals(Mode.BEAT_5K, model.getMode());
+        assertTrue(model.containsFreeZone());
+
+        int scratchLane = model.getMode().scratchKey[0];
+        FreeZoneNote fz1Start = null;
+        FreeZoneNote fz2Start = null;
+        int innerCount = 0;
+        int outerNormalScratchCount = 0;
+        LongNote bssStart = null;
+        MineNote mineInFz = null;
+
+        for (TimeLine tl : model.getAllTimeLines()) {
+            FreeZoneNote fz = tl.getFreeZone(scratchLane);
+            if (fz != null && !fz.isEnd()) {
+                if (Math.abs(tl.getSection() - 1.0) < 1e-6) {
+                    fz1Start = fz;
+                } else if (Math.abs(tl.getSection() - 2.0) < 1e-6) {
+                    fz2Start = fz;
+                }
+            }
+            Note n = tl.getNote(scratchLane);
+            if (n instanceof NormalNote nn) {
+                if (nn.isFreeZoneInner()) {
+                    innerCount++;
+                } else {
+                    outerNormalScratchCount++;
+                }
+            } else if (n instanceof LongNote ln && !ln.isEnd()) {
+                bssStart = ln;
+            } else if (n instanceof MineNote mn) {
+                mineInFz = mn;
+            }
+        }
+
+        assertNotNull(fz1Start, "小節001のフリーゾーン始点が存在すること");
+        assertEquals(1.5, fz1Start.getPair().getSection(), 1e-6, "SFとSGが結合され終点が1.5になっていること");
+        assertEquals(-2, fz1Start.getWav(), "フリーゾーンマーカーは無音(-2)であること");
+        assertEquals(3, fz1Start.getInnerNotes().length, "始点・中間・終点の3つの皿ノーツが内部ノーツとして紐付くこと");
+        assertEquals(3, innerCount);
+        assertEquals(1, outerNormalScratchCount, "区間外(1.75)の1個のみが通常皿ノーツであること");
+
+        assertNotNull(fz2Start, "小節002のフリーゾーン始点が存在すること");
+        assertNotNull(bssStart, "フリーゾーン内の競合BSSが維持されていること");
+        assertTrue(bssStart.isFreeZoneInner(), "フリーゾーン内のBSS始点が内包ノーツとしてマークされていること");
+        assertTrue(bssStart.getPair().isFreeZoneInner(), "フリーゾーン内のBSS終点が内包ノーツとしてマークされていること");
+        assertEquals(1, fz2Start.getInnerNotes().length, "小節002のフリーゾーンにBSSが内部ノーツとして紐付くこと");
+        assertSame(bssStart, fz2Start.getInnerNotes()[0]);
+        assertNotNull(mineInFz, "フリーゾーン内の地雷ノーツが維持されていること");
+
+        // 総ノーツ数: 小節001のFZ(1) + 小節001区間外の通常皿(1) + 小節002のFZ(1) = 3（内部BSSは単体ノーツ数に加算しない）
+        assertEquals(3, model.getTotalNotes());
+        assertEquals(3, BMSModelUtils.getTotalNotes(model, BMSModelUtils.TOTALNOTES_SCRATCH));
+        assertEquals(0, BMSModelUtils.getTotalNotes(model, BMSModelUtils.TOTALNOTES_LONG_SCRATCH));
+    }
+
+    @Test
+    void testPmsChannel17TreatedAsNormalNote() {
+        // PMS形式では年代にかかわらず ch17 をフリーゾーンではなく9鍵目の通常ノーツとして扱うことの確認
+        String pms = String.join("\n",
+                "#PLAYER 1",
+                "#BPM 120",
+                "#WAV01 note.wav",
+                "#00117:01000000"
+        );
+        byte[] bytes = pms.getBytes(StandardCharsets.US_ASCII);
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(new ChartInformation(new ByteArrayChartSource("test.pms", bytes, BMSDecoder.LEGACY_FREEZONE_CUTOFF_MILLIS), BMSModel.LNTYPE_LONGNOTE, null));
+        assertNotNull(model);
+        assertEquals(Mode.POPN_9K, model.getMode());
+        assertFalse(model.containsFreeZone(), "PMS形式ではch17がフリーゾーンにならないこと");
+        assertEquals(1, model.getTotalNotes());
+
+        Note lane8Note = null;
+        for (TimeLine tl : model.getAllTimeLines()) {
+            if (tl.getNote(8) != null) {
+                lane8Note = tl.getNote(8);
+                break;
+            }
+        }
+        assertTrue(lane8Note instanceof NormalNote, "PMSのch17はレーン8の通常ノーツとして配置されること");
+        assertFalse(((NormalNote) lane8Note).isFreeZoneInner());
+    }
 }
 

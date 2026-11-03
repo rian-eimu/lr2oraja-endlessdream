@@ -522,6 +522,7 @@ public class LR2PlaySkinLoader extends LR2SkinCSVLoader<PlaySkin> {
 				}
 				if (line != null) {
 					skin.add(line);
+					skin.addJudgeLine(line);
 				}
 			}
 		});

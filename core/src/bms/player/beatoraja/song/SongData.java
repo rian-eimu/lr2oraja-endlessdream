@@ -31,6 +31,7 @@ public class SongData implements Validatable, IpfsInformation {
 	public static final int FEATURE_SCROLL = 128;
 	public static final int FEATURE_HELLLONGNOTE = 256;
 	public static final int FEATURE_CONDITIONAL = 512;
+	public static final int FEATURE_FREEZONE = 1024;
 
 	public static final int CONTENT_TEXT = 1;
 	public static final int CONTENT_BGA = 2;
@@ -209,6 +210,9 @@ public class SongData implements Validatable, IpfsInformation {
 							break;
 					}
 				}
+				if(tl.existFreeZone(i)) {
+					feature |= FEATURE_FREEZONE;
+				}
 				if(tl.getNote(i) instanceof MineNote) {
 					feature |= FEATURE_MINENOTE;
 				}
@@ -222,6 +226,7 @@ public class SongData implements Validatable, IpfsInformation {
 
 		feature |= model.getRandom() != null && model.getRandom().length > 0 ? FEATURE_RANDOM : 0;
 		feature |= model.hasConditional() ? FEATURE_CONDITIONAL : 0;
+		feature |= model.isConditionalContainsFreeZone() ? FEATURE_FREEZONE : 0;
 		content |= model.getBgaList().length > 0 ? CONTENT_BGA : 0;
 		content |= length >= 30000 && model.getWavList().length <= (length / (50 * 1000)) + 3 ? CONTENT_NOKEYSOUND : 0;
 		
@@ -432,6 +437,10 @@ public class SongData implements Validatable, IpfsInformation {
 
 	public boolean isBpmstop() {
 		return (feature & FEATURE_STOPSEQUENCE) != 0;
+	}
+
+	public boolean hasFreeZone() {
+		return (feature & FEATURE_FREEZONE) != 0;
 	}
 
 	public boolean hasScrollChange() {

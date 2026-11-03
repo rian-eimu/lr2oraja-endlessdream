@@ -272,6 +272,17 @@ public final class PlayerResource {
 			}
 
 			@Override
+			public long lastModifiedTimeMillis() {
+				return resource.localPath().map(p -> {
+					try {
+						return java.nio.file.Files.getLastModifiedTime(p).toMillis();
+					} catch (java.io.IOException e) {
+						return -1L;
+					}
+				}).orElse(-1L);
+			}
+
+			@Override
 			public java.io.InputStream openStream() throws java.io.IOException {
 				return resource.openStream();
 			}

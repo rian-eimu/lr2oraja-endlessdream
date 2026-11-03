@@ -23,6 +23,45 @@ public class SkinNote extends SkinObject {
 	private LaneRenderer renderer;
 	private long time;
 
+	private final SkinFreeZone freeZone = new SkinFreeZone();
+
+	public SkinFreeZone getFreeZoneObject() {
+		return freeZone;
+	}
+
+	/**
+	 * フリーゾーン背景描画オブジェクト（判定ラインより後ろのレイヤーで描画する）
+	 */
+	public class SkinFreeZone extends SkinObject {
+
+		public SkinFreeZone() {
+			this.setDestination(0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 0, 0, 0, 0, 0, 0, new int[0]);
+		}
+
+		@Override
+		public void prepare(long time, MainState state) {
+			if (renderer == null) {
+				final BMSPlayer player = (BMSPlayer) state;
+				if (player.getLanerender() == null) {
+					draw = false;
+					return;
+				}
+				renderer = player.getLanerender();
+			}
+			SkinNote.this.time = time;
+			super.prepare(time, state);
+		}
+
+		@Override
+		public void draw(SkinObjectRenderer sprite) {
+			renderer.drawFreeZone(sprite, time, lanes, this.getOffsets());
+		}
+
+		@Override
+		public void dispose() {
+		}
+	}
+
 	public SkinNote(SkinSource[] note, SkinSource[][] longnote, SkinSource[] minenote) {
 		lanes = new SkinLane[note.length];
 		for(int i = 0;i < lanes.length;i++) {
