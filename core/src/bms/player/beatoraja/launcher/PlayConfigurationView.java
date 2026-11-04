@@ -1,5 +1,6 @@
 package bms.player.beatoraja.launcher;
 
+import bms.player.beatoraja.external.DesktopActions;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
@@ -434,17 +435,7 @@ public class PlayConfigurationView implements Initializable {
 
 						@Override
 						public void handle(ActionEvent event) {
-							Desktop desktop = Desktop.getDesktop();
-                            java.awt.EventQueue.invokeLater(() -> {
-                                try {
-                                    URI uri;
-                                    uri = new URI(downloadURL);
-                                    desktop.browse(uri);
-                                }
-                                catch (Exception e) {
-                                    logger.warn("最新版URLアクセス時例外:" + e.getMessage());
-                                }
-                            });
+							DesktopActions.openUri(downloadURL);
 						}
 					});
 				}
@@ -936,6 +927,7 @@ public class PlayConfigurationView implements Initializable {
         };
 
         Runnable loadBMSRunnable = () -> {
+            boolean updated = false;
             try {
                 SongDatabaseAccessor songdb = MainLoader.getScoreDatabaseAccessor();
                 if (songdb instanceof SQLiteSongDatabaseAccessor sqliteSongDb) {
@@ -946,23 +938,22 @@ public class PlayConfigurationView implements Initializable {
                 logger.info("song.db更新開始");
                 songdb.updateSongDatas(updatepath, config.getBmsroot(), updateAll, false, infodb, songDatabaseUpdateListener);
                 logger.info("song.db更新完了");
-                songUpdated = true;
-
-				// Once again, JavaFX UI code must be run inside a Platform context. Hide progress bar and resume
-				// normal launcher behaviour
-				Platform.runLater(new Runnable() {
-					@Override
-					public void run() {
-						loadingBarStage.hide();
-					}
-				});
-            } catch (ClassNotFoundException e) {
-                e.printStackTrace();
+                updated = true;
+            } catch (Throwable e) {
+                logger.error("song.db更新中の予期しない例外", e);
+            } finally {
+                final boolean completed = updated;
+                Platform.runLater(() -> {
+                    if (completed) {
+                        songUpdated = true;
+                    }
+                    loadingBarStage.hide();
+                });
             }
         };
 
-        new Thread(progressRunnable).start();
-        new Thread(loadBMSRunnable).start();
+        progressRunnable.run();
+        new Thread(loadBMSRunnable, "song database update").start();
 	}
 
     @FXML
@@ -1001,9 +992,7 @@ public class PlayConfigurationView implements Initializable {
 		Twitter twitter = twitterfactory.getInstance();
 		try {
 			requestToken = twitter.getOAuthRequestToken();
-			Desktop desktop = Desktop.getDesktop();
-			URI uri = new URI(requestToken.getAuthorizationURL());
-			desktop.browse(uri);
+			DesktopActions.openUri(requestToken.getAuthorizationURL());
 			player.setTwitterConsumerKey(txtTwitterConsumerKey.getText());
 			player.setTwitterConsumerSecret(txtTwitterConsumerSecret.getText());
 			player.setTwitterAccessToken("");
