@@ -34,7 +34,7 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 			return obj;
 		}
 
-        try (var perf = PerformanceMetrics.get().Event("Play object: " + dst.id)) {
+		try (var perf = PerformanceMetrics.get().Event("Play object: " + dst.id)) {
 		
 		// note (playskin only)
 		if(sk.note != null && dst.id.equals(sk.note.id)) {
@@ -192,7 +192,7 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 					((SkinHidden) obj).setDisapearLine((float) (img.disapearLine * skin.getScaleY()));
 					((SkinHidden) obj).setDisapearLineLinkLift(img.isDisapearLineLinkLift);
 					int[] offsets = new int[dst.offsets.length + 2];
-                    System.arraycopy(dst.offsets, 0, offsets, 0, dst.offsets.length);
+					System.arraycopy(dst.offsets, 0, offsets, 0, dst.offsets.length);
 					offsets[dst.offsets.length] = OFFSET_LIFT;
 					offsets[dst.offsets.length + 1] = OFFSET_HIDDEN_COVER;
 					dst.offsets = offsets;								
@@ -209,12 +209,18 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 					((SkinHidden) obj).setDisapearLine((float) (img.disapearLine * skin.getScaleY()));
 					((SkinHidden) obj).setDisapearLineLinkLift(img.isDisapearLineLinkLift);
 					int[] offsets = new int[dst.offsets.length + 2];
-                    System.arraycopy(dst.offsets, 0, offsets, 0, dst.offsets.length);
+					System.arraycopy(dst.offsets, 0, offsets, 0, dst.offsets.length);
 					offsets[dst.offsets.length] = OFFSET_LIFT;
 					dst.offsets = offsets;
 					return obj;
 				}
 			}
+		}
+		// practice configuration (playskin only)
+		if (sk.practice != null && dst.id.equals(sk.practice.id)) {
+			SkinPractice practice = new SkinPractice(sk.practice.visibleItems);
+			skin.setPractice(practice);
+			return practice;
 		}
 		// bga (playskin only)
 		if (sk.bga != null && dst.id.equals(sk.bga.id)) {
@@ -296,9 +302,10 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 				if(dst.dst.length > 0 && imagefile != null) {
 					int color = chara.color == 2 ? 2 : 1;
 					int side = chara.side == 2 ? 2 : 1;
+					int[] sourceOptions = dst.getOptionIds();
 					int[] option = new int[3];
 					for(int i = 0; i < option.length; i++) {
-						if(i < dst.op.length) option[i] = dst.op[i];
+						if(i < sourceOptions.length) option[i] = sourceOptions[i];
 						else option[i] = 0;
 					}
 					if(chara.type == 0) {
@@ -320,6 +327,6 @@ public class JsonPlaySkinObjectLoader extends JsonSkinObjectLoader<PlaySkin> {
 		}
 
 		return obj;
-        }
+		}
 	}
 }

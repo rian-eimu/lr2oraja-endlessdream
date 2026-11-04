@@ -18,6 +18,8 @@ import bms.player.beatoraja.play.bga.BGAProcessor;
 import bms.player.beatoraja.skin.*;
 import bms.player.beatoraja.skin.SkinHeader.CustomItem;
 import bms.player.beatoraja.skin.lua.SkinLuaAccessor;
+import bms.player.beatoraja.skin.property.BooleanProperty;
+import bms.player.beatoraja.video.VideoFormat;
 
 /**
  * JSONスキンローダー
@@ -26,6 +28,7 @@ import bms.player.beatoraja.skin.lua.SkinLuaAccessor;
  */
 public class JSONSkinLoader extends SkinLoader {
 	private static final Logger logger = LoggerFactory.getLogger(JSONSkinLoader.class);
+	private Skin loadingSkin;
 
 	protected Resolution dstr;
 	protected boolean usecim;
@@ -35,6 +38,7 @@ public class JSONSkinLoader extends SkinLoader {
 
 	Map<String, SourceData> sourceMap;
 	Map<String, SkinTextBitmap.SkinTextBitmapSource> bitmapSourceMap;
+	Map<String, SkinFontSource> fontSourceMap;
 
 	protected final SkinLuaAccessor lua;
 
@@ -91,21 +95,27 @@ public class JSONSkinLoader extends SkinLoader {
 		serializer = new JsonSkinSerializer(lua, path -> getPath(path, filemap));
 		SkinHeader header = null;
 		try {
+			if (lua != null) {
+				lua.setDirectory(p.getParent());
+			}
 			Json json = new Json();
 			json.setIgnoreUnknownFields(true);
 			serializer.setSerializers(json, null, p);
-			try{
-                sk = json.fromJson(JsonSkin.Skin.class, new FileReader(p.toFile()));
-            }
-			catch (Exception e) {
+			try (Reader reader = new FileReader(p.toFile())) {
+				sk = json.fromJson(JsonSkin.Skin.class, reader);
+			} catch (Exception e) {
 				logger.warn("Error parsing json, retrying with Shift JIS: {}", p);
-                var stream = new InputStreamReader(new FileInputStream(p.toFile()),
-                                                   Charset.forName("Shift_JIS"));
-                sk = json.fromJson(JsonSkin.Skin.class, stream);
-            }
-            header = loadJsonSkinHeader(sk, p);
-		} catch (FileNotFoundException e) {
-			logger.error("JSONスキンファイルが見つかりません : {}", p.toString());
+				try (var stream = new InputStreamReader(new FileInputStream(p.toFile()), Charset.forName("Shift_JIS"))) {
+					sk = json.fromJson(JsonSkin.Skin.class, stream);
+				}
+			}
+			if (sk == null) {
+				logger.warn("JSONスキンファイルのルート値がnullです : {}", p);
+				return null;
+			}
+			header = loadJsonSkinHeader(sk, p);
+		} catch (IOException | SerializationException e) {
+			logger.warn("JSONスキンファイルのヘッダ読み込み失敗 : {} : {}", p, e.getMessage());
 		}
 		return header;
 	}
@@ -162,18 +172,10 @@ public class JSONSkinLoader extends SkinLoader {
 				}
 				header.setCustomFiles(files);
 
-				int offsetLengthAddition = 0;
-				switch (header.getSkinType()) {
-					case PLAY_5KEYS:
-					case PLAY_7KEYS:
-					case PLAY_9KEYS:
-					case PLAY_10KEYS:
-					case PLAY_14KEYS:
-					case PLAY_24KEYS:
-					case PLAY_24KEYS_DOUBLE:
-						offsetLengthAddition = 4;
-					default:
-				}
+				int offsetLengthAddition = switch (header.getSkinType()) {
+					case PLAY_5KEYS, PLAY_7KEYS, PLAY_9KEYS, PLAY_10KEYS, PLAY_14KEYS, PLAY_24KEYS, PLAY_24KEYS_DOUBLE -> 4;
+					default -> 0;
+				};
 				SkinHeader.CustomOffset[] offsets = new SkinHeader.CustomOffset[sk.offset.length + offsetLengthAddition];
 				for (int i = 0; i < sk.offset.length; i++) {
 					JsonSkin.Offset pr = sk.offset[i];
@@ -187,18 +189,12 @@ public class JSONSkinLoader extends SkinLoader {
 					}
 				}
 				switch (header.getSkinType()) {
-					case PLAY_5KEYS:
-					case PLAY_7KEYS:
-					case PLAY_9KEYS:
-					case PLAY_10KEYS:
-					case PLAY_14KEYS:
-					case PLAY_24KEYS:
-					case PLAY_24KEYS_DOUBLE:
+					case PLAY_5KEYS, PLAY_7KEYS, PLAY_9KEYS, PLAY_10KEYS, PLAY_14KEYS, PLAY_24KEYS, PLAY_24KEYS_DOUBLE -> {
 						offsets[sk.offset.length + 0] = new SkinHeader.CustomOffset("All offset(%)", SkinProperty.OFFSET_ALL, true, true, true, true, false, false);
 						offsets[sk.offset.length + 1] = new SkinHeader.CustomOffset("Notes offset", SkinProperty.OFFSET_NOTES_1P, false, false, false, true, false, false);
 						offsets[sk.offset.length + 2] = new SkinHeader.CustomOffset("Judge offset", SkinProperty.OFFSET_JUDGE_1P, true, true, true, true, false, true);
 						offsets[sk.offset.length + 3] = new SkinHeader.CustomOffset("Judge Detail offset", SkinProperty.OFFSET_JUDGEDETAIL_1P, true, true, true, true, false, true);
-					default:
+					}
 				}
 				header.setCustomOffsets(offsets);
 				
@@ -226,11 +222,15 @@ public class JSONSkinLoader extends SkinLoader {
 		Skin skin = null;
 		SkinHeader header = loadHeader(p);
 		if(header == null) {
+			if (lua != null) lua.dispose();
 			return null;
 		}
 		header.setSkinConfigProperty(property);
 
 		try {
+			if(lua != null) {
+				lua.setDirectory(p.getParent());
+			}
 			Json json = new Json();
 			json.setIgnoreUnknownFields(true);
 
@@ -247,23 +247,23 @@ public class JSONSkinLoader extends SkinLoader {
 				return getPath(p.getParent().toString() + "/" + path, filemap).getPath();
 			});
 
-            try {
-                sk = json.fromJson(JsonSkin.Skin.class, new FileReader(p.toFile()));
-            }
-            catch (Exception e) {
+			try (Reader reader = new FileReader(p.toFile())) {
+				sk = json.fromJson(JsonSkin.Skin.class, reader);
+			} catch (Exception e) {
 				logger.warn("Error parsing json, retrying with Shift JIS: {}", p);
-                var stream = new InputStreamReader(new FileInputStream(p.toFile()),
-                                                   Charset.forName("Shift_JIS"));
-                sk = json.fromJson(JsonSkin.Skin.class, stream);
-            }
+				try (var stream = new InputStreamReader(new FileInputStream(p.toFile()), Charset.forName("Shift_JIS"))) {
+					sk = json.fromJson(JsonSkin.Skin.class, stream);
+				}
+			}
 
-            skin = loadJsonSkin(header, sk, type, property, p);
+			skin = loadJsonSkin(header, sk, type, property, p);
 		} catch (FileNotFoundException e) {
 			logger.error("JSONスキンファイルが見つかりません : {}", p.toString());
 		} catch (Throwable e) {
 			logger.error("何らかの原因でJSONスキンファイルの読み込みに失敗しました");
 			e.printStackTrace();
 		}
+		if (skin == null && lua != null) lua.dispose();
 		return skin;
 	}
 
@@ -288,42 +288,24 @@ public class JSONSkinLoader extends SkinLoader {
 
 			sourceMap = new HashMap<>();
 			bitmapSourceMap = new HashMap<>();
+			fontSourceMap = new HashMap<>();
 
-			JsonSkinObjectLoader objectLoader = null;
-			switch(type) {
-			case MUSIC_SELECT:
-				objectLoader = new JsonSelectSkinObjectLoader(this);
-				break;
-			case PLAY_5KEYS:
-			case PLAY_7KEYS:
-			case PLAY_9KEYS:
-			case PLAY_10KEYS:
-			case PLAY_14KEYS:
-			case PLAY_24KEYS:
-			case PLAY_24KEYS_DOUBLE:
-				objectLoader = new JsonPlaySkinObjectLoader(this);
-				break;
-			case DECIDE:
-				objectLoader = new JsonDecideSkinObjectLoader(this);
-				break;
-			case RESULT:
-				objectLoader = new JsonResultSkinObjectLoader(this);
-				break;
-			case COURSE_RESULT:
-				objectLoader = new JsonCourseResultSkinObjectLoader(this);
-				break;
-			case SKIN_SELECT:
-				objectLoader = new JsonSkinConfigurationSkinObjectLoader(this);
-				break;
-			case KEY_CONFIG:
-			default:
-				objectLoader = new JsonKeyConfigurationSkinObjectLoader(this);
-				break;				
-			}
+			final JsonSkinObjectLoader objectLoader = switch(type) {
+				case MUSIC_SELECT -> new JsonSelectSkinObjectLoader(this);
+				case PLAY_5KEYS, PLAY_7KEYS, PLAY_9KEYS, PLAY_10KEYS, PLAY_14KEYS, PLAY_24KEYS, PLAY_24KEYS_DOUBLE -> new JsonPlaySkinObjectLoader(this);
+				case DECIDE -> new JsonDecideSkinObjectLoader(this);
+				case RESULT -> new JsonResultSkinObjectLoader(this);
+				case COURSE_RESULT -> new JsonCourseResultSkinObjectLoader(this);
+				case SKIN_SELECT -> new JsonSkinConfigurationSkinObjectLoader(this);
+				case KEY_CONFIG -> new JsonKeyConfigurationSkinObjectLoader(this);
+				default -> new JsonKeyConfigurationSkinObjectLoader(this);
+			};
 			
 			header.setSourceResolution(src);
 			header.setDestinationResolution(dstr);
 			skin = objectLoader.getSkin(header);
+			loadingSkin = skin;
+			if (lua != null) skin.addResource(lua);
 			
 			IntIntMap op = new IntIntMap();
 			for (SkinHeader.CustomOption option : header.getCustomOptions()) {
@@ -347,12 +329,12 @@ public class JSONSkinLoader extends SkinLoader {
 				sourceMap.put(source.id, new SourceData(source.path));
 			}
 
-            BitmapFontBatchLoader bmpFontLoader = new BitmapFontBatchLoader(sk, p, usecim, true);
-            try (var fontPerf = PerformanceMetrics.get().Event("Bitmap font preload")) {
-                bmpFontLoader.load();
-            }
+			BitmapFontBatchLoader bmpFontLoader = new BitmapFontBatchLoader(sk, p, usecim, true);
+			try (var fontPerf = PerformanceMetrics.get().Event("Bitmap font preload")) {
+				bmpFontLoader.load();
+			}
 
-            for (JsonSkin.Destination dst : sk.destination) {
+			for (JsonSkin.Destination dst : sk.destination) {
 				SkinObject obj = null;
 				try {
 					int id = Integer.parseInt(dst.id);
@@ -417,10 +399,48 @@ public class JSONSkinLoader extends SkinLoader {
 				}
 			}
 		} catch (Throwable e) {
+			if (skin != null) {
+				try {
+					skin.dispose();
+				} catch (Throwable cleanupFailure) {
+					e.addSuppressed(cleanupFailure);
+				}
+			}
 			e.printStackTrace();
 			return null;
+		} finally {
+			loadingSkin = null;
 		}
 		return skin;
+	}
+
+	SkinFontSource getFontSource(String fontPath, String[] fallbackFontPaths) {
+		var key = createFontSourceKey(fontPath, fallbackFontPaths);
+		return fontSourceMap.computeIfAbsent(key, ignored -> {
+			SkinFontSource source = new SkinFontSource(fontPath, fallbackFontPaths);
+			registerResource(source);
+			return source;
+		});
+	}
+
+	void registerResource(Disposable resource) {
+		if (loadingSkin != null) {
+			if (resource instanceof Texture texture) {
+				loadingSkin.addResource(texture);
+			} else {
+				loadingSkin.addResource(resource);
+			}
+		}
+	}
+
+	private static String createFontSourceKey(String fontPath, String[] fallbackFontPaths) {
+		var key = new java.lang.StringBuilder(fontPath).append('\0');
+		if (fallbackFontPaths != null) {
+			for (var fallbackFontPath : fallbackFontPaths) {
+				key.append(fallbackFontPath == null ? "" : fallbackFontPath).append('\0');
+			}
+		}
+		return key.toString();
 	}
 
 	private void setDestination(Skin skin, SkinObject obj, JsonSkin.Destination dst) {
@@ -450,13 +470,20 @@ public class JSONSkinLoader extends SkinLoader {
 				a.r = (a.r == Integer.MIN_VALUE ? prev.r : a.r);
 				a.g = (a.g == Integer.MIN_VALUE ? prev.g : a.g);
 				a.b = (a.b == Integer.MIN_VALUE ? prev.b : a.b);
+				a.clip_x = (a.clip_x == Integer.MIN_VALUE ? prev.clip_x : a.clip_x);
+				a.clip_y = (a.clip_y == Integer.MIN_VALUE ? prev.clip_y : a.clip_y);
+				a.clip_w = (a.clip_w == Integer.MIN_VALUE ? prev.clip_w : a.clip_w);
+				a.clip_h = (a.clip_h == Integer.MIN_VALUE ? prev.clip_h : a.clip_h);
 			}
-			if(dst.draw != null) {
-				skin.setDestination(obj, a.time, a.x, a.y, a.w, a.h, a.acc, a.a, a.r, a.g, a.b, dst.blend, dst.filter,
-						a.angle, dst.center, dst.loop, dst.timer, dst.draw);
-			} else {
-				skin.setDestination(obj, a.time, a.x, a.y, a.w, a.h, a.acc, a.a, a.r, a.g, a.b, dst.blend, dst.filter,
-						a.angle, dst.center, dst.loop, dst.timer, dst.op);
+			BooleanProperty[] draw = dst.getDrawConditions();
+			if (dst.draw != null) {
+				draw = Arrays.copyOf(draw, draw.length + 1);
+				draw[draw.length - 1] = dst.draw;
+			}
+			skin.setDestination(obj, a.time, a.x, a.y, a.w, a.h, a.acc, a.a, a.r, a.g, a.b, dst.blend, dst.filter,
+					a.angle, dst.center, dst.loop, dst.timer, dst.getOptionIds(), draw);
+			if (a.clip_x != Integer.MIN_VALUE && a.clip_y != Integer.MIN_VALUE && a.clip_w != Integer.MIN_VALUE && a.clip_h != Integer.MIN_VALUE) {
+				skin.setDestinationClip(obj, a.time, a.clip_x, a.clip_y, a.clip_w, a.clip_h);
 			}
 			if (dst.mouseRect != null) {
 				skin.setMouseRect(obj, dst.mouseRect.x, dst.mouseRect.y, dst.mouseRect.w, dst.mouseRect.h);
@@ -491,22 +518,24 @@ public class JSONSkinLoader extends SkinLoader {
 		final File imagefile = getPath(p.getParent().toString() + "/" + data.path, filemap);
 		if (imagefile.exists()) {
 			boolean isMovie = false;
-			 for (String mov : BGAProcessor.mov_extension) {
-				 if (imagefile.getName().toLowerCase().endsWith(mov)) {
-					 try {
-					 	SkinSourceMovie mm = new SkinSourceMovie(imagefile.getAbsolutePath());
-					 	data.data = mm;
-					 	isMovie = true;
-					 	break;
-					 } catch (Throwable e) {
-						 logger.warn("BGAファイル読み込み失敗。{}", e.getMessage());
-						 e.printStackTrace();
-					 }
-				 }
-			 }
+			for (String mov : VideoFormat.getAllExtensions()) {
+				if (imagefile.getName().toLowerCase().endsWith(mov)) {
+					try {
+						SkinSourceMovie mm = new SkinSourceMovie(imagefile.getAbsolutePath());
+						data.data = mm;
+						registerResource(mm);
+						isMovie = true;
+						break;
+					} catch (Throwable e) {
+						logger.warn("BGAファイル読み込み失敗。{}", e.getMessage());
+						e.printStackTrace();
+					}
+				}
+			}
 
 			if (!isMovie) {
 				data.data = getTexture(imagefile.getPath());
+				registerResource((Texture) data.data);
 			}
 		}
 		data.loaded = true;

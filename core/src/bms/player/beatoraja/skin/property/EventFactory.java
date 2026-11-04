@@ -45,6 +45,10 @@ public class EventFactory {
 	 * @return イベントオブジェクト
 	 */
 	public static Event getEvent(int eventId) {
+		Event patternEvent = EventPattern.get(eventId);
+		if (patternEvent != null) {
+			return patternEvent;
+		}
 		for(EventType t : EventType.values()) {
 			if(t.id == eventId) {
 				return t.event;
@@ -62,6 +66,10 @@ public class EventFactory {
 	 * @return イベントオブジェクト
 	 */
 	public static Event getEvent(String eventName) {
+		Event patternEvent = EventPattern.get(eventName);
+		if (patternEvent != null) {
+			return patternEvent;
+		}
 		for(EventType t : EventType.values()) {
 			if(t.name().equals(eventName)) {
 				return t.event;
@@ -69,6 +77,94 @@ public class EventFactory {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Groups numbered Events by their IDs and skin-facing name pattern.
+	 */
+	private enum EventPattern {
+		KEY_ASSIGN(keyAssignIds(), "keyassign",
+				(index, eventId) -> createZeroArgEvent(EventType.changeKeyAssign(index), eventId)),
+		PRACTICE_ITEM(numberedIds(SkinProperty.BUTTON_PRACTICE_ITEM1, 16), "practice_item",
+				(index, eventId) -> createTwoArgEvent((state, arg1, arg2) -> state.executeEvent(eventId, arg1, arg2), eventId));
+
+		private final int[] ids;
+		private final String namePrefix;
+		private final Event[] events;
+
+		EventPattern(int[] ids, String namePrefix, EventGenerator generator) {
+			this.ids = ids;
+			this.namePrefix = namePrefix;
+			this.events = new Event[ids.length];
+			for (int index = 0; index < ids.length; index++) {
+				events[index] = generator.create(index, ids[index]);
+			}
+		}
+
+		private Event getById(int eventId) {
+			for (int index = 0; index < ids.length; index++) {
+				if (ids[index] == eventId) {
+					return events[index];
+				}
+			}
+			return null;
+		}
+
+		private Event getByName(String name) {
+			if (name == null || !name.startsWith(namePrefix)) {
+				return null;
+			}
+			try {
+				int index = Integer.parseInt(name.substring(namePrefix.length())) - 1;
+				return index >= 0 && index < events.length ? events[index] : null;
+			} catch (NumberFormatException e) {
+				return null;
+			}
+		}
+
+		private static Event get(int eventId) {
+			for (EventPattern pattern : values()) {
+				Event event = pattern.getById(eventId);
+				if (event != null) {
+					return event;
+				}
+			}
+			return null;
+		}
+
+		private static Event get(String name) {
+			for (EventPattern pattern : values()) {
+				Event event = pattern.getByName(name);
+				if (event != null) {
+					return event;
+				}
+			}
+			return null;
+		}
+
+		private static int[] numberedIds(int firstId, int count) {
+			int[] ids = new int[count];
+			for (int index = 0; index < count; index++) {
+				ids[index] = firstId + index;
+			}
+			return ids;
+		}
+
+		private static int[] keyAssignIds() {
+			int[] ids = new int[54];
+			for (int index = 0; index < 39; index++) {
+				ids[index] = 101 + index;
+			}
+			for (int index = 39; index < ids.length; index++) {
+				ids[index] = 150 + index - 39;
+			}
+			return ids;
+		}
+	}
+
+	@FunctionalInterface
+	private interface EventGenerator {
+		Event create(int index, int eventId);
 	}
 
 	public enum EventType {

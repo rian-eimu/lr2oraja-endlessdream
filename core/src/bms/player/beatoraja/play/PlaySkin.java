@@ -58,6 +58,8 @@ public class PlaySkin extends Skin {
 
 	public SkinSlider laneCover;
 
+	private SkinPractice practice;
+
 	public final PomyuCharaProcessor pomyu = new PomyuCharaProcessor();
 
 	private final List<SkinObject> judgeLines = new ArrayList<>();
@@ -231,4 +233,15 @@ public class PlaySkin extends Skin {
 		this.noteExpansionRate = rate;
 	}
 
+	public SkinPractice getPractice() {
+		return practice;
+	}
+
+	public boolean hasPractice() {
+		return practice != null;
+	}
+
+	public void setPractice(SkinPractice practice) {
+		this.practice = practice;
+	}
 }
