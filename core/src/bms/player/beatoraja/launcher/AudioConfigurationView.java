@@ -139,7 +139,9 @@ public class AudioConfigurationView implements Initializable {
 				DeviceInfo[] devices = PortAudioDriver.getDevices();
 				List<String> drivers = new ArrayList<String>(devices.length);
 				for(int i = 0;i < devices.length;i++) {
-					drivers.add(devices[i].name);
+					if(devices[i].maxOutputChannels > 0) {
+						drivers.add(PortAudioDriver.getDeviceDisplayName(devices[i]));
+					}
 				}
 				if(drivers.size() == 0) {
 					throw new RuntimeException("ドライバが見つかりません");
@@ -148,18 +150,34 @@ public class AudioConfigurationView implements Initializable {
 				if(drivers.contains(config.getDriverName())) {
 					audioname.setValue(config.getDriverName());
 				} else {
-					audioname.setValue(drivers.get(0));
+					audioname.setValue(getSelectedPortAudioDeviceName(devices, drivers, config.getDriverName()));
 				}
 				audioname.setDisable(false);
 				audiobuffer.setDisable(false);
 				audiosim.setDisable(false);
 //				PortAudio.terminate();
 			} catch(Throwable e) {
-				logger.error("PortAudioは選択できません : {}", e.getMessage());
+				logger.error("PortAudioは選択できません : {}", PortAudioDriver.getUnavailableMessage(e));
 				audio.setValue(DriverType.OpenAL);
 			}
 			break;
 		}
+	}
+
+	private static String getSelectedPortAudioDeviceName(DeviceInfo[] devices, List<String> drivers, String driverName) {
+		String defaultDevice = PortAudioDriver.getDefaultOutputDeviceDisplayName(devices);
+		if(driverName != null && !driverName.isEmpty()) {
+			if(defaultDevice.endsWith(" : " + driverName)) {
+				return defaultDevice;
+			}
+			for(DeviceInfo device : devices) {
+				if(device.maxOutputChannels > 0 && driverName.equals(device.name)) {
+					return PortAudioDriver.getDeviceDisplayName(device);
+				}
+			}
+		}
+
+		return drivers.contains(defaultDevice) ? defaultDevice : drivers.get(0);
 	}
 
 	private void bindSliderToSpinner(Slider slider, Spinner<Double> spinner) {
