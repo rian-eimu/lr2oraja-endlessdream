@@ -1364,6 +1364,14 @@ public class BMSPlayer extends MainState {
 		logger.info("システム描画のリソース解放");
 	}
 
+	@Override
+	public void executeEvent(int id, int arg1, int arg2) {
+		super.executeEvent(id, arg1, arg2);
+		if (state == STATE_PRACTICE && id >= BUTTON_PRACTICE_ITEM1 && id <= BUTTON_PRACTICE_ITEM16) {
+			practice.changeVisibleItem(id - BUTTON_PRACTICE_ITEM1, arg1 >= 0);
+		}
+	}
+
 	public PracticeConfiguration getPracticeConfiguration() {
 		return practice;
 	}

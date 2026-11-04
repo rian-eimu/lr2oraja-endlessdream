@@ -15,10 +15,11 @@ import bms.model.Mode;
 import bms.player.beatoraja.*;
 import bms.player.beatoraja.play.PlaySkin;
 import bms.player.beatoraja.play.SkinGauge;
-import bms.player.beatoraja.play.bga.BGAProcessor;
 import bms.player.beatoraja.select.MusicSelectSkin;
 import bms.player.beatoraja.skin.*;
 import bms.player.beatoraja.skin.SkinHeader.*;
+import bms.player.beatoraja.skin.property.StringPropertyFactory;
+import bms.player.beatoraja.video.VideoFormat;
 
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -36,9 +37,10 @@ import com.badlogic.gdx.utils.ObjectMap;
  */
 public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 	private static final Logger logger = LoggerFactory.getLogger(LR2SkinCSVLoader.class);
+	private static final Charset MS932 = Charset.forName("MS932");
 
-	Array<Object> imagelist = new Array<Object>();
-	Array<SkinTextImage.SkinTextImageSource> fontlist = new Array<SkinTextImage.SkinTextImageSource>();
+	Array<Object> imagelist = new Array<>();
+	Array<SkinTextImage.SkinTextImageSource> fontlist = new Array<>();
 
 	/**
 	 * スキンの元サイズ
@@ -53,7 +55,7 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 
 	protected S skin;
 
-	ObjectMap<String, String> filemap = new ObjectMap<String, String>();
+	ObjectMap<String, String> filemap = new ObjectMap<>();
 
 	private MainState state;
 
@@ -76,7 +78,7 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 				final File imagefile = LR2SkinLoader.getPath(skinpath, str[1], filemap);
 				if (imagefile.exists()) {
 					try (BufferedReader br = new BufferedReader(
-							new InputStreamReader(new FileInputStream(imagefile), "MS932"));) {
+							new InputStreamReader(new FileInputStream(imagefile), MS932))) {
 						while ((line = br.readLine()) != null) {
 							processLine(line, state);
 						}
@@ -93,11 +95,12 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 				final File imagefile = LR2SkinLoader.getPath(skinpath, str[1], filemap);
 				if (imagefile.exists()) {
 					boolean isMovie = false;
-					for (String mov : BGAProcessor.mov_extension) {
+					for (String mov : VideoFormat.getAllExtensions()) {
 						if (imagefile.getName().toLowerCase().endsWith(mov)) {
 							try {
 								SkinSourceMovie mm = new SkinSourceMovie(imagefile.getPath());
 								imagelist.add(mm);
+								skin.addResource(mm);
 								isMovie = true;
 								break;
 							} catch (Throwable e) {
@@ -108,7 +111,9 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 					}
 
 					if (!isMovie) {
-						imagelist.add(getTexture(imagefile.getPath(), usecim));
+						Texture texture = getTexture(imagefile.getPath(), usecim);
+						imagelist.add(texture);
+						skin.addResource(texture);
 					}
 				} else {
 					logger.warn("IMAGE {} : ファイルが見つかりません : {}", imagelist.size, imagefile.getPath());
@@ -129,6 +134,7 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 					try {
 						SkinTextImage.SkinTextImageSource source = font.loadFont(imagefile.toPath());
 						fontlist.add(source);
+						skin.addResource(source);
 					} catch (IOException e) {
 						e.printStackTrace();
 						fontlist.add(null);
@@ -155,9 +161,8 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 					// + gr);
 				} else {
 					int[] values = parseInt(str);
-					if (values[2] < imagelist.size && imagelist.get(values[2]) != null
-							&& imagelist.get(values[2]) instanceof SkinSourceMovie) {
-						part = new SkinImage((SkinSourceMovie) imagelist.get(values[2]));
+					if (values[2] < imagelist.size && imagelist.get(values[2]) instanceof SkinSourceMovie movie) {
+						part = new SkinImage(movie);
 					} else {
 						TextureRegion[] images = getSourceImage(values);
 						if (images != null) {
@@ -294,6 +299,9 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 				}
 				text.setAlign(values[4]);
 				text.setEditable(values[5] != 0);
+				if(text.isEditable()) {
+					text.setWriter(StringPropertyFactory.getStringWriter(values[3]));
+				}
 				int panel = values[6];
 				skin.add(text);
 				if(text.isEditable() && values[3] == SkinProperty.STRING_SEARCHWORD && skin instanceof MusicSelectSkin) {
@@ -337,8 +345,8 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 					skin.add(slider);
 
 					// TODO 固有実装の汎用化
-					if((skin instanceof PlaySkin) && values[13] == SLIDER_LANECOVER) {
-						((PlaySkin)skin).laneCover = slider;
+					if(skin instanceof PlaySkin playSkin && values[13] == SLIDER_LANECOVER) {
+						playSkin.laneCover = slider;
 					}
 
 					// System.out.println("Object Added - " +
@@ -745,7 +753,7 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 		return skin;
 	}
 
-	SkinImage part = null;
+	SkinObject part = null;
 	SkinImage button = null;
 	SkinImage onmouse = null;
 	SkinGraph bar = null;
@@ -760,13 +768,13 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 	int groovey = 0;
 	Mode mode;
 
-	Array<Object> imagesetarray = new Array<Object>();
+	Array<Object> imagesetarray = new Array<>();
 
 	int stretch = -1;
 
 	protected void loadSkin0(Skin skin, Path f, MainState state, IntIntMap option) throws IOException {
 
-		try (Stream<String> lines = Files.lines(f, Charset.forName("MS932"))) {
+		try (Stream<String> lines = Files.lines(f, MS932)) {
 			lines.forEach(line -> {
 				try {
 					processLine(line, state);
@@ -774,12 +782,20 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 					e.printStackTrace();
 				}
 			});
-		};
+		} catch (IOException | RuntimeException | Error e) {
+			try {
+				skin.dispose();
+			} catch (RuntimeException cleanupFailure) {
+				e.addSuppressed(cleanupFailure);
+			}
+			throw e;
+		}
 
 		skin.setOption(option);
 
 		for (SkinObject obj : skin.getAllSkinObjects()) {
 			if (obj instanceof SkinImage && obj.getAllDestination().length == 0) {
+				skin.addResource(obj);
 				skin.removeSkinObject(obj);
 				logger.warn("NO_DESTINATION : {}", obj);
 			}
@@ -857,32 +873,21 @@ public abstract class LR2SkinCSVLoader<S extends Skin> extends LR2SkinLoader {
 	 * @param c コンフィグ
 	 * @return 対応するLR2SkinCSVLoader。存在しない場合はnull
 	 */
-	public static LR2SkinCSVLoader getSkinLoader(SkinType type, Resolution src, Config c) {
-		switch(type) {
-		case MUSIC_SELECT:
-			return new LR2SelectSkinLoader(src, c);
-		case DECIDE:
-			return new LR2DecideSkinLoader(src, c);
-		case PLAY_5KEYS:
-		case PLAY_7KEYS:
-		case PLAY_9KEYS:
-		case PLAY_10KEYS:
-		case PLAY_14KEYS:
-			return new LR2PlaySkinLoader(type, src, c);
-		case RESULT:
-			return new LR2ResultSkinLoader(src, c);
-		case COURSE_RESULT:
-			return new LR2CourseResultSkinLoader(src, c);
-		case KEY_CONFIG:
-			return null;
-		case SKIN_SELECT:
-			return new LR2SkinSelectSkinLoader(src, c);
-		}
-		return null;
+	public static LR2SkinCSVLoader<?> getSkinLoader(SkinType type, Resolution src, Config c) {
+		return switch (type) {
+			case MUSIC_SELECT -> new LR2SelectSkinLoader(src, c);
+			case DECIDE -> new LR2DecideSkinLoader(src, c);
+			case PLAY_5KEYS, PLAY_7KEYS, PLAY_9KEYS, PLAY_10KEYS, PLAY_14KEYS -> new LR2PlaySkinLoader(type, src, c);
+			case RESULT -> new LR2ResultSkinLoader(src, c);
+			case COURSE_RESULT -> new LR2CourseResultSkinLoader(src, c);
+			case KEY_CONFIG -> null;
+			case SKIN_SELECT -> new LR2SkinSelectSkinLoader(src, c);
+			default -> null;
+		};
 	}
 }
 
-enum CSVCommand implements LR2SkinLoader.Command<LR2SkinCSVLoader> {
+enum CSVCommand implements LR2SkinLoader.Command<LR2SkinCSVLoader<?>> {
 	STARTINPUT ((loader, str) -> {
 		loader.skin.setInput(Integer.parseInt(str[1]));
 	}),
@@ -897,13 +902,13 @@ enum CSVCommand implements LR2SkinLoader.Command<LR2SkinCSVLoader> {
 	})
 	;
 	
-	public final BiConsumer<LR2SkinCSVLoader, String[]> function;
+	public final BiConsumer<LR2SkinCSVLoader<?>, String[]> function;
 	
-	private CSVCommand(BiConsumer<LR2SkinCSVLoader, String[]> function) {
+	private CSVCommand(BiConsumer<LR2SkinCSVLoader<?>, String[]> function) {
 		this.function = function;
 	}
 	
-	public void execute(LR2SkinCSVLoader loader, String[] str) {
+	public void execute(LR2SkinCSVLoader<?> loader, String[] str) {
 		function.accept(loader, str);
 	}
 
