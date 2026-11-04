@@ -66,7 +66,7 @@ public class ConditionalBranchController {
         this.modifierApplier = modifierApplier;
     }
 
-    void setCustomVariableProvider(ToDoubleFunction<ConditionalBlock.Variable> customVariableProvider) {
+    public void setCustomVariableProvider(ToDoubleFunction<ConditionalBlock.Variable> customVariableProvider) {
         this.customVariableProvider = customVariableProvider;
     }
 

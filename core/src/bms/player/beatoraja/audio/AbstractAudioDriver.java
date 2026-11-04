@@ -373,6 +373,11 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 			}
 		}
 		if (model.hasConditional()) {
+			for (Note preloadNote : model.getConditionalPreloadNotes()) {
+				if (preloadNote != null && preloadNote.getWav() >= 0 && preloadNote.getWav() < wavcount) {
+					addNoteList(notemap, preloadNote);
+				}
+			}
 			for (int condWavId : model.getConditionalWavIds()) {
 				if (condWavId >= 0 && condWavId < wavcount) {
 					addNoteList(notemap, new NormalNote(condWavId));
