@@ -38,7 +38,7 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 
 	private static final Color[][] JGRAPH = {
 			{ Color.valueOf("44ff44"), Color.valueOf("228822"), Color.valueOf("ff4444"), Color.valueOf("4444ff"), Color.valueOf("222288"), Color.valueOf("cccccc"),
-					Color.valueOf("880000") },
+					Color.valueOf("880000"), Color.valueOf("008888") },
 			{ Color.valueOf("555555"), Color.valueOf("0088ff"), Color.valueOf("00ff88"), Color.valueOf("ffff00"),
 					Color.valueOf("ff8800"), Color.valueOf("ff0000") },
 			{ Color.valueOf("555555"), Color.valueOf("44ff44"), Color.valueOf("0088ff"), Color.valueOf("0066cc"),
@@ -47,7 +47,7 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 
 	private static final Color[][] pmsGraphColor = {
 					{ Color.valueOf("44ff44"), Color.valueOf("228822"), Color.valueOf("ff4444"), Color.valueOf("4444ff"), Color.valueOf("222288"), Color.valueOf("cccccc"),
-							Color.valueOf("880000") },
+							Color.valueOf("880000"), Color.valueOf("008888") },
 					{ Color.valueOf("555555"), Color.valueOf("ff5eb0"), Color.valueOf("ffbe32"), Color.valueOf("dc463c"),
 							Color.valueOf("6cc6ff"), Color.valueOf("6cc6ff") },
 					{ Color.valueOf("555555"), Color.valueOf("ff5eb0"), Color.valueOf("0088ff"), Color.valueOf("0066cc"),
@@ -64,7 +64,7 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 	public static final int TYPE_JUDGE = 1;
 	public static final int TYPE_EARLYLATE = 2;
 	
-	private static final int[] DATA_LENGTH = {7, 6, 10};
+	private static final int[] DATA_LENGTH = {8, 6, 10};
 
 	private boolean isBackTexOff = false;
 	private int delay = 500;
@@ -141,7 +141,7 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 		if(shapetex == null || song != current || (this.model == null && model != null)) {
 			current = song;
 			this.model = model;
-			if(type == TYPE_NORMAL && song != null && song.getInformation() != null) {
+			if(type == TYPE_NORMAL && model == null && song != null && song.getInformation() != null) {
 				updateGraph(song.getInformation().getDistributionValues());				
 			} else {
 				updateGraph();
@@ -262,7 +262,8 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 		final Mode mode = model.getMode();
 		// #LNMODE is explicitly set to 1 (LN)
 		// or #LNMODE is undefined and getLntype (which reflects playconfig) is LN (0)
-		final boolean ignoreLNEnd = model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE);
+		final boolean ignoreLNEnd = model.getLnmode() == 1 || model.getLnmode() == 4
+				|| (model.getLnmode() == 0 && (model.getLntype() == BMSModel.LNTYPE_LONGNOTE || model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE));
 		for (TimeLine tl : model.getAllTimeLines()) {
 			final int index = tl.getTime() / 1000;
 			if(index >= data.length) {
@@ -277,7 +278,7 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 			}
 			for (int i = 0; i < mode.key; i++) {
 				Note n = tl.getNote(i);
-				if (n != null) {
+				if (n != null && !n.isDummy()) {
 					final int st = n.getState();
 					final int t = n.getPlayTime();
 					switch (type) {
@@ -296,20 +297,23 @@ public final class SkinNoteDistributionGraph extends SkinObject {
 								data[index][mode.isScratchKey(i) ? 0 : 3]++;
 								data[index][mode.isScratchKey(i) ? 1 : 4]--;									
 							}
+						} else if (n instanceof PotionNote) {
+							data[index][7]++;
+							count++;
 						} else if (n instanceof MineNote) {
 							data[index][6]++;
 							count++;
 						}
 						break;
 					case TYPE_JUDGE:
-						if (n instanceof MineNote || (ignoreLNEnd && n instanceof LongNote && ((LongNote) n).isEnd())) {
+						if (n instanceof MineNote || n instanceof PotionNote || (ignoreLNEnd && n instanceof LongNote && ((LongNote) n).isEnd())) {
 							break;
 						}
 						data[index][st]++;
 						count++;
 						break;
 					case TYPE_EARLYLATE:
-						if (n instanceof MineNote || (ignoreLNEnd && n instanceof LongNote && ((LongNote) n).isEnd())) {
+						if (n instanceof MineNote || n instanceof PotionNote || (ignoreLNEnd && n instanceof LongNote && ((LongNote) n).isEnd())) {
 							break;
 						}
 						if (st <= 1) {

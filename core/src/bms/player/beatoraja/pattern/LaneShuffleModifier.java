@@ -60,17 +60,33 @@ public abstract class LaneShuffleModifier extends PatternModifier {
             );
         }
 
+		applyRandomToModel(model);
+	}
+
+	/**
+	 * 前回生成されたレーン入れ替え配列(random)をそのまま別モデルに適用する
+	 */
+	public void applyLastRandom(BMSModel model) {
+		if (random == null || random.length == 0) {
+			return;
+		}
+		applyRandomToModel(model);
+	}
+
+	private void applyRandomToModel(BMSModel model) {
 		final int lanes = model.getMode().key;
 		final Note[] notes = new Note[lanes];
 		final Note[] hnotes = new Note[lanes];
+		final FreeZoneNote[] fnotes = new FreeZoneNote[lanes];
 		final boolean[] clone = new boolean[lanes];
 		TimeLine[] timelines = model.getAllTimeLines();
 		for (int index = 0; index < timelines.length; index++) {
 			final TimeLine tl = timelines[index];
-			if (tl.existNote() || tl.existHiddenNote()) {
+			if (tl.existNote() || tl.existHiddenNote() || tl.existFreeZone()) {
 				for (int i = 0; i < lanes; i++) {
 					notes[i] = tl.getNote(i);
 					hnotes[i] = tl.getHiddenNote(i);
+					fnotes[i] = tl.getFreeZone(i);
 					clone[i] = false;
 				}
 				for (int i = 0; i < lanes; i++) {
@@ -99,9 +115,35 @@ public abstract class LaneShuffleModifier extends PatternModifier {
 						} else {
 							tl.setHiddenNote(i, null);
 						}
+						if (fnotes[mod] != null) {
+							if (fnotes[mod].isEnd()) {
+								for (int j = index - 1; j >= 0; j--) {
+									if (fnotes[mod].getPair().getSection() == timelines[j].getSection()) {
+										FreeZoneNote fz = timelines[j].getFreeZone(i);
+										tl.setFreeZone(i, fz.getPair());
+										List<NormalNote> inner = new ArrayList<>();
+										for (int k = j; k <= index; k++) {
+											if (timelines[k].getNote(i) instanceof NormalNote nn && !nn.isDummy()) {
+												nn.setFreeZoneInner(true);
+												inner.add(nn);
+											}
+										}
+										fz.setInnerNotes(inner.toArray(new NormalNote[0]));
+										break;
+									}
+								}
+							} else {
+								tl.setFreeZone(i, (FreeZoneNote) fnotes[mod].clone());
+							}
+						} else {
+							tl.setFreeZone(i, null);
+						}
+						if (false) {
+						}
 					} else {
 						tl.setNote(i, notes[mod]);
 						tl.setHiddenNote(i, hnotes[mod]);
+						tl.setFreeZone(i, fnotes[mod]);
 						clone[mod] = true;
 					}
 				}
@@ -268,7 +310,7 @@ public abstract class LaneShuffleModifier extends PatternModifier {
 					//LN
 					for (int i = 0; i < lanes; i++) {
 						Note n = tl.getNote(i);
-						if (n instanceof LongNote ln2) {
+						if (n instanceof LongNote ln2 && !n.isDummy()) {
 							if (ln2.isEnd() && tl.getTime() == endLnNoteTime[i]) {
 								ln[i] = -1;
 								endLnNoteTime[i] = -1;
@@ -284,7 +326,7 @@ public abstract class LaneShuffleModifier extends PatternModifier {
 					List<Integer> noteLane = new ArrayList<>(keys.length);
 					for (int i = 0; i < lanes; i++) {
 						Note n = tl.getNote(i);
-						if (n != null && n instanceof NormalNote || ln[i] != -1) {
+						if ((n != null && n instanceof NormalNote && !n.isDummy()) || ln[i] != -1) {
 							noteLane.add(i);
 						}
 					}

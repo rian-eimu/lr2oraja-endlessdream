@@ -173,3 +173,54 @@ core/src/resources/build.properties
 
 # npm
 node_modules/
+
+# --- BEGIN Antigravity global AGENTS MANAGED FILES ---
+# These files are auto-synced by setup.js. DO NOT EDIT MANUALLY.
+/.agents/bin/
+/.agents/rules/agent-tool-mapping.md
+/.agents/rules/command-intent.md
+/.agents/skills/architecture-mapper/
+/.agents/skills/ci.en/
+/.agents/skills/ci.ja/
+/.agents/skills/clean-branches/
+/.agents/skills/code-review-rules/
+/.agents/skills/code-review/
+/.agents/skills/commit.en/
+/.agents/skills/commit.ja/
+/.agents/skills/design-pattern-cva/
+/.agents/skills/design-pattern-plan/
+/.agents/skills/design-pattern-refactor/
+/.agents/skills/file-enumerator/
+/.agents/skills/gpu-code-review/
+/.agents/skills/grill-you.ja/
+/.agents/skills/kickoff/
+/.agents/skills/make-pr/
+/.agents/skills/phased-session-manager/
+/.agents/skills/qodo.en/
+/.agents/skills/qodo.ja/
+/.agents/skills/qodo/
+/.agents/skills/write-csharp-xml-comment.en/
+/.agents/skills/write-csharp-xml-comment.ja/
+/.claude/skills/architecture-mapper/
+/.claude/skills/ci.en/
+/.claude/skills/ci.ja/
+/.claude/skills/clean-branches/
+/.claude/skills/code-review-rules/
+/.claude/skills/code-review/
+/.claude/skills/commit.en/
+/.claude/skills/commit.ja/
+/.claude/skills/design-pattern-cva/
+/.claude/skills/design-pattern-plan/
+/.claude/skills/design-pattern-refactor/
+/.claude/skills/file-enumerator/
+/.claude/skills/gpu-code-review/
+/.claude/skills/grill-you.ja/
+/.claude/skills/kickoff/
+/.claude/skills/make-pr/
+/.claude/skills/phased-session-manager/
+/.claude/skills/qodo.en/
+/.claude/skills/qodo.ja/
+/.claude/skills/qodo/
+/.claude/skills/write-csharp-xml-comment.en/
+/.claude/skills/write-csharp-xml-comment.ja/
+# --- END Antigravity global AGENTS MANAGED FILES ---

@@ -354,7 +354,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 		for (TimeLine tl : model.getAllTimeLines()) {
 			for (int i = 0; i < lanes; i++) {
 				final Note n = tl.getNote(i);
-				if (n != null) {
+				if (n != null && !n.isDummy()) {
 					// 地雷ノートに音が定義されていない場合のみ、本体側で音の定義を追加
 					if (!use_defaultsound && n instanceof MineNote && n.getWav() == wavcount) {
 						use_defaultsound = true;
@@ -370,6 +370,31 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 			}
 			for (Note n : tl.getBackGroundNotes()) {
 				addNoteList(notemap, n);
+			}
+		}
+		if (model.hasConditional()) {
+			for (Note preloadNote : model.getConditionalPreloadNotes()) {
+				if (preloadNote != null && preloadNote.getWav() >= 0 && preloadNote.getWav() < wavcount) {
+					addNoteList(notemap, preloadNote);
+				}
+			}
+			for (int condWavId : model.getConditionalWavIds()) {
+				if (condWavId >= 0 && condWavId < wavcount) {
+					addNoteList(notemap, new NormalNote(condWavId));
+				}
+			}
+			if (!use_defaultsound && model.isConditionalContainsMineNote()) {
+				boolean wav0Loaded = false;
+				for (int condWavId : model.getConditionalWavIds()) {
+					if (condWavId == 0) {
+						wav0Loaded = true;
+						break;
+					}
+				}
+				if (!wav0Loaded) {
+					use_defaultsound = true;
+					addNoteList(notemap, new MineNote(wavcount, 0));
+				}
 			}
 		}
 		if (use_defaultsound) {

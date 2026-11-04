@@ -344,6 +344,7 @@ public class JsonSkin {
 		public String[] hcnreactive = new String[0];
 		public String[] hcnbodyReactive = new String[0];
 		public String[] mine = new String[0];
+		public String[] potion = new String[0];
 		public String[] hidden = new String[0];
 		public String[] processed = new String[0];
 		public Animation[] dst = new Animation[0];

@@ -126,6 +126,15 @@ public class Skin {
 		objects.add(object);
 	}
 
+	public void insertObjectBefore(SkinObject target, SkinObject object) {
+		int idx = objects.indexOf(target, true);
+		if (idx >= 0) {
+			objects.insert(idx, object);
+		} else {
+			objects.add(object);
+		}
+	}
+
 	public void setDestination(SkinObject object, long time, float x, float y, float w, float h, int acc, int a,
 			int r, int g, int b, int blend, int filter, int angle, int center, int loop, int timer, int op1, int op2,
 			int op3, int[] offset) {

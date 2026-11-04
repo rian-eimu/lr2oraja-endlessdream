@@ -44,6 +44,7 @@ public class LR2PlaySkinLoader extends LR2SkinCSVLoader<PlaySkin> {
 	private SkinSource[] hcnbodyd = new SkinSource[8];
 	private SkinSource[] hcnbodyr = new SkinSource[8];
 	private SkinSource[] mine = new SkinSource[8];
+	private SkinSource[] potion = new SkinSource[8];
 	private Rectangle[] laner = new Rectangle[8];
 	private float[] scale = new float[8];
 	private int[] dstnote2 = new int[8];
@@ -232,6 +233,23 @@ public class LR2PlaySkinLoader extends LR2SkinCSVLoader<PlaySkin> {
 			}
 		});
 
+		addCommandWord(new CommandWord("SRC_POTION") {
+			@Override
+			public void execute(String[] str) {
+				addNote(str, potion, true);
+				if (lanerender != null) {
+					lanerender.setPotionNote(potion);
+				}
+			}
+		});
+
+		addCommandWord(new CommandWord("DST_POTION") {
+			@Override
+			public void execute(String[] str) {
+				// レーン座標は #DST_NOTE と共有するため no-op とする
+			}
+		});
+
 		addCommandWord(new CommandWord("SRC_MINE") {
 			@Override
 			public void execute(String[] str) {
@@ -290,7 +308,7 @@ public class LR2PlaySkinLoader extends LR2SkinCSVLoader<PlaySkin> {
 							lnss[j][i] = lns[i][j];
 						}
 					}
-					lanerender = new SkinNote(note, lnss, mine);
+					lanerender = new SkinNote(note, lnss, mine, potion);
 					lanerender.setOffsetID(readOffset(str, 21, new int[]{OFFSET_NOTES_1P}));
 					skin.add(lanerender);
 				}
@@ -522,6 +540,7 @@ public class LR2PlaySkinLoader extends LR2SkinCSVLoader<PlaySkin> {
 				}
 				if (line != null) {
 					skin.add(line);
+					skin.addJudgeLine(line);
 				}
 			}
 		});
@@ -908,6 +927,7 @@ public class LR2PlaySkinLoader extends LR2SkinCSVLoader<PlaySkin> {
 		hcnbodyd = new SkinSource[mode.key];
 		hcnbodyr = new SkinSource[mode.key];
 		mine = new SkinSource[mode.key];
+		potion = new SkinSource[mode.key];
 		laner = new Rectangle[mode.key];
 		scale = new float[mode.key];
 		dstnote2 = new int[mode.key];

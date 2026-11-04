@@ -1029,6 +1029,8 @@ public class IntegerPropertyFactory {
 				if (model.hasAnyLongNote() && !model.hasUndefinedLongNote()) { // #LNMODE defined
 					if (model.hasLongNote()) {
 						return 0;
+					} else if (model.hasHellLongNote()) {
+						return 3;
 					} else if (model.hasChargeNote()) {
 						return 1;
 					} else {

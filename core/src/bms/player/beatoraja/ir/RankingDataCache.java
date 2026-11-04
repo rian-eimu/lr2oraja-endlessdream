@@ -24,8 +24,8 @@ public class RankingDataCache {
     private ObjectMap<String, RankingData>[] cscorecache;
 
     public RankingDataCache() {
-        scorecache = new ObjectMap[4];
-        cscorecache = new ObjectMap[4];
+        scorecache = new ObjectMap[5];
+        cscorecache = new ObjectMap[5];
         for (int i = 0; i < scorecache.length; i++) {
             scorecache[i] = new ObjectMap(2000);
             cscorecache[i] = new ObjectMap(100);
@@ -39,7 +39,7 @@ public class RankingDataCache {
      * @return IRアクセスデータ。存在しない場合はnull
      */
     public RankingData get(SongData song, int lnmode) {
-        final int cacheindex = song.hasUndefinedLongNote() ? lnmode : 3;
+        final int cacheindex = song.hasUndefinedLongNote() ? lnmode : 4;
         if (scorecache[cacheindex].containsKey(song.getSha256())) {
             return scorecache[cacheindex].get(song.getSha256());
         }
@@ -53,7 +53,7 @@ public class RankingDataCache {
      * @return IRアクセスデータ。存在しない場合はnull
      */
     public RankingData get(CourseData course, int lnmode) {
-        int cacheindex = 3;
+        int cacheindex = 4;
         for(SongData song : course.getSong()) {
         	if(song.hasUndefinedLongNote()) {
         		cacheindex = lnmode;
@@ -67,12 +67,12 @@ public class RankingDataCache {
     }
 
     public void put(SongData song, int lnmode, RankingData iras) {
-        final int cacheindex = song.hasUndefinedLongNote() ? lnmode : 3;
+        final int cacheindex = song.hasUndefinedLongNote() ? lnmode : 4;
         scorecache[cacheindex].put(song.getSha256(), iras);
     }
     
     public void put(CourseData course, int lnmode, RankingData iras) {
-        int cacheindex = 3;
+        int cacheindex = 4;
         for(SongData song : course.getSong()) {
         	if(song.hasUndefinedLongNote()) {
         		cacheindex = lnmode;

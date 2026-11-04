@@ -63,7 +63,7 @@ public class IRChartData {
 	 */
 	public final Mode mode;
 	/**
-	 * LN TYPE(-1: 未指定, 0: LN, 1: CN, 2: HCN)
+	 * LN TYPE(-1: 未指定, 0: LN, 1: CN, 2: HCN, 3: HLN)
 	 */
 	public final int lntype;
 	/**
@@ -103,6 +103,10 @@ public class IRChartData {
 	 */
 	public final boolean hasHCN;
 	/**
+	 * HLNが存在するかどうか
+	 */
+	public final boolean hasHLN;
+	/**
 	 * 地雷ノーツが存在するかどうか
 	 */
 	public final boolean hasMine;
@@ -111,9 +115,17 @@ public class IRChartData {
 	 */
 	public final boolean hasRandom;
 	/**
+	 * CONDITIONAL定義が存在するかどうか
+	 */
+	public final boolean hasConditional;
+	/**
 	 * ストップシーケンスが存在するかどうか
 	 */
 	public final boolean hasStop;
+	/**
+	 * フリーゾーンが存在するかどうか
+	 */
+	public final boolean hasFreeZone;
 	
 	public final Map<String, String> values = new HashMap<String, String>();
 	
@@ -145,9 +157,12 @@ public class IRChartData {
 		this.hasLN = song.hasLongNote();
 		this.hasCN = song.hasChargeNote();
 		this.hasHCN = song.hasHellChargeNote();
+		this.hasHLN = song.hasHellLongNote();
 		this.hasMine = song.hasMineNote();
 		this.hasRandom = song.hasRandomSequence();
+		this.hasConditional = song.hasConditionalSequence();
 		this.hasStop = song.isBpmstop();
+		this.hasFreeZone = song.hasFreeZone();
 		this.lntype = lntype;
 
 		if(model != null) {

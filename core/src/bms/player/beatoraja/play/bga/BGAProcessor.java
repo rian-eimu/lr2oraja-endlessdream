@@ -275,7 +275,26 @@ public class BGAProcessor {
 		return cache != null ? cache.getTexture(id) : null;
 	}
 	
-	public void prepareBGA(long time) {
+	public synchronized void updateTimeLines(BMSModel model) {
+		if (model == null) {
+			return;
+		}
+		Array<TimeLine> tls = new Array<TimeLine>();
+		for (TimeLine tl : model.getAllTimeLines()) {
+			if (tl.getBGA() != -1 || tl.getLayer() != -1 || tl.getEventlayer().length > 0) {
+				tls.add(tl);
+			}
+		}
+		TimeLine[] newTimelines = tls.toArray(TimeLine.class);
+		int newPos = 0;
+		while (newPos < newTimelines.length && newTimelines[newPos].getTime() <= this.time) {
+			newPos++;
+		}
+		this.timelines = newTimelines;
+		this.pos = newPos;
+	}
+
+	public synchronized void prepareBGA(long time) {
 		if (time < 0 || timelines == null) {
 			this.time = -1;
 			return;

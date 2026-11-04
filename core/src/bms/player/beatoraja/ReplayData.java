@@ -57,6 +57,10 @@ public final class ReplayData implements Validatable {
 	 */
 	public int[] rand = new int[0];
 	/**
+	 * 動的条件分岐 (#CONDITIONAL) で採択された枝のインデックス配列
+	 */
+	public int[] conditionalBranches = new int[0];
+	/**
 	 * プレイ日時(unixtime)
 	 */
 	public long date = 0;

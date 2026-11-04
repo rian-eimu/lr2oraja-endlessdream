@@ -29,6 +29,9 @@ public class SongData implements Validatable, IpfsInformation {
 	public static final int FEATURE_HELLCHARGENOTE = 32;
 	public static final int FEATURE_STOPSEQUENCE = 64;
 	public static final int FEATURE_SCROLL = 128;
+	public static final int FEATURE_HELLLONGNOTE = 256;
+	public static final int FEATURE_CONDITIONAL = 512;
+	public static final int FEATURE_FREEZONE = 1024;
 
 	public static final int CONTENT_TEXT = 1;
 	public static final int CONTENT_BGA = 2;
@@ -188,7 +191,7 @@ public class SongData implements Validatable, IpfsInformation {
 			}
 
 			for(int i = 0;i < keys;i++) {
-				if(tl.getNote(i) instanceof LongNote) {
+				if(tl.getNote(i) instanceof LongNote && !tl.getNote(i).isDummy()) {
 					switch(((LongNote) tl.getNote(i)).getType()) {
 						case LongNote.TYPE_UNDEFINED:
 							feature |= FEATURE_UNDEFINEDLN;
@@ -199,12 +202,18 @@ public class SongData implements Validatable, IpfsInformation {
 						case LongNote.TYPE_CHARGENOTE:
 							feature |= FEATURE_CHARGENOTE;
 							break;
+						case LongNote.TYPE_HELLLONGNOTE:
+							feature |= FEATURE_HELLLONGNOTE;
+							break;
 						case LongNote.TYPE_HELLCHARGENOTE:
 							feature |= FEATURE_HELLCHARGENOTE;
 							break;
 					}
 				}
-				if(tl.getNote(i) instanceof MineNote) {
+				if(tl.existFreeZone(i)) {
+					feature |= FEATURE_FREEZONE;
+				}
+				if(tl.getNote(i) instanceof MineNote && !tl.getNote(i).isDummy()) {
 					feature |= FEATURE_MINENOTE;
 				}
 			}
@@ -216,6 +225,8 @@ public class SongData implements Validatable, IpfsInformation {
 		timelines = model.getAllTimeLines();
 
 		feature |= model.getRandom() != null && model.getRandom().length > 0 ? FEATURE_RANDOM : 0;
+		feature |= model.hasConditional() ? FEATURE_CONDITIONAL : 0;
+		feature |= model.isConditionalContainsFreeZone() ? FEATURE_FREEZONE : 0;
 		content |= model.getBgaList().length > 0 ? CONTENT_BGA : 0;
 		content |= length >= 30000 && model.getWavList().length <= (length / (50 * 1000)) + 3 ? CONTENT_NOKEYSOUND : 0;
 		
@@ -392,6 +403,10 @@ public class SongData implements Validatable, IpfsInformation {
 		return (feature & FEATURE_RANDOM) != 0;
 	}
 
+	public boolean hasConditionalSequence() {
+		return (feature & FEATURE_CONDITIONAL) != 0;
+	}
+
 	public boolean hasMineNote() {
 		return (feature & FEATURE_MINENOTE) != 0;
 	}
@@ -413,11 +428,19 @@ public class SongData implements Validatable, IpfsInformation {
 	}
 
 	public boolean hasAnyLongNote() {
-		return (feature & (FEATURE_UNDEFINEDLN | FEATURE_LONGNOTE | FEATURE_CHARGENOTE | FEATURE_HELLCHARGENOTE)) != 0;
+		return (feature & (FEATURE_UNDEFINEDLN | FEATURE_LONGNOTE | FEATURE_CHARGENOTE | FEATURE_HELLCHARGENOTE | FEATURE_HELLLONGNOTE)) != 0;
+	}
+
+	public boolean hasHellLongNote() {
+		return (feature & FEATURE_HELLLONGNOTE) != 0;
 	}
 
 	public boolean isBpmstop() {
 		return (feature & FEATURE_STOPSEQUENCE) != 0;
+	}
+
+	public boolean hasFreeZone() {
+		return (feature & FEATURE_FREEZONE) != 0;
 	}
 
 	public boolean hasScrollChange() {

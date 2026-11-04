@@ -254,7 +254,7 @@ public final class PlayerResource {
 			for (int i = 0; i < lanes; i++) {
 				final Note n = tl.getNote(i);
 				if (n != null) {
-					if (n instanceof MineNote && n.getWav() < 0) {
+					if (n instanceof MineNote && !n.isDummy() && n.getWav() < 0) {
 						n.setWav(wavcount);
 					}
 				}
@@ -269,6 +269,17 @@ public final class PlayerResource {
 			@Override
 			public String location() {
 				return resource.displayPath();
+			}
+
+			@Override
+			public long lastModifiedTimeMillis() {
+				return resource.localPath().map(p -> {
+					try {
+						return java.nio.file.Files.getLastModifiedTime(p).toMillis();
+					} catch (java.io.IOException e) {
+						return -1L;
+					}
+				}).orElse(-1L);
 			}
 
 			@Override

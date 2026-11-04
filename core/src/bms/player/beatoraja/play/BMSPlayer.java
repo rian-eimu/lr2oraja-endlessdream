@@ -106,6 +106,12 @@ public class BMSPlayer extends MainState {
 	private long playStartTimeMs = 0;
 	private long playEndTimeMs = 0;
 
+	private ConditionalBranchController conditionalController;
+	private long conditionalInitialMarginTime;
+	private double conditionalInitialTotal;
+	private int conditionalFreq = 100;
+	private java.util.function.Consumer<BMSModel> conditionalModifierApplier;
+
 	public BMSPlayer(MainController main, PlayerResource resource) {
 		super(main);
 		this.playStartTimeMs = 0;
@@ -225,6 +231,9 @@ public class BMSPlayer extends MainState {
 
 		boolean score = true;
 		boolean forceNoIRSend = false;
+		conditionalInitialMarginTime = resource.getMarginTime();
+		final List<java.util.function.Consumer<BMSModel>> branchModSteps = new ArrayList<>();
+
 
 		// Don't send score to IR if chart is from osu
 		if (model.isFromOSU()) {
@@ -243,7 +252,7 @@ public class BMSPlayer extends MainState {
 			if(playinfo.rand != null && playinfo.rand.length > 0) {
 				model = resource.loadBMSModel(playinfo.rand);
 				// 暫定処置
-				BMSModelUtils.setStartNoteTime(model, 1000);
+				conditionalInitialMarginTime = BMSModelUtils.setStartNoteTime(model, 1000);
 				BMSPlayerRule.validate(model);
 			}
 			playinfo.rand = model.getRandom();
@@ -253,11 +262,13 @@ public class BMSPlayer extends MainState {
 		final boolean waitAllNotes = resource.getConfig() != null && resource.getConfig().isWaitAllNotesResult();
 		final int baseEndTime = (autoplay.mode == BMSPlayerMode.Mode.AUTOPLAY || waitAllNotes) ? Math.max(model.getLastTime(), model.getLastNoteTime()) : model.getLastNoteTime();
 		playtime = baseEndTime + TIME_MARGIN;
+		conditionalInitialTotal = model.getTotal();
 
 		resource.setFreqOn(false);
 		resource.setFreqString("");
 		if(FreqTrainerMenu.isFreqTrainerEnabled() && autoplay.mode == BMSPlayerMode.Mode.PLAY && resource.getCourseBMSModels() == null) {
 			int freq = FreqTrainerMenu.getFreq();
+			conditionalFreq = freq;
 
 			playtime = (baseEndTime + 1000) * 100 / freq + TIME_MARGIN;
 
@@ -303,6 +314,7 @@ public class BMSPlayer extends MainState {
 					score = false;
 				}
 				model.setJudgerank(overridingJudgeWindowRate);
+				branchModSteps.add(m -> m.setJudgerank(overridingJudgeWindowRate));
 			}
 
 			// Constant considered as assist in Endless Dream
@@ -337,6 +349,11 @@ public class BMSPlayer extends MainState {
 					assist = Math.max(assist, mod.getAssistLevel() == PatternModifier.AssistLevel.ASSIST ? 2 : 1);
 					score = false;
 				}
+				final long modSeed = mod.getSeed();
+				branchModSteps.add(m -> {
+					mod.setSeed(modSeed);
+					mod.modify(m);
+				});
 			}
 
 			if (playinfo.doubleoption >= 2) {
@@ -369,6 +386,13 @@ public class BMSPlayer extends MainState {
 				model.setMode(Mode.POPN_9K);
 			}
 			PatternModifier.modify(model, Arrays.asList(replay.pattern));
+			final ReplayData savedReplay = replay;
+			branchModSteps.add(m -> {
+				if (savedReplay.sevenToNinePattern > 0 && m.getMode() == Mode.BEAT_7K) {
+					m.setMode(Mode.POPN_9K);
+				}
+				PatternModifier.modify(m, Arrays.asList(savedReplay.pattern));
+			});
 			logger.info("リプレイデータから譜面再現 : PatternModifyLog");
 		} else if (autoplay.mode != BMSPlayerMode.Mode.PRACTICE) {
 
@@ -390,6 +414,13 @@ public class BMSPlayer extends MainState {
 				playinfo.randomoption2 = rd.randomoption2;
 				playinfo.randomoption2seed = rd.randomoption2seed;
 				playinfo.doubleoption = rd.doubleoption;
+				if (rd.sevenToNinePattern > 0) {
+					branchModSteps.add(m -> {
+						if (m.getMode() == Mode.BEAT_7K) {
+							m.setMode(Mode.POPN_9K);
+						}
+					});
+				}
 			}
 
 			Array<PatternModifier> mods = new Array<PatternModifier>();
@@ -455,6 +486,26 @@ public class BMSPlayer extends MainState {
 			}
 //			playinfo.pattern = pattern.toArray(new PatternModifyLog[pattern.size()]);
 			playinfo.laneShufflePattern = patternArray;
+			for (PatternModifier mod : mods) {
+				if (mod instanceof LaneShuffleModifier lmod) {
+					branchModSteps.add(lmod::applyLastRandom);
+				} else if (mod instanceof ModeModifier mmod) {
+					final long seed = mmod.getSeed();
+					branchModSteps.add(m -> {
+						mmod.setSeed(seed);
+						mmod.modify(m);
+					});
+				} else {
+					final int modPlayer = mod.player;
+					final int opt = modPlayer == 1 ? playinfo.randomoption2 : playinfo.randomoption;
+					final long seed = mod.getSeed();
+					branchModSteps.add(m -> {
+						PatternModifier fresh = PatternModifier.create(opt, modPlayer, m.getMode(), config);
+						fresh.setSeed(seed);
+						fresh.modify(m);
+					});
+				}
+			}
 
 		}
 
@@ -465,6 +516,11 @@ public class BMSPlayer extends MainState {
 		// ノーツ数が変わりゴーストが無効化され、練習モードは譜面オプションをPracticePropertyが持つ。
 		if (config.isAutoscratch() && autoplay.mode == BMSPlayerMode.Mode.PLAY
 				&& ghostBattle.isEmpty() && model.getMode().scratchKey.length > 0) { // 皿無しモードは対象外
+			branchModSteps.add(m -> {
+				if (m.getMode().scratchKey.length > 0) {
+					new AutoplayModifier(m.getMode().scratchKey).modify(m);
+				}
+			});
 			PatternModifier as = new AutoplayModifier(model.getMode().scratchKey);
 			as.modify(model);
 			// AutoplayModifierはNONEかASSISTしか返さないため2を直書きする。
@@ -513,6 +569,11 @@ public class BMSPlayer extends MainState {
 		resource.setUpdateScore(score);
 		resource.setUpdateCourseScore(resource.isUpdateCourseScore() && score);
 		resource.setForceNoIRSend(forceNoIRSend);
+		this.conditionalModifierApplier = m -> {
+			for (java.util.function.Consumer<BMSModel> step : branchModSteps) {
+				step.accept(m);
+			}
+		};
 		final int difficulty = resource.getSongdata() != null ? resource.getSongdata().getDifficulty() : 0;
 		resource.getSongdata().setBMSModel(model);
 		resource.getSongdata().setDifficulty(difficulty);
@@ -578,6 +639,31 @@ public class BMSPlayer extends MainState {
 
 		ScoreData score = main.getPlayDataAccessor().readScoreData(model, config.getLnmode());
 		logger.info("スコアデータベースからスコア取得");
+		final int bestLamp = score != null ? score.getClear() : ClearType.NoPlay.id;
+		if (model.hasConditional() && autoplay.mode != BMSPlayerMode.Mode.PRACTICE && playinfo.doubleoption < 2) {
+			final int[] replayBranches = (autoplay.mode == BMSPlayerMode.Mode.REPLAY && replay != null)
+					? replay.conditionalBranches
+					: null;
+			conditionalController = new ConditionalBranchController(
+					this,
+					model,
+					replayBranches,
+					model.getTotalNotes(),
+					conditionalInitialTotal,
+					bestLamp,
+					autoplay.mode == BMSPlayerMode.Mode.AUTOPLAY,
+					conditionalInitialMarginTime,
+					conditionalFreq,
+					conditionalModifierApplier);
+			playinfo.conditionalBranches = conditionalController.getSelectedBranches();
+		} else if (model.hasConditional()) {
+			final ConditionalBlock[] blocks = model.getConditionalBlocks();
+			final int[] defaults = new int[blocks.length];
+			for (int i = 0; i < blocks.length; i++) {
+				defaults[i] = blocks[i].getDefaultBranchIndex();
+			}
+			playinfo.conditionalBranches = defaults;
+		}
 		if (score == null) {
 			score = new ScoreData();
 		}
@@ -790,6 +876,10 @@ public class BMSPlayer extends MainState {
 					}
 				}
 				timer.switchTimer(TIMER_GAUGE_MAX_1P, gauge.getGauge().isMax());
+				timer.switchTimer(TIMER_FULLCOMBO_1P, this.judge.getPastNotes() == resource.getSongdata().getNotes()
+						&& !this.judge.hasActiveHellLongNoteBody()
+						&& !this.judge.hasActiveHellLongNoteBody()
+				&& this.judge.getPastNotes() == this.judge.getCombo());
 
 				skin.pomyu.updateTimer(this);
 
@@ -1150,6 +1240,7 @@ public class BMSPlayer extends MainState {
 //		replay.pattern = playinfo.pattern;
 		replay.laneShufflePattern = playinfo.laneShufflePattern;
 		replay.rand = playinfo.rand;
+		replay.conditionalBranches = playinfo.conditionalBranches;
 		replay.gauge = config.getGauge();
 		replay.sevenToNinePattern = config.getSevenToNinePattern();
 		replay.randomoption = playinfo.randomoption;
@@ -1171,6 +1262,12 @@ public class BMSPlayer extends MainState {
 			for (int i = 0; i < lanes; i++) {
 				Note n = tl.getNote(i);
 				if (n != null && (n instanceof NormalNote || (n instanceof LongNote ln &&
+						!(((model.getLntype() == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+								|| ln.getType() == LongNote.TYPE_LONGNOTE
+								|| (model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+								|| ln.getType() == LongNote.TYPE_HELLLONGNOTE)
+								&& ((LongNote) n).isEnd())))
+						&& (n instanceof NormalNote || (n instanceof LongNote ln &&
 						!(((model.getLntype() == BMSModel.LNTYPE_LONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
 								|| ln.getType() == LongNote.TYPE_LONGNOTE)
 								&& ((LongNote) n).isEnd())))) {
@@ -1240,7 +1337,7 @@ public class BMSPlayer extends MainState {
 			return;
 		}
 		if (state != STATE_FINISHED && 
-				(judge.getPastNotes() == resource.getSongdata().getNotes()
+				((judge.getPastNotes() == resource.getSongdata().getNotes() && !judge.hasActiveHellLongNoteBody())
 				|| resource.getPlayMode().mode == BMSPlayerMode.Mode.AUTOPLAY)) {
 			state = STATE_FINISHED;
 			timer.setTimerOn(TIMER_FADEOUT);
@@ -1294,6 +1391,7 @@ public class BMSPlayer extends MainState {
 
 		//フルコン判定
 		timer.switchTimer(TIMER_FULLCOMBO_1P, this.judge.getPastNotes() == resource.getSongdata().getNotes()
+				&& !this.judge.hasActiveHellLongNoteBody()
 				&& this.judge.getPastNotes() == this.judge.getCombo());
 
 		getScoreDataProperty().update(this.judge.getScoreData(), this.judge.getPastNotes());
@@ -1312,7 +1410,7 @@ public class BMSPlayer extends MainState {
 	}
 
 	public boolean isNoteEnd() {
-		return judge.getPastNotes() == resource.getSongdata().getNotes();
+		return judge.getPastNotes() == resource.getSongdata().getNotes() && !judge.hasActiveHellLongNoteBody();
 	}
 
 	public int getPastNotes() {
@@ -1338,4 +1436,52 @@ public class BMSPlayer extends MainState {
 	public long getNowQuarterNoteTime() {
 		return rhythm != null ? rhythm.getNowQuarterNoteTime() : 0;
 	}
+
+	public long getNextConditionalEvalMicroTime() {
+		return conditionalController != null ? conditionalController.getNextEvalMicroTime() : Long.MAX_VALUE;
+	}
+
+	public void evaluateConditionalBranches(long mtime) {
+		if (conditionalController != null) {
+			conditionalController.evaluateUpTo(mtime);
+			playinfo.conditionalBranches = conditionalController.getSelectedBranches();
+		}
+	}
+
+	public void onConditionalBranchSwitched(long evalMicroTime) {
+		final int newTotalNotes = model.getTotalNotes();
+		judge.onConditionalBranchSwitched(model, evalMicroTime);
+		if (resource.getSongdata() != null) {
+			resource.getSongdata().setNotes(newTotalNotes);
+		}
+		getScoreDataProperty().update(judge.getScoreData(), judge.getPastNotes());
+
+		final BMSPlayerMode autoplay = resource.getPlayMode();
+		final boolean waitAllNotes = resource.getConfig() != null && resource.getConfig().isWaitAllNotesResult();
+		final int baseEndTime = (autoplay.mode == BMSPlayerMode.Mode.AUTOPLAY || waitAllNotes)
+				? Math.max(model.getLastTime(), model.getLastNoteTime())
+				: model.getLastNoteTime();
+		playtime = baseEndTime + TIME_MARGIN;
+
+		if (keyinput != null) {
+			keyinput.updateLastTime(model.getAllTimeLines());
+		}
+		if (keysound != null) {
+			keysound.updateBGPlay(model, evalMicroTime);
+		}
+		if (lanerender != null) {
+			lanerender.updateModel(model);
+		}
+		if (bga != null) {
+			bga.updateTimeLines(model);
+		}
+		if (rhythm != null) {
+			final long nowPlayMicroTime = timer.isTimerOn(TIMER_PLAY) ? timer.getNowMicroTime(TIMER_PLAY) : evalMicroTime;
+			rhythm.updateModel(model, nowPlayMicroTime, practice.getPracticeProperty().freq);
+		}
+		if (conditionalController != null) {
+			playinfo.conditionalBranches = conditionalController.getSelectedBranches();
+		}
+	}
+
 }

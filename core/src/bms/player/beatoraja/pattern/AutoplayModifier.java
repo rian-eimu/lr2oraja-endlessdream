@@ -37,7 +37,7 @@ public class AutoplayModifier extends PatternModifier {
 			if(margin > 0) {
 				while(tls[pos].getTime() < tl.getTime() - margin) {
 					for(int lane = 0;lane < lns.length;lane++) {
-						if(tls[pos].getNote(lane) instanceof LongNote note) {
+						if(tls[pos].getNote(lane) instanceof LongNote note && !note.isDummy()) {
 							lns[lane] = !note.isEnd();
 						}
 					}
@@ -45,7 +45,7 @@ public class AutoplayModifier extends PatternModifier {
 				}
 				int endtime = tl.getTime() + margin;
 				for(int lane : lanes) {
-					if(tl.getNote(lane) instanceof LongNote ln && !ln.isEnd()) {
+					if(tl.getNote(lane) instanceof LongNote ln && !ln.isDummy() && !ln.isEnd()) {
 						endtime = Math.max(ln.getPair().getTime() + margin, endtime);
 					}
 				}
@@ -59,7 +59,7 @@ public class AutoplayModifier extends PatternModifier {
 								break;
 							}
 						}
-						if(b && (tls[j].getNote(lane) != null || lns[lane])) {
+						if(b && ((tls[j].getNote(lane) != null && !tls[j].getNote(lane).isDummy()) || lns[lane])) {
 							remove = true;
 							break;
 						}
@@ -71,7 +71,7 @@ public class AutoplayModifier extends PatternModifier {
 
 			if(remove) {
 				for(int lane : lanes) {
-					if(tl.existNote(lane)) {
+					if((tl.existNote(lane) && !tl.getNote(lane).isDummy() && !(tl.getNote(lane) instanceof PotionNote)) || tl.existFreeZone(lane)) {
 						assist = AssistLevel.ASSIST;
 					}
 					moveToBackground(tls, tl, lane);

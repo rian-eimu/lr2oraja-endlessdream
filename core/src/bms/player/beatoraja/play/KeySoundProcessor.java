@@ -43,6 +43,13 @@ public class KeySoundProcessor {
 	public void stopBGPlay() {
 		if (autoThread != null) {
 			autoThread.stop = true;
+			autoThread.interrupt();
+		}
+	}
+
+	public void updateBGPlay(BMSModel model, long evalMicroTime) {
+		if (autoThread != null) {
+			autoThread.updateModel(model, evalMicroTime);
 		}
 	}
 	
@@ -53,30 +60,50 @@ public class KeySoundProcessor {
 	 */
 	class AutoplayThread extends Thread {
 
-		private boolean stop = false;
+		private volatile boolean stop = false;
 
 		private final long starttime;
-		final TimeLine[] timelines;
+		private TimeLine[] timelines;
+		private long lasttime;
+		private int p = 0;
+		private long lastPlayedMicroTime = Long.MIN_VALUE;
 
 		public AutoplayThread(BMSModel model, long starttime) {
 			this.starttime = starttime;
+			this.timelines = extractBgTimeLines(model);
+			this.lasttime = timelines.length > 0 ? timelines[timelines.length - 1].getMicroTime() : 0;
+			this.lastPlayedMicroTime = starttime - 1;
+		}
+
+		private TimeLine[] extractBgTimeLines(BMSModel model) {
 			Array<TimeLine> tls = new Array<TimeLine>();
-			for(TimeLine tl : model.getAllTimeLines()) {
-				if(tl.getBackGroundNotes().length > 0) {
+			for (TimeLine tl : model.getAllTimeLines()) {
+				if (tl.getBackGroundNotes().length > 0) {
 					tls.add(tl);
 				}
 			}
-			timelines = tls.toArray(TimeLine.class);
+			return tls.toArray(TimeLine.class);
+		}
+
+		public synchronized void updateModel(BMSModel model, long evalMicroTime) {
+			this.timelines = extractBgTimeLines(model);
+			this.lasttime = timelines.length > 0 ? timelines[timelines.length - 1].getMicroTime() : 0;
+			final long resumeFrom = Math.min(evalMicroTime, lastPlayedMicroTime + 1);
+			int newP = 0;
+			while (newP < timelines.length && timelines[newP].getMicroTime() < resumeFrom) {
+				newP++;
+			}
+			this.p = newP;
+			this.interrupt();
 		}
 
 		@Override
 		public void run() {
-			final long lasttime = timelines.length > 0 ?
-					timelines[timelines.length - 1].getMicroTime() : 0;
 			final Config config = player.resource.getConfig();
-			int p = 0;
-			for (long time = starttime; p < timelines.length && timelines[p].getMicroTime() < time; p++)
-				;
+			synchronized (this) {
+				for (long time = starttime; p < timelines.length && timelines[p].getMicroTime() < time; p++)
+					;
+			}
 
 			while (!stop) {
 				final long time = player.timer.getNowMicroTime(TIMER_PLAY);
@@ -84,24 +111,38 @@ public class KeySoundProcessor {
 				if (volume < 0) {
 					volume = config.getAudioConfig().getBgvolume();
 				}
-				// BGレーン再生
-				while (p < timelines.length && timelines[p].getMicroTime() <= time) {
-					for (Note n : timelines[p].getBackGroundNotes()) {
-						audio.play(n, volume, 0);
-					}
-					p++;
-				}
-				if (p < timelines.length) {
-					try {
-						final long sleeptime = timelines[p].getMicroTime() - time;
-						if (sleeptime > 0) {
-							sleep(sleeptime / 1000);
+				final long nextEvalTime = player.getNextConditionalEvalMicroTime();
+				long sleeptime = 0;
+				boolean finished = false;
+				synchronized (this) {
+					// BGレーン再生（未評価の動的分岐境界より先は評価完了まで待機）
+					while (p < timelines.length && timelines[p].getMicroTime() <= time
+							&& timelines[p].getMicroTime() < nextEvalTime) {
+						for (Note n : timelines[p].getBackGroundNotes()) {
+							audio.play(n, volume, 0);
 						}
+						lastPlayedMicroTime = timelines[p].getMicroTime();
+						p++;
+					}
+					if (p < timelines.length) {
+						if (timelines[p].getMicroTime() >= nextEvalTime && time >= nextEvalTime) {
+							sleeptime = 1000;
+						} else {
+							sleeptime = timelines[p].getMicroTime() - time;
+						}
+					}
+					if (time >= lasttime && p >= timelines.length && nextEvalTime == Long.MAX_VALUE) {
+						finished = true;
+					}
+				}
+				if (finished) {
+					break;
+				}
+				if (sleeptime > 0) {
+					try {
+						sleep(Math.max(1, sleeptime / 1000));
 					} catch (InterruptedException e) {
 					}
-				}
-				if (time >= lasttime) {
-					break;
 				}
 			}
 		}
