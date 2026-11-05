@@ -98,7 +98,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		int framesPerBuffer = audioConfig.getDeviceBufferSize();
 //		System.out.println( "  suggestedLatency = " + streamParameters.suggestedLatency );
 
-		int flags = PortAudio.FLAG_CLIP_OFF | PortAudio.FLAG_DITHER_OFF;
+		int flags = 0;
 
 		mixer = new Thread(this, "PortAudio Mixer");
 		mixer.setPriority(Thread.MAX_PRIORITY);
@@ -257,7 +257,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 				}
 				writesCompleted++;
 				completed = true;
-				if (startup && waited) {
+				if (startup) {
 					outputProgressObserved = true;
 					transitioned = true;
 				}
@@ -957,8 +957,8 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 							}
 						}
 					}
-					buffer[i] = wav_l;
-					buffer[i+1] = wav_r;
+					buffer[i] = Math.max(-1.0f, Math.min(1.0f, wav_l));
+					buffer[i+1] = Math.max(-1.0f, Math.min(1.0f, wav_r));
 				}						
 			}
 			
