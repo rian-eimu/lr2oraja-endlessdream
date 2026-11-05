@@ -151,7 +151,22 @@ public final class IsolatedIRConnectionTest {
                 await(() -> Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.isAlive() && t.getName().startsWith("isolated-ir-") && t.getName().contains(RecoveryIRConnection.NAME)));
             } finally {
                 for (Process process : processes) if (process.isAlive()) process.destroyForcibly().waitFor(3, TimeUnit.SECONDS);
-                try (var files = Files.walk(root)) { for (Path path : files.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path); }
+                try (var files = Files.walk(root)) {
+                    for (Path path : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                        deleteWithRetry(path);
+                    }
+                }
+            }
+        }
+    }
+    private static void deleteWithRetry(Path path) throws Exception {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            try {
+                Files.deleteIfExists(path);
+                return;
+            } catch (java.nio.file.FileSystemException e) {
+                if (attempt == 19) throw e;
+                Thread.sleep(25);
             }
         }
     }

@@ -918,5 +918,26 @@ class BMSDecoderTest {
             }
         }
     }
+
+    @Test
+    void testUtf8EncodingAndBase62PreScan() {
+        // UTF-8タイトルと、#WAV定義より後ろに記述された#BASE 62が正しく解釈されることを確認
+        String bmsContent = String.join("\r\n",
+                "#PLAYER 1",
+                "#TITLE テスト楽曲🔥",
+                "#BPM 120",
+                "#WAV0a base62.wav",
+                "#00111:0a",
+                "#BASE 62"
+        );
+        BMSDecoder decoder = new BMSDecoder();
+        BMSModel model = decoder.decode(bmsContent.getBytes(StandardCharsets.UTF_8), false, null);
+        assertNotNull(model);
+        assertEquals("テスト楽曲🔥", model.getTitle());
+        assertEquals(62, model.getBase());
+        assertEquals(1, model.getTotalNotes());
+        assertEquals(1, model.getWavList().length);
+        assertEquals("base62.wav", model.getWavList()[0]);
+    }
 }
 
