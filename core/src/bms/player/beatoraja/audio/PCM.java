@@ -202,6 +202,11 @@ public abstract class PCM<T> {
 							StreamUtils.copyStream(input, output);
 							pcm = ByteBuffer.wrap(output.getBuffer()).order(ByteOrder.LITTLE_ENDIAN);
 							pcm.limit(output.size());
+							if (input.type == 1 && bitsPerSample == 32) {
+								for (int i = 0; i + 4 <= pcm.limit(); i += 4) {
+									pcm.putFloat(i, (float) pcm.getInt(i) / Integer.MAX_VALUE);
+								}
+							}
 						}
 						break;					
 					}

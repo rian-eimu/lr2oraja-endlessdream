@@ -43,7 +43,8 @@ public class FloatPCM extends PCM<float[]> {
 		case 32:
 			sample = new float[bytes / 4];
 			for (int i = 0; i < sample.length; i++) {
-				sample[i] = pcm.getFloat();
+				float f = pcm.getFloat();
+				sample[i] = Float.isFinite(f) ? Math.max(-1.0f, Math.min(1.0f, f)) : 0.0f;
 			}
 			break;
 		default:

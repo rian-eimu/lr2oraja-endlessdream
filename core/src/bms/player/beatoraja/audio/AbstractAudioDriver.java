@@ -331,6 +331,7 @@ public abstract class AbstractAudioDriver<T> implements AudioDriver {
 
 	@Override
 	public synchronized void setModel(BMSModel model, SongResource resource) {
+		stop((Note) null);
 		modelResource = resource;
 		logger.info("音源ファイル読み込み開始。");
 		String[] wavlist = model.getWavList();
