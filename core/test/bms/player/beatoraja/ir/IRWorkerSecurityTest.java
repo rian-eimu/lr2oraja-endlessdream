@@ -55,7 +55,13 @@ public final class IRWorkerSecurityTest {
             testDiscoveryTimeout(root, plugin);
         } finally {
             try (var paths = Files.walk(root)) {
-                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException ignored) {
+                        path.toFile().deleteOnExit();
+                    }
+                }
             }
         }
         System.out.println("IRWorkerSecurityTest passed (parent classpath, worker metadata/legacy APIs, strict JSON, timeout cleanup)");
