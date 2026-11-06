@@ -322,7 +322,6 @@ public class SkinProperty {
 	public static final int NUMBER_AVERAGE_TIMING_AFTERDOT = 375;
 	public static final int NUMBER_STDDEV_TIMING = 376;
 	public static final int NUMBER_STDDEV_TIMING_AFTERDOT = 377;
-	public static final int NUMBER_SCORE_DATE = 378;
 	public static final int NUMBER_FAIL_MEASURE = 379;
 	public static final int NUMBER_SCORE = 71;
 	public static final int NUMBER_MAXSCORE = 72;
@@ -464,6 +463,13 @@ public class SkinProperty {
 	public static final int NUMBER_IR_PLAYER_MAX_RATE_AFTERDOT = 240;
 	public static final int NUMBER_IR_PLAYER_TOTAL_CLEAR_RATE_AFTERDOT = 241;
 	public static final int NUMBER_IR_PLAYER_TOTAL_FULLCOMBO_RATE_AFTERDOT = 242;
+	public static final int NUMBER_LASTPLAY_TIMESTAMP = 243;
+	public static final int NUMBER_LASTPLAY_YEAR = 244;
+	public static final int NUMBER_LASTPLAY_MONTH = 245;
+	public static final int NUMBER_LASTPLAY_DAY = 246;
+	public static final int NUMBER_LASTPLAY_HOUR = 247;
+	public static final int NUMBER_LASTPLAY_MINUTE = 248;
+	public static final int NUMBER_LASTPLAY_SECOND = 249;
 
 	public static final int NUMBER_RIVAL_SCORE = 271;
 	public static final int NUMBER_RIVAL_MAXSCORE = 272;

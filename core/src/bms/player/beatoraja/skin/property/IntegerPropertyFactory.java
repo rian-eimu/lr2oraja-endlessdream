@@ -214,6 +214,13 @@ public class IntegerPropertyFactory {
 		ir_totalfullcombo(228,createIRTotalClearCountProperty(new int[]{8,9,10})),
 		ir_totalfullcomborate(229,createIRTotalClearRateProperty(new int[]{8,9,10}, false)),
 		ir_totalfullcomborate_afterdot(242,createIRTotalClearRateProperty(new int[]{8,9,10}, true)),		
+		lastplay_timestamp(243, createLastPlayTimestampProperty()),
+		lastplay_year(244, createLastPlayDateProperty(Calendar.YEAR)),
+		lastplay_month(245, createLastPlayDateProperty(Calendar.MONTH)),
+		lastplay_day(246, createLastPlayDateProperty(Calendar.DATE)),
+		lastplay_hour(247, createLastPlayDateProperty(Calendar.HOUR_OF_DAY)),
+		lastplay_minute(248, createLastPlayDateProperty(Calendar.MINUTE)),
+		lastplay_second(249, createLastPlayDateProperty(Calendar.SECOND)),
 
 		duration(312, (state) -> {
 			if (state instanceof MusicSelector selector) {
@@ -356,9 +363,6 @@ public class IntegerPropertyFactory {
 			}
 			return Integer.MIN_VALUE;
 		}),
-		score_date(378, (state) -> (state.getScoreDataProperty().getScoreData() != null
-				? (int) state.getScoreDataProperty().getScoreData().getDate()
-				: 0)),
 
 		judgerank(400, (state) -> (state.resource.getSongdata() != null
 				? state.resource.getSongdata().getJudge() : Integer.MIN_VALUE)),
@@ -855,6 +859,36 @@ public class IntegerPropertyFactory {
 				}
 				return Integer.MIN_VALUE;
 			};
+		}
+
+		private static IntegerProperty createLastPlayTimestampProperty() {
+			return (state) -> {
+				ScoreData score = getCurrentScoreData(state);
+				long date = score != null ? score.getDate() : 0;
+				return date > 0 && date <= Integer.MAX_VALUE ? (int) date : Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createLastPlayDateProperty(int field) {
+			return (state) -> {
+				ScoreData score = getCurrentScoreData(state);
+				long date = score != null ? score.getDate() : 0;
+				if (date <= 0) {
+					return Integer.MIN_VALUE;
+				}
+				Calendar calendar = Calendar.getInstance();
+				calendar.setTimeInMillis(date * 1000L);
+				int value = calendar.get(field);
+				return field == Calendar.MONTH ? value + 1 : value;
+			};
+		}
+
+		private static ScoreData getCurrentScoreData(MainState state) {
+			if (state instanceof MusicSelector selector) {
+				Bar selected = selector.getBarManager().getSelected();
+				return selected != null ? selected.getScore() : null;
+			}
+			return state.getScoreDataProperty().getScoreData();
 		}
 
 		private static IntegerProperty createFolderClearCountProperty(final int clearType) {
