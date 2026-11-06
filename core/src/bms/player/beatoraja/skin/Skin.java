@@ -12,14 +12,19 @@ import bms.player.beatoraja.play.BMSPlayer;
 import bms.player.beatoraja.skin.property.TimerProperty;
 import bms.player.beatoraja.skin.property.TimerPropertyFactory;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
 import com.badlogic.gdx.graphics.g2d.*;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.utils.ScissorStack;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.IntArray;
 import com.badlogic.gdx.utils.IntIntMap;
 import com.badlogic.gdx.utils.IntMap;
@@ -66,6 +71,7 @@ public class Skin {
 	 */
 	private Array<SkinObject> objects = new Array<SkinObject>();
 	private SkinObject[] objectarray = new SkinObject[0];
+	private final Array<Disposable> resources = new Array<>();
 	/**
 	 * 除外されているスキンオブジェクト
 	 */
@@ -123,10 +129,12 @@ public class Skin {
 	}
 
 	public void add(SkinObject object) {
+		object.setSkinScale(dw, dh);
 		objects.add(object);
 	}
 
 	public void insertObjectBefore(SkinObject target, SkinObject object) {
+		object.setSkinScale(dw, dh);
 		int idx = objects.indexOf(target, true);
 		if (idx >= 0) {
 			objects.insert(idx, object);
@@ -138,24 +146,36 @@ public class Skin {
 	public void setDestination(SkinObject object, long time, float x, float y, float w, float h, int acc, int a,
 			int r, int g, int b, int blend, int filter, int angle, int center, int loop, int timer, int op1, int op2,
 			int op3, int[] offset) {
+		object.setSkinScale(dw, dh);
 		object.setDestination(time, x * dw, y * dh, w * dw, h * dh, acc, a, r, g, b, blend, filter, angle, center,
 				loop, timer > 0 ? TimerPropertyFactory.getTimerProperty(timer) : null, op1, op2, op3, offset);
 	}
 
 	public void setDestination(SkinObject object, long time, float x, float y, float w, float h, int acc, int a,
 	                           int r, int g, int b, int blend, int filter, int angle, int center, int loop, TimerProperty timer, int[] op) {
+		object.setSkinScale(dw, dh);
 		object.setDestination(time, x * dw, y * dh, w * dw, h * dh, acc, a, r, g, b, blend, filter, angle, center,
 				loop, timer, op);
 	}
 
 	public void setDestination(SkinObject object, long time, float x, float y, float w, float h, int acc, int a,
+						   int r, int g, int b, int blend, int filter, int angle, int center, int loop, TimerProperty timer,
+						   int[] op, BooleanProperty[] draw) {
+		object.setSkinScale(dw, dh);
+		object.setDestination(time, x * dw, y * dh, w * dw, h * dh, acc, a, r, g, b, blend, filter, angle, center,
+				loop, timer, op, draw);
+	}
+
+	public void setDestination(SkinObject object, long time, float x, float y, float w, float h, int acc, int a,
 	                           int r, int g, int b, int blend, int filter, int angle, int center, int loop, TimerProperty timer, BooleanProperty draw) {
+		object.setSkinScale(dw, dh);
 		object.setDestination(time, x * dw, y * dh, w * dw, h * dh, acc, a, r, g, b, blend, filter, angle, center,
 				loop, timer, draw);
 	}
 
 	public void addNumber(SkinNumber number, long time, float x, float y, float w, float h, int acc, int a, int r,
 			int g, int b, int blend, int filter, int angle, int center, int loop, TimerProperty timer, int op1, int op2, int op3, int offset) {
+		number.setSkinScale(dw, dh);
 		number.setDestination(time, x * dw, y * dh, w * dw, h * dh, acc, a, r, g, b, blend, filter, angle, center,
 				loop, timer, op1, op2, op3, offset);
 		objects.add(number);
@@ -173,6 +193,10 @@ public class Skin {
 
 	public void setMouseRect(SkinObject object, float x, float y, float w, float h) {
 		object.setMouseRect(x * dw, y * dh, w * dw, h * dh);
+	}
+
+	public void setDestinationClip(SkinObject object, long time, float x, float y, float w, float h) {
+		object.setDestinationClip(time, new Rectangle(x * dw, y * dh, w * dw, h * dh));
 	}
 
 	public SkinObject[] getAllSkinObjects() {
@@ -254,22 +278,14 @@ public class Skin {
 	}
 	
 	private SkinObjectRenderer renderer;
+	private final Matrix4 transform = new Matrix4();
+	private final OrthographicCamera scissorCamera = new OrthographicCamera();
 	
 	private long nextpreparetime;
 	private long prepareduration;
 
 	public void drawAllObjects(SpriteBatch sprite, MainState state) {
-		if(renderer == null) {
-			SkinOffset offsetAll = getOffsetAll(state);
-			Matrix4 transform = new Matrix4();
-			if(offsetAll != null) {
-				transform.set(width * offsetAll.x /100, height * offsetAll.y / 100, 0, 0, 0, 0, 0, (offsetAll.w + 100) / 100, (offsetAll.h + 100) / 100, 1);
-			} else {
-				transform.set(0, 0, 0, 0, 0, 0, 0, 1, 1, 1);
-			}
-			sprite.setTransformMatrix(transform);
-			renderer = new SkinObjectRenderer(sprite);
-		}
+		ensureRenderer(sprite, state);
 		
 		final long microtime = state.timer.getNowMicroTime();
 
@@ -289,9 +305,9 @@ public class Skin {
 		
 			var startDraw = System.nanoTime();
 			for (SkinObject obj : objectarray) {
-				if (obj.draw) {
+				if (obj.draw && obj.visible) {
 					var objDraw = System.nanoTime();
-					obj.draw(renderer);
+					drawObject(obj);
 					tempmap.get(obj.getClass())[4] += (System.nanoTime() - objDraw);
 				}
 			}
@@ -319,10 +335,71 @@ public class Skin {
 
 			for (SkinObject obj : objectarray) {
 				if (obj.draw && obj.visible) {
-					obj.draw(renderer);
+					drawObject(obj);
 				}
 			}
 		}
+	}
+
+	public void drawAllObjectsSafely(SpriteBatch sprite, MainState state) {
+		ensureRenderer(sprite, state);
+
+		final long microtime = state.timer.getNowMicroTime();
+		if (nextpreparetime <= microtime) {
+			final long time = state.timer.getNowTime();
+			for (SkinObject obj : objectarray) {
+				try {
+					obj.prepare(time, state);
+				} catch (Throwable e) {
+					obj.draw = false;
+				}
+			}
+
+			nextpreparetime += ((microtime - nextpreparetime) / prepareduration + 1) * prepareduration;
+		}
+
+		for (SkinObject obj : objectarray) {
+			if (obj.draw && obj.visible) {
+				try {
+					drawObject(obj);
+				} catch (Throwable e) {
+					obj.draw = false;
+				}
+			}
+		}
+	}
+
+	private void drawObject(SkinObject obj) {
+		if (!obj.hasClip()) {
+			obj.draw(renderer);
+			return;
+		}
+
+		Rectangle clip = obj.getClip();
+		if (renderer.pushClip(clip.x, clip.y, clip.width, clip.height)) {
+			try {
+				obj.draw(renderer);
+			} finally {
+				renderer.popClip();
+			}
+		}
+	}
+
+	private void ensureRenderer(SpriteBatch sprite, MainState state) {
+		if(renderer != null) {
+			return;
+		}
+
+		SkinOffset offsetAll = getOffsetAll(state);
+		if(offsetAll != null) {
+			transform.set(width * offsetAll.x /100, height * offsetAll.y / 100, 0, 0, 0, 0, 0,
+					(offsetAll.w + 100) / 100, (offsetAll.h + 100) / 100, 1);
+		} else {
+			transform.set(0, 0, 0, 0, 0, 0, 0, 1, 1, 1);
+		}
+		sprite.setTransformMatrix(transform);
+		scissorCamera.setToOrtho(false, width, height);
+		renderer = new SkinObjectRenderer(sprite, scissorCamera);
 	}
 
 	public void mousePressed(MainState state, int button, int x, int y) {
@@ -346,13 +423,42 @@ public class Skin {
 	public void dispose() {
 		for (SkinObject obj : objects) {
 			if(!obj.isDisposed()) {
-				obj.dispose();
+				disposeResource(obj);
 			}
 		}
 		for (SkinObject obj : removes) {
 			if(!obj.isDisposed()) {
-				obj.dispose();
+				disposeResource(obj);
 			}
+		}
+		for (Disposable resource : resources) {
+			disposeResource(resource);
+		}
+		resources.clear();
+	}
+
+	private static void disposeResource(Disposable resource) {
+		try {
+			resource.dispose();
+		} catch (RuntimeException e) {
+			logger.warn("Skin resource disposal failed", e);
+		}
+	}
+
+	public void addResource(Disposable resource) {
+		if (resource != null && !resources.contains(resource, true)) {
+			resources.add(resource);
+		}
+	}
+
+	/** オブジェクト破棄で先に削除されている可能性があるため、未使用のローダテクスチャも保持して安全に破棄する */
+	public void addResource(Texture texture) {
+		if (texture != null) {
+			addResource((Disposable) () -> {
+				if (texture.getTextureObjectHandle() != 0) {
+					texture.dispose();
+				}
+			});
 		}
 	}
 
@@ -415,6 +521,7 @@ public class Skin {
 	public static final class SkinObjectRenderer {
 		
 		private final SpriteBatch sprite;
+		private final Camera camera;
 		
 		private final ShaderProgram[] shaders = new ShaderProgram[6];
 		
@@ -434,9 +541,18 @@ public class Skin {
 		private final Color color = new Color(Color.WHITE);
 		
 		private Color orgcolor;
-		
+
+		private final Rectangle clipBounds = new Rectangle();
+		private final Array<Rectangle> scissors = new Array<>(false, 2);
+		private int clipDepth;
+
 		public SkinObjectRenderer(SpriteBatch sprite) {
+			this(sprite, null);
+		}
+		
+		public SkinObjectRenderer(SpriteBatch sprite, Camera camera) {
 			this.sprite = sprite;
+			this.camera = camera;
 			shaders[TYPE_BILINEAR] = ShaderManager.getShader("bilinear");
 			shaders[TYPE_FFMPEG] = ShaderManager.getShader("ffmpeg");
 			shaders[TYPE_LAYER] = ShaderManager.getShader("layer");
@@ -444,6 +560,59 @@ public class Skin {
 
 			sprite.setShader(shaders[current]);
 			sprite.setColor(Color.WHITE);
+		}
+
+		public SpriteBatch getSpriteBatch() {
+			return sprite;
+		}
+
+		public boolean pushClip(float x, float y, float width, float height) {
+			if (camera == null || width <= 0 || height <= 0) {
+				return false;
+			}
+			sprite.flush();
+			clipBounds.set(x, y, width, height);
+			// ScissorStackはpopまでRectangleの参照を保持するため、ネスト時は別インスタンスを使用する
+			if (scissors.size == clipDepth) scissors.add(new Rectangle());
+			Rectangle next = scissors.get(clipDepth);
+			SkinRenderTarget target = SkinRenderTarget.current();
+			if (target != null) {
+				ScissorStack.calculateScissors(camera, 0, 0, target.width(), target.height(), sprite.getTransformMatrix(), clipBounds, next);
+				if (next.width < 0) { next.x += next.width; next.width = -next.width; }
+				if (next.height < 0) { next.y += next.height; next.height = -next.height; }
+				float left = Math.max(0, Math.round(next.x)), bottom = Math.max(0, Math.round(next.y));
+				float right = Math.min(target.width(), Math.round(next.x) + Math.round(next.width));
+				float top = Math.min(target.height(), Math.round(next.y) + Math.round(next.height));
+				if (clipDepth > 0) {
+					Rectangle parent = scissors.get(clipDepth - 1);
+					left = Math.max(left, parent.x); bottom = Math.max(bottom, parent.y);
+					right = Math.min(right, parent.x + parent.width); top = Math.min(top, parent.y + parent.height);
+				}
+				if (right <= left || top <= bottom) return false;
+				next.set(left, bottom, right - left, top - bottom);
+				Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
+				Gdx.gl.glScissor((int)left, (int)bottom, (int)next.width, (int)next.height);
+				clipDepth++;
+				return true;
+			}
+			ScissorStack.calculateScissors(camera, sprite.getTransformMatrix(), clipBounds, next);
+			if (!ScissorStack.pushScissors(next)) return false;
+			clipDepth++;
+			return true;
+		}
+
+		public void popClip() {
+			sprite.flush();
+			if (SkinRenderTarget.current() != null) {
+				if (--clipDepth == 0) Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+				else {
+					Rectangle clip = scissors.get(clipDepth - 1);
+					Gdx.gl.glScissor((int)clip.x, (int)clip.y, (int)clip.width, (int)clip.height);
+				}
+				return;
+			}
+			ScissorStack.popScissors();
+			clipDepth--;
 		}
 
 		public void draw(BitmapFont font, String s, float x, float y, Color c) {

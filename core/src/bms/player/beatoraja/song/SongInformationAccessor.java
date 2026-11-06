@@ -73,8 +73,8 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 		try {
 			List<SongInformation> m = Validatable.removeInvalidElements(qr.query("SELECT * FROM information WHERE " + sql, songhandler));
 			return m.toArray(new SongInformation[0]);
-		} catch (SQLException e) {
-			e.printStackTrace();
+		} catch (SQLException | RuntimeException e) {
+			logger.warn("楽曲情報データベース読み込み失敗 : {}", e.getMessage());
 		}
 		return new SongInformation[0];		
 	}
@@ -85,8 +85,8 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 			if(m.size() > 0) {
 				return m.get(0);
 			}
-		} catch (SQLException e) {
-			e.printStackTrace();
+		} catch (SQLException | RuntimeException e) {
+			logger.warn("楽曲情報データベース読み込み失敗 : {}", e.getMessage());
 		}
 		return null;
 	}
@@ -124,15 +124,16 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 					}
 				}
 			}
-		} catch (SQLException e) {
-			e.printStackTrace();
+		} catch (SQLException | RuntimeException e) {
+			logger.warn("楽曲情報データベース読み込み失敗 : {}", e.getMessage());
 		}
 	}
 
-	public void startUpdate() {
+	public boolean startUpdate() {
 		try {
 			conn = ds.getConnection();
 			conn.setAutoCommit(false);
+			return true;
 		} catch (SQLException e) {
 			if (conn != null) {
 				try {
@@ -142,6 +143,8 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 				}
 			}
 			conn = null;
+			logger.warn("楽曲情報データベース更新を開始できません : {}", e.getMessage());
+			return false;
 		}
 	}
 
@@ -167,19 +170,19 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 	}
 
 	public void endUpdate() {
-		if (conn != null) {
+		Connection current = conn;
+		conn = null;
+		if (current != null) {
 			try {
-				conn.commit();
-				conn.close();
+				current.commit();
 			} catch (SQLException e) {
-				if (conn != null) {
-					try {
-						conn.close();
-					} catch (SQLException e1) {
-						e1.printStackTrace();
-					}
+				logger.warn("楽曲情報データベース更新の確定に失敗しました : {}", e.getMessage());
+			} finally {
+				try {
+					current.close();
+				} catch (SQLException e) {
+					logger.warn("楽曲情報データベースを閉じられません : {}", e.getMessage());
 				}
-				conn = null;
 			}
 		}
 	}

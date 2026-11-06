@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import bms.model.Layer.Sequence;
 import bms.model.*;
 import bms.player.beatoraja.Config;
+import bms.player.beatoraja.PixmapResourcePool;
 import bms.player.beatoraja.PlayerConfig;
 import bms.player.beatoraja.ResourcePool;
 import bms.player.beatoraja.play.BMSPlayer;
@@ -16,6 +17,9 @@ import bms.player.beatoraja.play.SkinBGA;
 import bms.player.beatoraja.skin.Skin.SkinObjectRenderer;
 import bms.player.beatoraja.song.SongResource;
 import bms.player.beatoraja.song.SongResources;
+import bms.player.beatoraja.video.FFmpegProcessor;
+import bms.player.beatoraja.video.VideoFormat;
+import bms.player.beatoraja.video.VideoProcessor;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.*;
@@ -30,18 +34,23 @@ import com.badlogic.gdx.utils.Array;
  */
 public class BGAProcessor {
 	private static final Logger logger = LoggerFactory.getLogger(BGAProcessor.class);
+
+	/** BGA画像・動画キャッシュの時点サマリ。 */
+	public record MemoryStatistics(int movieProcessorCount, long retainedMovieBytes, int cachedTextureCount,
+			int cachedPixmapCount, long estimatedPixmapBytes) {
+	}
 	
 	// TODO イベントレイヤー対応(現状はミスレイヤーのみ)
 
 	private PlayerConfig player;
 	private float progress = 0;
 
-	private MovieProcessor[] movies = new MovieProcessor[0]; 
+	private VideoProcessor[] movies = new VideoProcessor[0];
 	
-	private final ResourcePool<String, MovieProcessor> mpgresource;
+	private final ResourcePool<String, VideoProcessor> mpgresource;
 	private final Config config;
 
-	public static final String[] mov_extension = { "mp4", "wmv", "m4v", "webm", "mpg", "mpeg", "m1v", "m2v", "avi"};
+	public static final String[] mov_extension = VideoFormat.getAllExtensions();
 
 	/**
 	 * 再生中のBGAID
@@ -86,16 +95,16 @@ public class BGAProcessor {
 		blanktex = new Texture(blank);
 		blank.dispose();
 
-		mpgresource = new ResourcePool<String, MovieProcessor>(Math.max(config.getSongResourceGen(), 1)) {
+		mpgresource = new ResourcePool<String, VideoProcessor>(Math.max(config.getSongResourceGen(), 1)) {
 			@Override
-			protected MovieProcessor load(String key) {
+			protected VideoProcessor load(String key) {
 				FFmpegProcessor mm = new FFmpegProcessor(config.getFrameskip());
 				mm.create(key);
 				return mm;
 			}
 
 			@Override
-			protected void dispose(MovieProcessor resource) {
+			protected void dispose(VideoProcessor resource) {
 				resource.dispose();
 			}
 		};
@@ -128,7 +137,7 @@ public class BGAProcessor {
 			// BMS格納ディレクトリ
 			SongResource directory = chartResource.parent();
 
-			movies = new MovieProcessor[model.getBgaList().length];
+			movies = new VideoProcessor[model.getBgaList().length];
 			for (String name : model.getBgaList()) {
 				if (progress == 1) {
 					break;
@@ -142,9 +151,9 @@ public class BGAProcessor {
 							fex = name.substring(index + 1).toLowerCase();
 						}
 						if (fex != null) {
-							if (Arrays.asList(mov_extension).contains(fex)){
+							if (Arrays.asList(VideoFormat.getAllExtensions()).contains(fex)){
 								name = name.substring(0, index);
-								for (String mov : mov_extension) {
+								for (String mov : VideoFormat.getAllExtensions()) {
 									final SongResource mpgfile = directory.resolve(name + "." + mov);
 									if (mpgfile.exists()) {
 										f = mpgfile;
@@ -170,7 +179,7 @@ public class BGAProcessor {
 						if (index != -1) {
 							name = name.substring(0, index);
 						}
-						for (String mov : mov_extension) {
+						for (String mov : VideoFormat.getAllExtensions()) {
 							final SongResource mpgfile = directory.resolve(name + "." + mov);
 							if (mpgfile.exists()) {
 								f = mpgfile;
@@ -193,11 +202,11 @@ public class BGAProcessor {
 
 				if (f != null) {
 					boolean isMovie = false;
-					for (String mov : mov_extension) {
+					for (String mov : VideoFormat.getAllExtensions()) {
 						if (f.name().toLowerCase().endsWith(mov)) {
 							try {
 								SongResource movieResource = f;
-								MovieProcessor mm = mpgresource.get(f.cacheKey(), () -> {
+								VideoProcessor mm = mpgresource.get(f.cacheKey(), () -> {
 									FFmpegProcessor processor = new FFmpegProcessor(config.getFrameskip());
 									processor.create(movieResource);
 									return processor;
@@ -245,7 +254,7 @@ public class BGAProcessor {
 		if(cache != null) {
 			cache.prepare(timelines);			
 		}
-		for (MovieProcessor mp : movies) {
+		for (VideoProcessor mp : movies) {
 			if(mp != null) {
 				mp.stop();				
 			}
@@ -412,7 +421,7 @@ public class BGAProcessor {
 	}
 
 	public void stop() {
-		for (MovieProcessor mpg : movies) {
+		for (VideoProcessor mpg : movies) {
 			if (mpg != null) {
 				mpg.stop();
 			}
@@ -427,9 +436,25 @@ public class BGAProcessor {
 			cache.dispose();
 		}
 		mpgresource.dispose();
+		if (blanktex != null) {
+			blanktex.dispose();
+			blanktex = null;
+		}
 	}
 
 	public float getProgress() {
 		return progress;
+	}
+
+	public MemoryStatistics getMemoryStatistics() {
+		ResourcePool.Statistics movieStatistics = mpgresource.getStatistics(processor -> {
+			return processor instanceof FFmpegProcessor ffmpeg ? ffmpeg.getRetainedMovieBytes() : 0;
+		});
+		PixmapResourcePool.MemoryStatistics pixmapStatistics = cache != null
+				? cache.getPixmapMemoryStatistics()
+				: new PixmapResourcePool.MemoryStatistics(0, 0, 0);
+		return new MemoryStatistics(movieStatistics.resourceCount(), movieStatistics.estimatedBytes(),
+				cache != null ? cache.getCachedTextureCount() : 0, pixmapStatistics.pixmapCount(),
+				pixmapStatistics.estimatedNativeBytes());
 	}
 }

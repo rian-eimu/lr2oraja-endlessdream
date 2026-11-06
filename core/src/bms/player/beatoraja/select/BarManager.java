@@ -966,7 +966,7 @@ public class BarManager {
 						SongResource bannerResource = chartResource.parent().resolve(song.getBanner());
 						// System.out.println(bannerfile.getPath());
 						if (song.getBanner().length() > 0 && bannerResource.exists()) {
-							songbar.setBanner(select.getBannerResource().get(bannerResource));
+							songbar.setBanner(select.getBannerResource().getPixmap(bannerResource));
 						}
 					} catch (Exception e) {
 						logger.warn("banner読み込み失敗 : {}", song.getBanner());
@@ -975,7 +975,7 @@ public class BarManager {
 						SongResource stagefileResource = chartResource.parent().resolve(song.getStagefile());
 						// System.out.println(stagefilefile.getPath());
 						if (song.getStagefile().length() > 0 && stagefileResource.exists()) {
-							songbar.setStagefile(select.getStagefileResource().get(stagefileResource));
+							songbar.setStagefile(select.getStagefileResource().getPixmap(stagefileResource));
 						}
 					} catch (Exception e) {
 						logger.warn("stagefile読み込み失敗 : {}", song.getStagefile());

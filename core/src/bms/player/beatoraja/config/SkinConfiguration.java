@@ -455,7 +455,7 @@ public class SkinConfiguration extends MainState {
 					allSkins.add(header);
 				}
 			} else if (pathString.endsWith(".luaskin")) {
-				LuaSkinLoader loader = new LuaSkinLoader();
+				LuaSkinLoader loader = LuaSkinLoader.sandboxed(path);
 				SkinHeader header = loader.loadHeader(path);
 				if (header != null) {
 					allSkins.add(header);
@@ -487,7 +487,10 @@ public class SkinConfiguration extends MainState {
 	}
 
 	private void scanSkins(Path path, List<Path> paths) {
-		if (Files.isDirectory(path)) {
+		if (Files.isSymbolicLink(path)) {
+			return;
+		}
+		if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
 			try (Stream<Path> sub = Files.list(path)) {
 				sub.forEach((Path t) -> {
 					scanSkins(t, paths);

@@ -207,6 +207,13 @@ public class FloatPropertyFactory {
 						((AbstractResult) state).setRankingPosition(value);
 					}
 				}),
+		practice_position(9,
+				(state) -> (state instanceof BMSPlayer player ? player.getPracticeConfiguration().getItemScrollPosition() : 0),
+				(state, value) -> {
+					if (state instanceof BMSPlayer player) {
+						player.getPracticeConfiguration().setItemScrollPosition(value);
+					}
+				}),
 		mastervolume(17,
 				(state) -> (state.resource.getConfig().getAudioConfig().getSystemvolume()),
 				(state, value) -> {

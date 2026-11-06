@@ -31,6 +31,15 @@ public class IRCourseData {
 	 */
 	public final int lntype;
 
+	public IRCourseData(String name, IRChartData[] charts, CourseDataConstraint[] constraint, IRTrophyData[] trophy,
+			int lntype) {
+		this.name = name;
+		this.charts = charts != null ? charts : new IRChartData[0];
+		this.constraint = constraint != null ? constraint : new CourseDataConstraint[0];
+		this.trophy = trophy != null ? trophy : new IRTrophyData[0];
+		this.lntype = lntype;
+	}
+
     public IRCourseData(CourseData course) {
     	this(course, -1);
     }
@@ -76,6 +85,12 @@ public class IRCourseData {
     		name = trophy.getName();
     		scorerate = trophy.getScorerate();
 			smissrate = trophy.getMissrate();
+		}
+
+		public IRTrophyData(String name, float scorerate, float smissrate) {
+			this.name = name;
+			this.scorerate = scorerate;
+			this.smissrate = smissrate;
 		}
 	}
 }

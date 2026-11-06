@@ -478,12 +478,18 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 			Files.walkFileTree(start, new SimpleFileVisitor<Path>() {
 				@Override
 				public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+					if (!directory.equals(start) && isHidden(directory)) {
+						return FileVisitResult.SKIP_SUBTREE;
+					}
 					return SongArchives.isArchiveStorageDirectory(directory) ? FileVisitResult.SKIP_SUBTREE
 							: FileVisitResult.CONTINUE;
 				}
 
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+					if (isHidden(file)) {
+						return FileVisitResult.CONTINUE;
+					}
 					if (SongArchives.isSupportedArchive(file)) {
 						archives.add(file);
 					}
@@ -545,6 +551,9 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		private void addArchiveFiles(Path archive, SongArchives.ArchiveContents contents) {
 			String autoPreviewFile = null;
 			for (String entry : contents.entries()) {
+				if (isHiddenEntry(entry)) {
+					continue;
+				}
 				if (contents.rootDirectory() != null && !entry.startsWith(contents.rootDirectory() + "/")) {
 					continue;
 				}
@@ -564,8 +573,8 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 						}
 					}
 				}
-				if (filename.endsWith(".bms") || filename.endsWith(".bme") || filename.endsWith(".bml") || filename.endsWith(".bmc")
-						|| filename.endsWith(".pms") || filename.endsWith(".bmson") || filename.endsWith(".osu")) {
+				if (SongArchives.isChartEntry(entry) && (filename.endsWith(".bms") || filename.endsWith(".bme") || filename.endsWith(".bml") || filename.endsWith(".bmc")
+						|| filename.endsWith(".pms") || filename.endsWith(".bmson") || filename.endsWith(".osu"))) {
 					bmsfiles.add(SongArchives.virtualPath(archive, entry, contents.rootDirectory()));
 				}
 			}
@@ -595,7 +604,11 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		*/
 		private void processDirectory(SongDatabaseUpdaterProperty property)
 				throws IOException, SQLException, ReflectiveOperationException, IllegalArgumentException, InvocationTargetException, IntrospectionException {
-			final List<SongData> records = qr.query(property.conn, "SELECT path,date FROM song WHERE folder = ?", songhandler,
+			final List<SongData> records = SongArchives.archivePath(path) != null
+					? qr.query(property.conn, "SELECT path,date FROM song WHERE path >= ? AND path < ?", songhandler,
+							(SongArchives.archivePath(path).startsWith(root) ? root.relativize(SongArchives.archivePath(path)).toString() : SongArchives.archivePath(path).toString()) + "!",
+							(SongArchives.archivePath(path).startsWith(root) ? root.relativize(SongArchives.archivePath(path)).toString() : SongArchives.archivePath(path).toString()) + "\"")
+					: qr.query(property.conn, "SELECT path,date FROM song WHERE folder = ?", songhandler,
 					SongUtils.crc32(path.toString(), bmsroot, root.toString()));
 			final List<FolderData> folders = qr.query(property.conn, "SELECT path,date FROM folder WHERE parent = ?",
 					folderhandler, SongUtils.crc32(path.toString(), bmsroot, root.toString()));
@@ -606,6 +619,9 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 
 				// TODO: Use .hasNext() method of Directory stream to resume directory processing even when a file has an error (such as having too long a name)
 				for (Path p : paths) {
+					if (isHidden(p)) {
+						continue;
+					}
 					if(Files.isDirectory(p)) {
 						if (!SongArchives.isArchiveStorageDirectory(p)) {
 							dirs.add(new BMSFolder(p, bmsroot));
@@ -975,6 +991,20 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		}
 	}
 	
+	private static boolean isHidden(Path path) {
+		Path name = path.getFileName();
+		return name != null && name.toString().startsWith(".");
+	}
+
+	private static boolean isHiddenEntry(String entry) {
+		for (String name : entry.split("[/\\\\]")) {
+			if (!name.isEmpty() && !name.equals(".") && !name.equals("..") && name.startsWith(".")) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public static interface SongDatabaseAccessorPlugin {
 		
 		public void update(BMSModel model, SongData song);

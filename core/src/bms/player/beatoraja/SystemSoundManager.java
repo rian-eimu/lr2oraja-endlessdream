@@ -2,6 +2,7 @@ package bms.player.beatoraja;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.slf4j.Logger;
@@ -88,7 +89,10 @@ public class SystemSoundManager {
 	}
 
 	private void scan(Path p, Array<Path> paths, String name) {
-		if (Files.isDirectory(p)) {
+		if (Files.isSymbolicLink(p)) {
+			return;
+		}
+		if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
 			try (Stream<Path> sub = Files.list(p)) {
 				sub.forEach((t) -> scan(t, paths, name));
 				if (AudioDriver.getPaths(p.resolve(name).toString()).length > 0) {

@@ -912,16 +912,12 @@ public class BMSPlayer extends MainState {
 						}
 					}
 					gauge.setType(type);
-				} else if (g == 0 && Double.isNaN(resource.getFailMeasure())) {
-					// ゲージ0になった時点で小節数を記録
-					double failMeasure = 0;
-					for (TimeLine tl : model.getAllTimeLines()) {
-						if (tl.getMilliTime() > ptime) {
-							break;
-						}
-						failMeasure = tl.getSection();
+					if (gauge.getValue() == 0f) {
+						recordFailMeasure(ptime);
 					}
-					resource.setFailMeasure(failMeasure);
+				} else if (g == 0) {
+					// ゲージ0になった時点で小節数を記録
+					recordFailMeasure(ptime);
 
 					switch(config.getGaugeAutoShift()) {
 					case PlayerConfig.GAUGEAUTOSHIFT_NONE:
@@ -1345,6 +1341,7 @@ public class BMSPlayer extends MainState {
 		} else if(state == STATE_FINISHED && !timer.isTimerOn(TIMER_FADEOUT)) {
 			timer.setTimerOn(TIMER_FADEOUT);
 		} else if(state != STATE_FINISHED) {
+			recordFailMeasure(timer.getNowTime(TIMER_PLAY));
 			main.getAudioProcessor().setGlobalPitch(1f);
 			state = STATE_FAILED;
 			timer.setTimerOn(TIMER_FAILED);
@@ -1356,12 +1353,34 @@ public class BMSPlayer extends MainState {
 		}
 	}
 
+	private void recordFailMeasure(long ptime) {
+		if (!Double.isNaN(resource.getFailMeasure()) || model == null) {
+			return;
+		}
+		double failMeasure = 0;
+		for (TimeLine tl : model.getAllTimeLines()) {
+			if (tl.getMilliTime() > ptime) {
+				break;
+			}
+			failMeasure = tl.getSection();
+		}
+		resource.setFailMeasure(failMeasure);
+	}
+
 	@Override
 	public void dispose() {
 		super.dispose();
 		lanerender.dispose();
 		practice.dispose();
 		logger.info("システム描画のリソース解放");
+	}
+
+	@Override
+	public void executeEvent(int id, int arg1, int arg2) {
+		super.executeEvent(id, arg1, arg2);
+		if (state == STATE_PRACTICE && id >= BUTTON_PRACTICE_ITEM1 && id <= BUTTON_PRACTICE_ITEM16) {
+			practice.changeVisibleItem(id - BUTTON_PRACTICE_ITEM1, arg1 >= 0);
+		}
 	}
 
 	public PracticeConfiguration getPracticeConfiguration() {

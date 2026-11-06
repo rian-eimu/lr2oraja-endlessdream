@@ -6,7 +6,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 
 import bms.player.beatoraja.MainState;
-import bms.player.beatoraja.play.bga.FFmpegProcessor;
+import bms.player.beatoraja.video.*;
 
 /**
  * スキンのソースイメージ(ムービー)
@@ -18,7 +18,7 @@ public class SkinSourceMovie extends SkinSource {
 	/**
 	 * イメージ
 	 */
-	private FFmpegProcessor image;
+	private VideoProcessor image;
 	
 	private boolean playing;
 
@@ -31,8 +31,9 @@ public class SkinSourceMovie extends SkinSource {
 	}
 
 	public SkinSourceMovie(String s, int timer) {
-		image = new FFmpegProcessor(1);
-		image.create(s);
+		FFmpegProcessor processor = new FFmpegProcessor(1);
+		processor.create(s);
+		image = processor;
 		this.timer = timer;
 	}
 
@@ -56,7 +57,7 @@ public class SkinSourceMovie extends SkinSource {
 
 	public void dispose() {
     	if(isNotDisposed()) {
-    		Optional.ofNullable(image).ifPresent(FFmpegProcessor::dispose);
+    		Optional.ofNullable(image).ifPresent(VideoProcessor::dispose);
     		setDisposed();
     	}
 	}

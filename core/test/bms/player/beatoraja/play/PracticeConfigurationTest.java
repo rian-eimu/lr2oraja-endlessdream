@@ -7,12 +7,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * PracticeConfiguration の SCROLL MODIFY MODE 項目の単体テスト
+ * PracticeConfiguration の SCROLL MODIFY MODE 項目および破損設定ファイル読み込みの単体テスト
  */
 class PracticeConfigurationTest {
 
@@ -69,5 +75,28 @@ class PracticeConfigurationTest {
         assertFalse(new Json().prettyPrint(property).contains("scrollmode"));
         property.scrollmode = 1;
         assertTrue(new Json().prettyPrint(property).contains("scrollmode"));
+    }
+
+    @Test
+    @DisplayName("破損・空の練習設定ファイルを読み込んだ場合は null を返すこと")
+    void testLoadCorruptPracticeProperty() throws IOException {
+        Path directory = Files.createTempDirectory("practice-configuration-test");
+        try {
+            Path nullProperty = directory.resolve("null.json");
+            Files.writeString(nullProperty, "null");
+            assertNull(PracticeConfiguration.loadPracticeProperty(nullProperty));
+
+            Path invalidProperty = directory.resolve("invalid.json");
+            Files.writeString(invalidProperty, "{");
+            assertNull(PracticeConfiguration.loadPracticeProperty(invalidProperty));
+
+            assertNull(PracticeConfiguration.loadPracticeProperty(directory.resolve("directory.json")));
+        } finally {
+            try (var paths = Files.walk(directory)) {
+                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                    Files.deleteIfExists(path);
+                }
+            }
+        }
     }
 }

@@ -225,47 +225,39 @@ public final class BarRenderer {
 
 		if (bartextupdate) {
 			bartextupdate = false;
-			
-			bartextCharset.clear();
-			for (Bar song : manager.currentsongs) {
-				for (char c : song.getTitle().toCharArray()) {
-					bartextCharset.add(c);
+
+			boolean requiresFontPreparation = false;
+			for (int index = 0; index < SkinBar.BARTEXT_COUNT; index++) {
+				SkinText text = baro.getText(index);
+				if (text != null && text.requiresFontPreparation()) {
+					requiresFontPreparation = true;
+					break;
 				}
 			}
-			// お気に入りマーカーは曲名に含まれないため、常にフォント生成対象に加える
-			bartextCharset.add(FAVORITE_MARK);
-			char[] chars = new char[bartextCharset.size];
-			int i = 0;
-			for (IntSetIterator iterator = bartextCharset.iterator();iterator.hasNext;) {
-				chars[i++] = (char) iterator.next();
-			}
-//			Arrays.fill(bartextCharset, false);
-//			int charCount = 0;
-//			for (Bar song : manager.currentsongs) {
-//				final String title = song.getTitle();
-//				for(int index = title.length() - 1;index >= 0;index--) {
-//					final char c = title.charAt(index);
-//					if(!bartextCharset[c]) {
-//						bartextCharset[c] = true;
-//						charCount++;
-//					}
-//				}
-//			}
-//			char[] chars = new char[charCount];
-//			int count = 0;
-//			for (char c = (char) (bartextCharset.length - 1) ;;c--) {
-//				if(bartextCharset[c]) {
-//					chars[count++] = c;
-//				}
-//				if(c == 0) {
-//					break;
-//				}
-//			}
+			if (requiresFontPreparation) {
+				bartextCharset.clear();
+				for (Bar song : manager.currentsongs) {
+					final String title = song.getTitle();
+					for (int index = 0; index < title.length();) {
+						final int codePoint = title.codePointAt(index);
+						bartextCharset.add(codePoint);
+						index += Character.charCount(codePoint);
+					}
+				}
+				// お気に入りマーカーは曲名に含まれないため、常にフォント生成対象に加える
+				bartextCharset.add(FAVORITE_MARK);
+				StringBuilder chars = new StringBuilder(bartextCharset.size);
+				for (IntSetIterator iterator = bartextCharset.iterator();iterator.hasNext;) {
+					chars.appendCodePoint(iterator.next());
+				}
 			
-			for(int index = 0;index < SkinBar.BARTEXT_COUNT;index++) {
-				if(baro.getText(index) != null) {
-					baro.getText(index).prepareFont(String.valueOf(chars));
-				}				
+				for(int index = 0;index < SkinBar.BARTEXT_COUNT;index++) {
+					SkinText text = baro.getText(index);
+					if(text != null && text.requiresFontPreparation()) {
+						text.prepareFont(chars.toString());
+					}
+				}
+				baro.clearTextLayoutCache();
 			}
 		}
 
@@ -343,7 +335,7 @@ public final class BarRenderer {
 			}
 			final SkinText text = baro.getText(ba.text);
 			if(text != null) {
-				drawBarTitle(sprite, text, ba, baro.getBarImages(i == skin.getCenterBar(), i),
+				drawBarTitle(sprite, baro, text, ba, baro.getBarImages(i == skin.getCenterBar(), i),
 						skin.getWidth());
 			}
 		}
@@ -480,7 +472,7 @@ public final class BarRenderer {
 	 * タイトルソートの比較に使われるため)。
 	 * SkinTextはバー間で共有されるので、変更した状態は必ず元に戻すこと。
 	 */
-	private void drawBarTitle(SkinObjectRenderer sprite, SkinText text, BarArea ba, SkinImage bar,
+	private void drawBarTitle(SkinObjectRenderer sprite, SkinBar baro, SkinText text, BarArea ba, SkinImage bar,
 			float skinwidth) {
 		final SongData song = ba.sd instanceof SongBar ? ((SongBar) ba.sd).getSongData() : null;
 		if (bar != null && song != null
@@ -502,8 +494,7 @@ public final class BarRenderer {
 			text.color.set(orgcolor);
 		}
 		// 長い曲名がマーカーに重なったとき曲名側を優先するため、マーカーより後に描く
-		text.setText(ba.sd.getTitle());
-		text.draw(sprite, ba.x, ba.y);
+		baro.drawText(sprite, ba.text, ba.sd.getTitle(), ba.x, ba.y);
 	}
 
 	public void input() {

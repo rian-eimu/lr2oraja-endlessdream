@@ -178,7 +178,9 @@ public final class SkinTimingVisualizer extends SkinObject {
 	@Override
 	public void dispose() {
 		Optional.ofNullable(backtex).ifPresent(t -> t.getTexture().dispose());
+		backtex = null;
 		Optional.ofNullable(line).ifPresent(t -> t.getTexture().dispose());
+		line = null;
 	}
 
 	/**

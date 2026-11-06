@@ -356,6 +356,7 @@ public class CourseResult extends AbstractResult {
 		}
 		
 		public boolean send() {
+			if (retry < 0) return retry == -255;
 			logger.info("IRへスコア送信中 : {}", course.getName());
 			bms.player.beatoraja.ir.IRScoreData irscore = new bms.player.beatoraja.ir.IRScoreData(score);
 			irscore.replays = replays;
@@ -366,7 +367,8 @@ public class CourseResult extends AbstractResult {
                 return true;
             } else {
 				logger.warn("IRスコア送信失敗 : {}", send1.getMessage());
-                retry++;
+                retry = IRSubmissionResponse.isOutcomeUnknown(send1) ? -1 : retry + 1;
+                if (retry == -1) logger.warn("IR送信結果が不明なため自動再送を中止します");
                 return false;
             }
 

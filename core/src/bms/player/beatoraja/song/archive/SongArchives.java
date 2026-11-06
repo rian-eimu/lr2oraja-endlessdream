@@ -101,7 +101,7 @@ public final class SongArchives {
 		Path normalizedArchive = archive.toAbsolutePath().normalize();
 		ArchiveContents contents = readContents(normalizedArchive);
 		if (contents.entries().stream().noneMatch(SongArchives::isChartEntry)) {
-			throw new IOException("Song archive does not contain a chart: " + archive);
+			throw new IOException("Song archive does not contain a chart within one directory level: " + archive);
 		}
 
 		Path parent = normalizedArchive.getParent();
@@ -307,8 +307,20 @@ public final class SongArchives {
 		return entry.startsWith("__MACOSX/") || entry.startsWith("._");
 	}
 
-	private static boolean isChartEntry(String entry) {
-		String lowerCase = entry.toLowerCase(Locale.ROOT);
+	/**
+	 * アーカイブ直下または1階層下のディレクトリ内の譜面のみを検出する（表示ルート省略前）。
+	 * リソースアクセス自体はこの深さ制限を受けない。
+	 */
+	public static boolean isChartEntry(String entry) {
+		String normalized = normalizeEntryNameOrNull(entry);
+		if (normalized == null) {
+			return false;
+		}
+		int separator = normalized.indexOf('/');
+		if (separator >= 0 && normalized.indexOf('/', separator + 1) >= 0) {
+			return false;
+		}
+		String lowerCase = normalized.toLowerCase(Locale.ROOT);
 		return lowerCase.endsWith(".bms") || lowerCase.endsWith(".bme") || lowerCase.endsWith(".bml") || lowerCase.endsWith(".bmc")
 				|| lowerCase.endsWith(".pms") || lowerCase.endsWith(".bmson") || lowerCase.endsWith(".osu");
 	}
@@ -362,4 +374,3 @@ public final class SongArchives {
 	}
 
 }
-

@@ -2,13 +2,16 @@ package bms.player.beatoraja.skin;
 
 import java.io.*;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import bms.player.beatoraja.PixmapResourcePool;
 import bms.player.beatoraja.skin.json.JsonSkin;
 import bms.player.beatoraja.skin.BitmapFontCache.CacheableBitmapFont;
+import bms.player.beatoraja.skin.SkinTextBitmap.SkinTextBitmapSource;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -23,8 +26,8 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.utils.Array;
 
-// Parallelized bitmap font preloader
-// largely adopted from SkinTextBitmap.java
+// 並列化されたビットマップフォントのプリローダ
+// SkinTextBitmap.javaの処理をベースに実装
 
 public class BitmapFontBatchLoader {
     private static final Logger logger = LoggerFactory.getLogger(BitmapFontBatchLoader.class);
@@ -37,7 +40,7 @@ public class BitmapFontBatchLoader {
             try {
                 Path path = skinPath.getParent().resolve(font.path);
                 boolean validPath = path.toString().toLowerCase().endsWith(".fnt");
-                boolean alreadyCached = BitmapFontCache.Has(path);
+                boolean alreadyCached = BitmapFontCache.Has(path, font.type);
                 if (!validPath || alreadyCached) continue;
                 fontPaths.put(path, font.type);
             }
@@ -52,6 +55,8 @@ public class BitmapFontBatchLoader {
     private HashMap<Path, Integer> fontPaths = new HashMap<Path, Integer>();
     private HashMap<Path, BitmapFont.BitmapFontData> fontData =
         new HashMap<Path, BitmapFont.BitmapFontData>();
+    private HashMap<Path, Map<Integer, BitmapFont.Glyph>> supplementaryGlyphs =
+        new HashMap<Path, Map<Integer, BitmapFont.Glyph>>();
 
     public void load() {
         int parallelism = Runtime.getRuntime().availableProcessors();
@@ -59,13 +64,17 @@ public class BitmapFontBatchLoader {
 
         LinkedBlockingQueue<BitmapFont.BitmapFontData> parsedFontData =
             new LinkedBlockingQueue<BitmapFont.BitmapFontData>();
-        // parse each font description file, queue up the resulting data
+        // 각フォント定義ファイルを解析し、結果のデータをキューに入れる
         Future<Boolean> parseTask = pool.submit(() -> {
             for (Path path : fontPaths.keySet()) {
                 try {
+                    FileHandle fontFile = new FileHandle(path.toFile());
+                    SkinTextBitmapSource.RemappedFontFile remappedFontFile =
+                        SkinTextBitmapSource.createRemappedFontFile(fontFile);
                     BitmapFont.BitmapFontData fontData =
-                        new BitmapFont.BitmapFontData(new FileHandle(path.toFile()), false);
+                        new BitmapFont.BitmapFontData(remappedFontFile.fileHandle, false);
                     this.fontData.put(path, fontData);
+                    this.supplementaryGlyphs.put(path, remappedFontFile.supplementaryGlyphs);
                     parsedFontData.put(fontData);
                 }
                 catch (InterruptedException e) {
@@ -80,14 +89,10 @@ public class BitmapFontBatchLoader {
             return true;
         });
 
-        // each font data object contains a list of 'page' image file paths
-        // we read the parse queue and load all the required images in parallel
+        // 各フォントデータにはページ画像のパス配列が含まれるため、キューから取り出して並列読み込みする
         LinkedBlockingQueue<String> loadedImages = new LinkedBlockingQueue<String>();
         HashMap<String, TextureRegion> loadedTextures = new HashMap<String, TextureRegion>();
 
-        // once for each path in the set
-        // no particular exception handling because it's okay if we drop some images,
-        // they'll be missing from the cache later and get loaded anyway
         final PixmapResourcePool resource = SkinLoader.getResource();
 
         while (!parseTask.isDone() || !parsedFontData.isEmpty()) {
@@ -120,15 +125,15 @@ public class BitmapFontBatchLoader {
 
         pool.shutdown();
 
-        // textures need to be created on the main thread due to GL calls
-        // this loop should ensure that all image paths are read from the queue
-        // after the thread pool terminates
+        // GL呼び出しを伴うためテクスチャ生成はメインスレッドで行う
         while (!pool.isTerminated() || !loadedImages.isEmpty()) {
             try {
                 String imagePath = loadedImages.poll(1, TimeUnit.MILLISECONDS);
                 if (imagePath == null) continue;
                 Texture texture = SkinLoader.getTexture(imagePath, this.usecim, this.useMipMaps);
-                loadedTextures.put(imagePath, new TextureRegion(texture));
+                if (texture != null) {
+                    loadedTextures.put(imagePath, new TextureRegion(texture));
+                }
             }
             catch (InterruptedException e) {
                 logger.warn(e.getLocalizedMessage());
@@ -154,11 +159,15 @@ public class BitmapFontBatchLoader {
             float size = fontData.lineHeight;
             float scaleW = 0;
             float scaleH = 0;
+            int base = (int) fontData.ascent;
+            int glyphYOffset = SkinTextBitmapSource.getRepresentativeGlyphYOffset(fontData);
             fontSizes sizes = readFontSizes(path);
             if (sizes != null) {
                 size = sizes.size();
                 scaleW = sizes.scaleW();
                 scaleH = sizes.scaleH();
+                base = sizes.base();
+                glyphYOffset = sizes.glyphYOffset();
             }
             else if (imageRegions.size > 0) {
                 scaleW = (float)imageRegions.get(0).getRegionWidth();
@@ -168,6 +177,7 @@ public class BitmapFontBatchLoader {
             CacheableBitmapFont fontCache = new CacheableBitmapFont();
             try {
                 fontCache.font = new BitmapFont(fontData, imageRegions, true);
+                fontCache.font.setOwnsTexture(true);
             }
             catch (Exception e) {
                 logger.warn(e.getLocalizedMessage());
@@ -179,11 +189,14 @@ public class BitmapFontBatchLoader {
             fontCache.originalSize = size;
             fontCache.pageWidth = scaleW;
             fontCache.pageHeight = scaleH;
-            BitmapFontCache.Set(path, fontCache);
+            fontCache.base = base;
+            fontCache.glyphYOffset = glyphYOffset;
+            fontCache.supplementaryGlyphs = this.supplementaryGlyphs.getOrDefault(path, Collections.emptyMap());
+            BitmapFontCache.Set(path, fontCache.type, fontCache);
         }
     }
 
-    record fontSizes(float size, float scaleW, float scaleH){}
+    record fontSizes(float size, float scaleW, float scaleH, int base, int glyphYOffset){}
 
     private fontSizes readFontSizes(Path fontPath) {
         // size が BitmapFont から取得できないので、独自に取得する
@@ -193,11 +206,13 @@ public class BitmapFontBatchLoader {
             float size =
                 (float)Integer.parseInt(line.substring(line.indexOf("size=") + 5).split(" ")[0]);
             line = reader.readLine();
+            int base = SkinTextBitmapSource.getIntAttribute(line, "base");
             float scaleW =
                 (float)Integer.parseInt(line.substring(line.indexOf("scaleW=") + 7).split(" ")[0]);
             float scaleH =
                 (float)Integer.parseInt(line.substring(line.indexOf("scaleH=") + 7).split(" ")[0]);
-            return new fontSizes(size, scaleW, scaleH);
+            int glyphYOffset = SkinTextBitmapSource.readRepresentativeGlyphYOffset(reader);
+            return new fontSizes(size, scaleW, scaleH, base, glyphYOffset);
         }
         catch (Exception e) {
             logger.warn(e.getLocalizedMessage());

@@ -44,6 +44,7 @@ public class JsonSkin {
 		public HiddenCover[] hiddenCover = new HiddenCover[0];
 		public LiftCover[] liftCover = new LiftCover[0];
 		public BGA bga;
+		public Practice practice;
 		public Judge[] judge = new Judge[0];
 		public SongList songlist;
 		public PMchara[] pmchara = new PMchara[0];
@@ -97,6 +98,12 @@ public class JsonSkin {
 
 	public static class Font {
 		public String id;
+		public String path;
+		public FontFallback[] fallback = new FontFallback[0];
+		public int type;
+	}
+
+	public static class FontFallback {
 		public String path;
 		public int type;
 	}
@@ -179,7 +186,9 @@ public class JsonSkin {
 		public int align;
 		public int ref;
 		public StringProperty value;
+		public StringWriter event;
 		public String constantText;
+		public boolean editable = false;
 		public boolean wrapping = false;
 		public int overflow = SkinText.OVERFLOW_OVERFLOW;
 		public String outlineColor = "ffffff00";
@@ -402,6 +411,17 @@ public class JsonSkin {
 		public String id;
 	}
 
+	/**
+	 * Practice mode configuration area in a play skin.
+	 *
+	 * <p>The visual contents are defined by the usual skin objects. This object
+	 * only enables the skin-based Practice UI and configures its visible row count.</p>
+	 */
+	public static class Practice {
+		public String id;
+		public int visibleItems = 10;
+	}
+
 	public static class Judge {
 		public String id;
 		public int index;
@@ -436,10 +456,41 @@ public class JsonSkin {
 		public int offset;
 		public int[] offsets = new int[0];
 		public int stretch = -1;
-		public int[] op = new int[0];
+		public DestinationOption[] op = new DestinationOption[0];
 		public BooleanProperty draw;
 		public Animation[] dst = new Animation[0];
 		public Rect mouseRect;
+
+		public int[] getOptionIds() {
+			return java.util.Arrays.stream(op != null ? op : new DestinationOption[0])
+					.filter(option -> option != null && option.property == null && option.id != 0)
+					.mapToInt(option -> option.id)
+					.toArray();
+		}
+
+		public BooleanProperty[] getDrawConditions() {
+			return java.util.Arrays.stream(op != null ? op : new DestinationOption[0])
+					.filter(option -> option != null && option.property != null)
+					.map(option -> option.property)
+					.toArray(BooleanProperty[]::new);
+		}
+	}
+
+	/** A destination condition represented by either a numeric option ID or a BooleanProperty. */
+	public static class DestinationOption {
+		public int id;
+		public BooleanProperty property;
+
+		public DestinationOption() {
+		}
+
+		public DestinationOption(int id) {
+			this.id = id;
+		}
+
+		public DestinationOption(BooleanProperty property) {
+			this.property = property;
+		}
 	}
 
 	public static class Rect {
@@ -456,6 +507,11 @@ public class JsonSkin {
 		public int y = Integer.MIN_VALUE;
 		public int w = Integer.MIN_VALUE;
 		public int h = Integer.MIN_VALUE;
+
+		public int clip_x = Integer.MIN_VALUE;
+		public int clip_y = Integer.MIN_VALUE;
+		public int clip_w = Integer.MIN_VALUE;
+		public int clip_h = Integer.MIN_VALUE;
 
 		public int acc = Integer.MIN_VALUE;
 
