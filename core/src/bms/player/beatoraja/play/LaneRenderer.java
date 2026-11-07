@@ -62,6 +62,7 @@ public class LaneRenderer {
 	private final float noteExpansionTime = 9;
 	//最大拡大から通常サイズに戻るまでの時間
 	private final float noteContractionTime = 150;
+	private static final Color FREEZONE_COLOR = Color.valueOf("3b0808ff");
 
 	public LaneRenderer(BMSPlayer main, BMSModel model) {
 
@@ -104,14 +105,16 @@ public class LaneRenderer {
 		List<TimeLine> tls = new ArrayList<TimeLine>();
 		double cbpm = model.getBpm();
 		double cscr = 1.0;
+		double cspd = 1.0;
 		for (TimeLine tl : model.getAllTimeLines()) {
-			if (cbpm != tl.getBPM() || tl.getStop() > 0 || cscr != tl.getScroll() || tl.getSectionLine()) {
+			if (cbpm != tl.getBPM() || tl.getStop() > 0 || cscr != tl.getScroll() || cspd != tl.getSpeed() || tl.hasSpeedObj() || tl.getSectionLine()) {
 				tls.add(tl);
-			} else if (tl.existNote() || tl.existHiddenNote()) {
+			} else if (tl.existNote() || tl.existHiddenNote() || tl.existFreeZone()) {
 				tls.add(tl);
 			}
 			cbpm = tl.getBPM();
 			cscr = tl.getScroll();
+			cspd = tl.getSpeed();
 		}
 		this.timelines = tls.toArray(new TimeLine[tls.size()]);
 		// logger.info("省略したTimeLine数:" +
@@ -149,6 +152,28 @@ public class LaneRenderer {
 			basehispeed = playconfig.getHispeed();
 		}
 		this.hispeedmargin = playconfig.getHispeedMargin();
+	}
+
+	public synchronized void updateModel(BMSModel model) {
+		this.model = model;
+		List<TimeLine> tls = new ArrayList<TimeLine>();
+		double cbpm = model.getBpm();
+		double cscr = 1.0;
+		double cspd = 1.0;
+		for (TimeLine tl : model.getAllTimeLines()) {
+			if (cbpm != tl.getBPM() || tl.getStop() > 0 || cscr != tl.getScroll() || cspd != tl.getSpeed() || tl.hasSpeedObj() || tl.getSectionLine()) {
+				tls.add(tl);
+			} else if (tl.existNote() || tl.existHiddenNote() || tl.existFreeZone()) {
+				tls.add(tl);
+			}
+			cbpm = tl.getBPM();
+			cscr = tl.getScroll();
+			cspd = tl.getSpeed();
+		}
+		this.timelines = tls.toArray(new TimeLine[tls.size()]);
+		this.pos = 0;
+		this.minbpm = model.getMinBPM();
+		this.maxbpm = model.getMaxBPM();
 	}
 
 	public float getHispeed() {
@@ -258,7 +283,128 @@ public class LaneRenderer {
 		return playconfig;
 	}
 
-	public void drawLane(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets) {
+	/**
+	 * 前後のSPEED値と時間の差から現在時間のSPEED値を計算する
+	 * 
+	 * @param microtime
+	 * @return speed value
+	 */
+	private double getCurrentSpeed(long microtime) {
+		double speed = 1.0;
+		TimeLine prev = null;
+		TimeLine next = null;
+		for (TimeLine tl : timelines) {
+			if (!tl.hasSpeedObj()) {
+				continue;
+			}
+			if (tl.getMicroTime() <= microtime) {
+				speed = tl.getSpeed();
+				prev = tl;
+			} else {
+				next = tl;
+				break;
+			}
+		}
+		if (next == null) {
+			return speed;
+		}
+		final long start = prev != null ? prev.getMicroTime() : 0;
+		final long end = next.getMicroTime();
+		if (end <= start) {
+			return next.getSpeed();
+		}
+		double progress = (double)(microtime - start) / (end - start);
+		progress = Math.max(0, Math.min(1, progress));
+		return speed + (next.getSpeed() - speed) * progress;
+	}
+
+	/**
+	 * フリーゾーン背景を描画する（判定ラインより背面のレイヤーから呼び出される）
+	 */
+	public synchronized void drawFreeZone(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets) {
+		float offsetX = 0;
+		float offsetY = 0;
+		float offsetW = 0;
+		for (SkinOffset offset : offsets) {
+			offsetX += offset.x;
+			offsetY += offset.y;
+			offsetW += offset.w;
+		}
+
+		time = (main.timer.isTimerOn(TIMER_PLAY) ? time - main.timer.getTimer(TIMER_PLAY) :
+				(main.timer.isTimerOn(141) ? time - main.timer.getTimer(141) : 0)) + playconfig.getJudgetiming();
+		if (main.getState() == BMSPlayer.STATE_PRACTICE) {
+			time = main.getPracticeConfiguration().getPracticeProperty().starttime;
+			pos = 0;
+		}
+		final long microtime = time * 1000;
+
+		final float hispeed = main.getState() != BMSPlayer.STATE_PRACTICE ? playconfig.getHispeed() : 1.0f;
+		final Rectangle[] playerr = skin.getLaneGroupRegion();
+		final boolean enableConstant = playconfig.isEnableConstant() && (main.getState() != BMSPlayer.STATE_PRACTICE);
+		final double speed = enableConstant ? 1.0 : getCurrentSpeed(microtime);
+		final double hu = lanes[0].region.y + lanes[0].region.height;
+		final double hl = playconfig.isEnablelift() ? lanes[0].region.y + lanes[0].region.height * playconfig.getLift() : lanes[0].region.y;
+		final double rxhs = (hu - hl) * hispeed * speed;
+		final boolean hasGroupRegion = playerr != null && playerr.length > 0 && playerr[0] != null && playerr[0].height > 0;
+		final double lineOffset = hasGroupRegion ? playerr[0].y - lanes[0].region.y : 0;
+		final double laneBottom = hl + lineOffset;
+		final double laneTop = hasGroupRegion ? Math.max(hu + lineOffset, playerr[0].y + playerr[0].height) : hu;
+
+		sprite.setBlend(0);
+		sprite.setType(SkinObjectRenderer.TYPE_NORMAL);
+		double fzy = hl;
+		for (int i = pos; i < timelines.length && fzy + lineOffset <= laneTop; i++) {
+			final TimeLine tl = timelines[i];
+			if (tl.getMicroTime() >= microtime) {
+				if (i > 0) {
+					final TimeLine prevtl = timelines[i - 1];
+					if (prevtl.getMicroTime() + prevtl.getMicroStop() > microtime) {
+						fzy += (tl.getSection() - prevtl.getSection()) * prevtl.getScroll() * rxhs;
+					} else {
+						fzy += (tl.getSection() - prevtl.getSection()) * prevtl.getScroll() * (tl.getMicroTime() - microtime)
+								/ (tl.getMicroTime() - prevtl.getMicroTime() - prevtl.getMicroStop()) * rxhs;
+					}
+				} else {
+					fzy += tl.getSection() * (tl.getMicroTime() - microtime) / tl.getMicroTime() * rxhs;
+				}
+			}
+			for (int lane = 0; lane < lanes.length; lane++) {
+				final FreeZoneNote fz = tl.getFreeZone(lane);
+				if (fz != null && !fz.isEnd() && fz.getPair().getMicroTime() >= microtime) {
+					double dy = 0;
+					TimeLine prevtl = tl;
+					for (int j = i + 1; j < timelines.length
+							&& prevtl.getSection() != fz.getPair().getSection(); j++) {
+						final TimeLine nowtl = timelines[j];
+						if (nowtl.getMicroTime() >= microtime) {
+							if (prevtl.getMicroTime() + prevtl.getMicroStop() > microtime) {
+								dy += (nowtl.getSection() - prevtl.getSection()) * prevtl.getScroll() * rxhs;
+							} else {
+								dy += (nowtl.getSection() - prevtl.getSection()) * prevtl.getScroll()
+										* (nowtl.getMicroTime() - microtime)
+										/ (nowtl.getMicroTime() - prevtl.getMicroTime() - prevtl.getMicroStop())
+										* rxhs;
+							}
+						}
+						prevtl = nowtl;
+					}
+					final double fzBottom = Math.max(fzy + lineOffset, laneBottom);
+					final double fzTop = Math.min(fzy + dy + lineOffset, laneTop);
+					if (fzTop > fzBottom) {
+						sprite.setColor(FREEZONE_COLOR);
+						sprite.draw(main.getImage(IMAGE_WHITE),
+								lanes[lane].region.x + offsetX,
+								(float) fzBottom + offsetY,
+								lanes[lane].region.width + offsetW,
+								(float) (fzTop - fzBottom));
+					}
+				}
+			}
+		}
+	}
+
+	public synchronized void drawLane(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets) {
 		float offsetX = 0;
 		float offsetY = 0;
 		float offsetW = 0;
@@ -270,6 +416,7 @@ public class LaneRenderer {
 			offsetH += offset.h;
 		}
 		
+		final long nowtime = time;
 		time = (main.timer.isTimerOn(TIMER_PLAY) ? time - main.timer.getTimer(TIMER_PLAY) : 
 			(main.timer.isTimerOn(141) ? time - main.timer.getTimer(141) : 0)) + playconfig.getJudgetiming();
 		if (main.getState() == BMSPlayer.STATE_PRACTICE) {
@@ -289,12 +436,14 @@ public class LaneRenderer {
 			nscroll = timelines[i].getScroll();
 		}
 		nowbpm = nbpm;
-		final double region = nscroll > 0 ? (240000 / nbpm / hispeed) / nscroll : 0;
+		final boolean enableConstant = playconfig.isEnableConstant() && (main.getState() != BMSPlayer.STATE_PRACTICE);
+		final double speed = enableConstant? 1.0 : getCurrentSpeed(microtime);
+		final double region = nscroll > 0 ? (240000 / nbpm / hispeed / speed) / nscroll : 0;
 		// double sect = (bpm / 60) * 4 * 1000;
 		// TODO hu,hlをレーン毎に変更
 		final double hu = lanes[0].region.y + lanes[0].region.height;
 		final double hl = playconfig.isEnablelift() ? lanes[0].region.y + lanes[0].region.height * playconfig.getLift() : lanes[0].region.y;
-		final double rxhs = (hu - hl) * hispeed;
+		final double rxhs = (hu - hl) * hispeed * speed;
 		double y = hl;
 
 		final float lanecover = playconfig.isEnablelanecover() ? playconfig.getLanecover() : 0;
@@ -342,9 +491,11 @@ public class LaneRenderer {
 
 		// draw section line
 		final double orgy = y;
-		final boolean enableConstant = playconfig.isEnableConstant() && (main.getState() != BMSPlayer.STATE_PRACTICE);
 		final int baseduration = playconfig.getDuration();
 		final float alphaLimit =  playconfig.getConstantFadeinTime() * 1000;
+		// CONSTANT中のLN本体を描画する上限時刻。ノート自体の表示判定と同じ境界で、
+		// ここを超える分は描かない。CONSTANT無効時は打ち切らない
+		final long lnLimit = enableConstant ? microtime + baseduration * 1000L : Long.MAX_VALUE;
 		for (int i = pos; i < timelines.length && y <= hu; i++) {
 			final TimeLine tl = timelines[i];
 			if (tl.getMicroTime() >= microtime) {
@@ -391,7 +542,7 @@ public class LaneRenderer {
 				}
 				if (showTimeline && (i > 0 && (tl.getTime() / 1000) > (timelines[i - 1].getTime() / 1000))) {
 					for (SkinImage line : skin.getTimeLine()) {
-						line.draw(sprite, time, main, 0, (int) (y - hl));
+						line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 					}
 					for (Rectangle r : playerr) {
 						// TODO 数値もスキンベースへ移行
@@ -405,7 +556,7 @@ public class LaneRenderer {
 				if (config.isBpmguide() || showTimeline) {
 					if (tl.getBPM() != nbpm) {
 						for (SkinImage line : skin.getBPMLine()) {
-							line.draw(sprite, time, main, 0, (int) (y - hl));
+							line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 						}
 						for (Rectangle r : playerr) {
 							// TODO 数値もスキンベースへ移行
@@ -418,7 +569,7 @@ public class LaneRenderer {
 					}
 					if (tl.getStop() > 0) {
 						for (SkinImage line : skin.getStopLine()) {
-							line.draw(sprite, time, main, 0, (int) (y - hl));
+							line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 						}
 						for (Rectangle r : playerr) {
 							// TODO 数値もスキンベースへ移行
@@ -432,7 +583,7 @@ public class LaneRenderer {
 				// 小節線描画
 				if (tl.getSectionLine()) {
 					for (SkinImage line : skin.getLine()) {
-						line.draw(sprite, time, main, 0, (int) (y - hl));
+						line.draw(sprite, nowtime, main, 0, (int) (y - hl));
 					}
 				}
 				nbpm = tl.getBPM();
@@ -440,9 +591,14 @@ public class LaneRenderer {
 				boolean b = true;
 				for (int lane = 0; lane < lanes.length; lane++) {
 					final Note note = tl.getNote(lane);
+					final FreeZoneNote fz = tl.getFreeZone(lane);
+					if (fz != null && (fz.isEnd() ? fz : fz.getPair()).getMicroTime() >= microtime) {
+						b = false;
+						break;
+					}
 					// 判定ラインへのノーツ滞留設定(noteretention)または過去ノート表示設定(showpastnote)がONかつ未処理(State 0)なら常に pos を維持
 					if (note != null && ((note instanceof LongNote ln && (ln.isEnd() ? ln : ln.getPair()).getMicroTime() >= microtime)
-							|| ((config.isNoteretention() || config.isShowpastnote()) && note instanceof NormalNote && note.getState() == 0))) {
+							|| ((config.isNoteretention() || config.isShowpastnote()) && note instanceof NormalNote && !note.isDummy() && note.getState() == 0))) {
 						b = false;
 						break;
 					}
@@ -511,7 +667,7 @@ public class LaneRenderer {
 				if (note != null) {
 					//4分のタイミングでノートを拡大する
 					float dstx = lanes[lane].region.x + offsetX;
-					float dsty = (float) y + offsetY - offsetH / 2;
+					float dsty = (float) y + offsetY;
 					float dstw = lanes[lane].region.width + offsetW;
 					float dsth = scale + offsetH;
 					if(skin.getNoteExpansionRate()[0] != 100 || skin.getNoteExpansionRate()[1] != 100) {
@@ -529,7 +685,11 @@ public class LaneRenderer {
 					}
 					if (note instanceof NormalNote) {
 						// draw normal note
-						if (lanes[lane].dstnote2 != Integer.MIN_VALUE) {
+						if (((NormalNote) note).isFreeZoneInner() || note.isDummy()) {
+							if (tl.getMicroTime() >= microtime) {
+								sprite.draw(lanes[lane].noteImage, dstx, dsty, dstw, dsth);
+							}
+						} else if (lanes[lane].dstnote2 != Integer.MIN_VALUE) {
 							if (tl.getMicroTime() >= microtime && (note.getState() == 0 || note.getState() >= 4)) {
 								final TextureRegion s = config.isMarkprocessednote() && note.getState() != 0
 								? lanes[lane].processedImage : lanes[lane].noteImage;
@@ -556,13 +716,24 @@ public class LaneRenderer {
 									&& prevtl.getSection() != ln.getPair().getSection(); j++) {
 								final TimeLine nowtl = timelines[j];
 								if (nowtl.getMicroTime() >= microtime) {
-									if (prevtl.getMicroTime() + prevtl.getMicroStop() > microtime) {
-										dy += (nowtl.getSection() - prevtl.getSection()) * prevtl.getScroll() * rxhs;
+									// 区間の全長と、譜面が実際に進む時間。STOP中は進まないので除く
+									final double full = (nowtl.getSection() - prevtl.getSection())
+											* prevtl.getScroll() * rxhs;
+									final long scrollStart = prevtl.getMicroTime() + prevtl.getMicroStop();
+									final long span = nowtl.getMicroTime() - scrollStart;
+									if (nowtl.getMicroTime() > lnLimit) {
+										// 表示境界をまたぐ区間は境界までの分だけ伸ばして打ち切る。
+										// 以降は描かないので走査もここで止める
+										if (span > 0) {
+											final long from = Math.max(microtime, scrollStart);
+											dy += full * Math.max(0, lnLimit - from) / span;
+										}
+										break;
+									}
+									if (scrollStart > microtime) {
+										dy += full;
 									} else {
-										dy += (nowtl.getSection() - prevtl.getSection()) * prevtl.getScroll()
-												* (nowtl.getMicroTime() - microtime)
-												/ (nowtl.getMicroTime() - prevtl.getMicroTime() - prevtl.getMicroStop())
-												* rxhs;
+										dy += full * (nowtl.getMicroTime() - microtime) / span;
 									}
 								}
 								prevtl = nowtl;
@@ -574,6 +745,11 @@ public class LaneRenderer {
 										ln);
 							}
 							// System.out.println(dy);
+						}
+					} else if (note instanceof PotionNote) {
+						// ポーションノーツの描画
+						if (tl.getMicroTime() >= microtime) {
+							sprite.draw(lanes[lane].potionImage, dstx, dsty, dstw, dsth);
 						}
 					} else if (note instanceof MineNote) {
 						// draw mine note
@@ -643,7 +819,7 @@ public class LaneRenderer {
 					final float scale = lanes[lane].scale;
 					final Note note = tl.getNote(lane);
 					if (note != null) {
-						if (note instanceof NormalNote) {
+						if (note instanceof NormalNote && !((NormalNote) note).isFreeZoneInner() && !note.isDummy()) {
 							// draw normal note
 							//4分のタイミングでノートを拡大する
 							float dstx = lanes[lane].region.x;
@@ -693,6 +869,17 @@ public class LaneRenderer {
 
 	final private void drawLongNote(SkinObjectRenderer sprite, TextureRegion[] longImage, float x, float y, float width, float height, float scale,
 			int lane, LongNote ln) {
+
+		if ((model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
+				|| ln.getType() == LongNote.TYPE_HELLLONGNOTE) {
+			// HLN
+			final JudgeManager judge = main.getJudgeManager();
+			sprite.draw(longImage[judge.getHellLongNoteBodyState(lane, ln)], x, y - height + scale, width, height - scale);
+			// 終端は描画しない
+			sprite.draw(longImage[5], x, y - height, width, scale);
+			return;
+		}
+
 		if ((model.getLntype() == BMSModel.LNTYPE_HELLCHARGENOTE && ln.getType() == LongNote.TYPE_UNDEFINED)
 				|| ln.getType() == LongNote.TYPE_HELLCHARGENOTE) {
 			// HCN

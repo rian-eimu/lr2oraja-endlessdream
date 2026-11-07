@@ -25,6 +25,10 @@ public class MineNoteModifier extends PatternModifier {
 			for (TimeLine tl : model.getAllTimeLines()) {
 				for(int lane = 0;lane < model.getMode().key;lane++) {
 					if(tl.getNote(lane) instanceof MineNote) {
+						if (tl.getNote(lane).isDummy()) {
+							tl.setNote(lane, null);
+							continue;
+						}
 						assist = AssistLevel.LIGHT_ASSIST;
 						exists = true;
 						tl.setNote(lane, null);

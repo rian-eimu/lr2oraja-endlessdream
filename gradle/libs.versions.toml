@@ -11,6 +11,7 @@ ffmpeg = "6.0-1.5.9"
 jflac = "1.5.2"
 commons-codec = "1.15"
 commons-compress = "1.26.1"
+junrar = "7.5.5"
 commons-csv = "1.14.1"
 commons-dbutils = "1.6"
 sqlite = "3.42.0.0"
@@ -63,6 +64,7 @@ jflac = { group = "org.jflac", name = "jflac-codec", version.ref = "jflac" }
 commons-codec = { group = "commons-codec", name = "commons-codec", version.ref = "commons-codec" }
 
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commons-compress" }
+junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" }
 commons-csv = { group = "org.apache.commons", name = "commons-csv", version.ref = "commons-csv" }
 commons-dbutils = { group = "commons-dbutils", name = "commons-dbutils", version.ref = "commons-dbutils" }
 xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }

@@ -163,6 +163,12 @@ class KeyInputProccessor {
 		this.keyBeamStop = inputStop;
 	}
 
+	public void updateLastTime(TimeLine[] timelines) {
+		if (judge != null) {
+			judge.updateLastTime(timelines);
+		}
+	}
+
 	/**
 	 * プレイログからのキー自動入力、判定処理用スレッド
 	 */
@@ -170,8 +176,8 @@ class KeyInputProccessor {
 
 		// TODO 判定処理スレッドはJudgeManagerに渡した方がいいかも
 
-		private final TimeLine[] timelines;
-		private boolean stop = false;
+		private volatile long lasttime;
+		private volatile boolean stop = false;
 		/**
 		 * 自動入力するキー入力ログ
 		 */
@@ -179,9 +185,14 @@ class KeyInputProccessor {
 		private final long microMarginTime;
 
 		public JudgeThread(TimeLine[] timelines, KeyInputLog[] keylog, long milliMarginTime) {
-			this.timelines = timelines;
+			updateLastTime(timelines);
 			this.keylog = keylog;
 			this.microMarginTime = milliMarginTime * 1000;
+		}
+
+		public void updateLastTime(TimeLine[] timelines) {
+			this.lasttime = (timelines.length > 0 ? timelines[timelines.length - 1].getMicroTime() : 0)
+					+ BMSPlayer.TIME_MARGIN * 1000;
 		}
 
 		@Override
@@ -191,13 +202,30 @@ class KeyInputProccessor {
 			long frametime = 1;
 			final BMSPlayerInputProcessor input = player.main.getInputProcessor();
 			final JudgeManager judge = player.getJudgeManager();
-			final long lasttime = timelines[timelines.length - 1].getMicroTime() + BMSPlayer.TIME_MARGIN * 1000;
 
 			long prevtime = -1;
 			while (!stop) {
 //				final long time = player.main.getNowTime(TIMER_PLAY);
 				final long mtime = player.timer.getNowMicroTime(TIMER_PLAY);
 				if (mtime != prevtime) {
+					while (true) {
+						final long nextEval = player.getNextConditionalEvalMicroTime();
+						if (nextEval > mtime) {
+							break;
+						}
+						final long beforeEval = nextEval - 1;
+						if (beforeEval > prevtime && beforeEval >= 0) {
+							if (keylog != null) {
+								while (index < keylog.length && keylog[index].getTime() + microMarginTime <= beforeEval) {
+									final KeyInputLog key = keylog[index];
+									input.setKeyState(key.getKeycode(), key.isPressed(), key.getTime() + microMarginTime);
+									index++;
+								}
+							}
+							judge.update(beforeEval);
+						}
+						player.evaluateConditionalBranches(nextEval);
+					}
 					// リプレイデータ再生
 					if (keylog != null) {
 						while (index < keylog.length && keylog[index].getTime() + microMarginTime <= mtime) {

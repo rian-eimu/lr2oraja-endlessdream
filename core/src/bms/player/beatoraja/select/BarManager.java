@@ -32,7 +32,10 @@ import bms.player.beatoraja.ir.IRTableData;
 import bms.player.beatoraja.select.bar.*;
 import bms.player.beatoraja.skin.property.EventFactory.EventType;
 import bms.player.beatoraja.song.SongData;
+import bms.player.beatoraja.song.SongData;
 import bms.player.beatoraja.song.SongInformationAccessor;
+import bms.player.beatoraja.song.SongResource;
+import bms.player.beatoraja.song.SongResources;
 
 /**
  * 楽曲バー管理用クラス
@@ -348,15 +351,16 @@ public class BarManager {
 			// 【修正1】 フリーズ対策：リストのバックアップを作成
 			final Array<Bar> originalList = new Array<>(l);
 
+			final ModeFilter[] filters = ModeFilter.values();
 			int modeIndex = 0;
-			for(;modeIndex < MusicSelector.MODE.length && MusicSelector.MODE[modeIndex] != config.getMode();modeIndex++);
-			for(int trialCount = 0; trialCount < MusicSelector.MODE.length; trialCount++, modeIndex++) {
+			for(;modeIndex < filters.length && filters[modeIndex] != config.getModeFilter();modeIndex++);
+			for(int trialCount = 0; trialCount < filters.length; trialCount++, modeIndex++) {
 				// 【修正1の続き】 試行ごとにリストを初期状態にリセット
 				l.clear();
 				l.addAll(originalList);
 
-				final Mode mode = MusicSelector.MODE[modeIndex % MusicSelector.MODE.length];
-				config.setMode(mode);
+				final ModeFilter filter = filters[modeIndex % filters.length];
+				config.setModeFilter(filter);
 				Array<Bar> remove = new Array<Bar>();
 
 				// -------------------------------------------------------------
@@ -366,7 +370,7 @@ public class BarManager {
 					if(b instanceof SongBar && ((SongBar) b).getSongData() != null) {
 						final SongData song = ((SongBar) b).getSongData();
 						if((!showInvisibleCharts && (song.getFavorite() & (SongData.INVISIBLE_SONG | SongData.INVISIBLE_CHART)) != 0)
-								|| (mode != null && song.getMode() != 0 && song.getMode() != mode.id)) {
+								|| (!filter.match(song.getMode()))) {
 							remove.add(b);
 						}
 					}
@@ -452,7 +456,7 @@ public class BarManager {
 					break;
 				} else {
 					// 【修正2】 曲が見つからず、最後の試行だった場合はリストを空にする
-					if (trialCount == MusicSelector.MODE.length - 1) {
+					if (trialCount == filters.length - 1) {
 						l.clear();
 					}
 				}
@@ -957,20 +961,21 @@ public class BarManager {
 				if (bar instanceof SongBar && ((SongBar) bar).existsSong()) {
 					final SongBar songbar = (SongBar) bar;
 					SongData song = songbar.getSongData();
+					SongResource chartResource = SongResources.fromPath(Paths.get(song.getPath()));
 					try {
-						Path bannerfile = Paths.get(song.getPath()).getParent().resolve(song.getBanner());
+						SongResource bannerResource = chartResource.parent().resolve(song.getBanner());
 						// System.out.println(bannerfile.getPath());
-						if (song.getBanner().length() > 0 && Files.exists(bannerfile)) {
-							songbar.setBanner(select.getBannerResource().get(bannerfile.toString()));
+						if (song.getBanner().length() > 0 && bannerResource.exists()) {
+							songbar.setBanner(select.getBannerResource().getPixmap(bannerResource));
 						}
 					} catch (Exception e) {
 						logger.warn("banner読み込み失敗 : {}", song.getBanner());
 					}
 					try {
-						Path stagefilefile = Paths.get(song.getPath()).getParent().resolve(song.getStagefile());
+						SongResource stagefileResource = chartResource.parent().resolve(song.getStagefile());
 						// System.out.println(stagefilefile.getPath());
-						if (song.getStagefile().length() > 0 && Files.exists(stagefilefile)) {
-							songbar.setStagefile(select.getStagefileResource().get(stagefilefile.toString()));
+						if (song.getStagefile().length() > 0 && stagefileResource.exists()) {
+							songbar.setStagefile(select.getStagefileResource().getPixmap(stagefileResource));
 						}
 					} catch (Exception e) {
 						logger.warn("stagefile読み込み失敗 : {}", song.getStagefile());
@@ -1006,8 +1011,17 @@ public class BarManager {
 	 * 切り替え時にオプション変更音を鳴らします。
 	 */
 	public void toggleDifficultyFilter() {
+		toggleDifficultyFilter(true);
+	}
+
+	/**
+	 * 難易度フィルターを切り替えます
+	 *
+	 * @param forward trueなら順送り (ALL -> BEG -> ...)、falseなら逆送り (ALL -> INS -> ...)
+	 */
+	public void toggleDifficultyFilter(boolean forward) {
 		PlayerConfig config = select.resource.getPlayerConfig();
-		config.setDifficultyFilter((config.getDifficultyFilter() + 1) % 6);
+		config.setDifficultyFilter((config.getDifficultyFilter() + (forward ? 1 : 5)) % 6);
 		this.updateBar();
 		select.play(OPTION_CHANGE);
 	}

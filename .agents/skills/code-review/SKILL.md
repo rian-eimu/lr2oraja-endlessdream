@@ -1,170 +1,236 @@
 ---
-name: code-review-rules
-description: 自律検証型コードレビューガイドライン (コア基準)
+name: code-review
+description: Subagent-coordinated hybrid code review. A Pro model acts as the moderator (orchestrator) and runs, in parallel, a fast meta scan by Flash subagents and a phase-by-phase deep logical review by Pro subagents, then generates an integrated report.
+skills:
+  - file-enumerator
+  - code-review-rules
+  - gpu-code-review-rules
+  - phased-session-manager
 ---
 
-# 役割
+# Subagent-Coordinated Hybrid Code Review Process
 
-あなたは世界トップレベル of ソフトウェア品質保証スペシャリスト、およびシニアアーキテクトです。
-提示された「実装コード」と「テストコード」の単体解析に留まらず、**人間のシニア開発者が行うように、対象の関数がコードベース全体のどこから・どのような文脈（引数のバリエーション、状態遷移）で呼び出されているか（呼び出し元・呼び出し先）を論理的に逆引き・全検索して把握する能力**を持ちます。
+> Tool names use the Antigravity notation. In other environments, read them through the table in `.agents/rules/agent-tool-mapping.md`.
 
-従来の静的ツール（ESLint等）では検知できない、動的型付けならではのバグや、YAGNI/KISS原則に反する設計のねじれを「自由かつクリエイティブ」に捜査してください。
+## Model Precondition Guard (Early Exit)
 
-# ワークフロー（エージェントへの実行指示）
+1. **Identify the model**:
+   Refer to the system context (`<USER_SETTINGS_CHANGE>` or the runtime `Model Selection` metadata) and confirm which main model is currently running the inference.
+2. **Abort immediately when a Flash model is detected**:
+   - If the `Model Selection` value contains **`Flash`** (e.g. `Gemini 3.8 Flash`), **stop immediately without processing the task or running any tool**.
+   - Output only the following guidance message (in Japanese, the user's language) and end the response:
+     > ⚠️ **Please switch the model**: The main agent of this workflow (moderation, overall design, final assessment) requires high-difficulty reasoning, so it is **for the 🤔 Pro model (or a higher model) only**. Switch to the 🤔 **Pro model** in the model selector of the chat screen and run it again. (Note: the Flash model for the fast scan is started automatically inside as a subagent.)
+3. **For a Pro / higher model**:
+   - Start the normal processing below.
 
-評価を生成する前に、必ず提供された実行環境（ターミナル等）やコードベースを活用して、以下のステップを順に実行してください。
+---
 
-1. **カバレッジの取得**: 事前計測ファイル `./tmp/code-reviews/{SSS}-coverage.json` をロードし、対象ファイルの実測カバレッジ値（未計測・テスト不可時は静的なテスト有無）を確認して `## B. テスト戦略` に反映します。
-2. **【広域コンテキストの解析（呼び出し元・先の追跡）】**:
-   - 対象の関数・コンポーネントが、プロジェクト全体で「どのファイルから」「どのような条件下（引数、エッジケース）」で呼び出されているかを、依存関係やデータフローから特定してください。
-   - 逆に、対象の関数が呼び出している先（依存先）やトリガーする副作用（イベント、状態更新、UI描画）への影響範囲を追跡してください。
-3. **性質の特定**: 対象ロジックの複雑度や重要性を分析します。
-4. **【欠陥の抽出 (Defect Extraction)】**:
-   - 単体コードのアンチパターンだけでなく、ステップ2で特定した「呼び出し元との不整合」「画面外の仕様の矛盾」から発生する隠れたバグや構造的欠陥をカウントしてください。
-   - 同時に、**KISS原則**および**YAGNI原則**の観点から、不要な抽象化や無駄なクラス化（過剰設計）がないかを厳格に精査してください。
+## Global Role and Absolute Constraints (most important)
 
-# 深刻度の格付け基準（影響度ベース）
+From the moment this prompt is loaded, you, the main agent, act as a **world-class software architect and quality assurance specialist** and as a **strict orchestrator (moderator)** that directs the group of subagents.
 
-エージェントが発見したすべてのバグやアンチパターンは、その「バグのパターン」ではなく、「システムや開発プロセスに与えるインパクトの大きさ」に基づいて、以下の3段階に機械的に格付けしてください。これにより、ルール外のバグであっても一貫した評価が保証されます。
+Obey the following absolute constraints in every situation:
 
-### 致命的 (Fatal)
+1. **The main agent must not read the code directly (context protection)**:
+   The main agent itself must not load and review all of the source code under review. The meta scan of the file set (Flash) and the deep review of each phase (Pro) must always be delegated to subagents with the **`invoke_subagent` tool**.
+2. **Run non-stop to the end (no pauses between phases, no monitoring script)**:
+   The main agent's context is always kept clean, so waiting for user approval for each phase (a "yes/y" confirmation) and starting a background monitoring script (`session.js monitor`) are **not needed at all**. Proceed autonomously and non-stop from STEP 0 to STEP 4 (the final assessment output).
+3. **Never generate the plan or review automatically with a script**:
+   Writing and running scripts in PowerShell, Python, etc. to automate generating plan files or review result JSON is strictly forbidden (always include this constraint in the instructions to subagents as well).
 
-- **定義**: 放置した場合、システム全体や他コンポーネントに「カスケード障害（全体崩壊）」を直接引き起こすか、または外部攻撃による不正操作、重要データの漏洩、任意のコード実行が即座に可能になる極めて破壊的な欠陥。
-- **例**: evalによるコード実行、サニタイズなしのinnerHTML（XSS）、SQLインジェクション、接続リーク、排他制御なしの非同期グローバル状態直接ミューテーション、例外の完全な握りつぶしなど。
+---
 
-### 重大 (Major)
+## STEP 0: Session initialization and preparation (run by the main agent)
 
-- **定義**: 単体で即座にシステムダウンやセキュリティ侵害は起きないが、コードの結合度（依存関係）を著しく高めて再利用を不可能にしている設計違反、マジックナンバーや深いネストによる認知限界の超過、あるいはコアロジックに対する異常系テストの完全な欠如など。
-- **例**: UI構築と計算ロジックの混在、過剰な抽象化（YAGNI違反）、密結合、3階層以上のネスト、単一責任原則（SRP）の明確な逸脱など。
+1. **Initialize the session**:
+   Run the following command to obtain the common session ID `{SSS}`.
 
-### 軽微 (minor)
+   ```bash
+   node .agents/skills/phased-session-manager/scripts/session.js init --scenario code-reviews --sub-id main
+   ```
 
-- **定義**: システムの動作やテスト容易性には直接影響しないが、言語のベストプラクティス（不変宣言、型シグネチャの明示など）から外れているもの、または単純なリファクタリングで容易に解消可能なコードスタイルの問題。
-- **例**: 不要なelseブロック、const化可能な変数に対するlet/varの乱用、データホルダーに対する無駄なボイラープレート（貧血ドメイン）など。
+2. **Extract the target files (generate `targets.json`)**:
+   If the result of the `init` above is `"status": "new"` (or `./tmp/code-reviews/{SSS}-targets.json` has not been generated), run the following command to extract the files to scan. If the user specified target paths (one or more) in the prompt, pass them as they are as arguments.
 
-# 欠陥評価基準
+   ```bash
+   node .agents/skills/file-enumerator/scripts/list-files.js [user-specified paths (one or more)] -o ./tmp/code-reviews/{SSS}-targets.json
+   ```
 
-評価は以下の5カテゴリで行います。以下に列挙されているのはあくまでも例です。基準は上記「深刻度の格付け基準」に従ってください。  
-優れた設計に対する【特別評価（ボーナス）】が存在する場合は抽出してください。
+   **File list mode**: if the user passes a "newline-separated file list", pass it as it is, without processing or interpreting it, as the argument of `--list` (`-l`) (the script handles blank lines, `#` comments, duplicates and excluded files properly).
 
-## 1. [堅牢性・セキュリティ・パフォーマンス]
+   ```bash
+   node .agents/skills/file-enumerator/scripts/list-files.js --list "<the list the user passed (newline-separated)>" -o ./tmp/code-reviews/{SSS}-targets.json
+   ```
 
-- **【致命的】**
-  - 外部入力（APIリクエスト、DB読込、ファイル読込等）の値を、バリデーションやサニタイズなしにそのままクエリ、コマンド、またはDOMに渡している。
-  - 暗号化・ハッシュ化に非推奨のアルゴリズム（MD5, SHA1等）を使用している、またはシークレットキー・パスワードがハードコードされている。
-  - ループ（`for`, `map`, `while` 等）の内部で、外部I/O（DBクエリ発行、API呼び出し、ファイルI/O）を同期/非同期問わず実行している（N+1問題の明確なファクト）。
-- **【重大】**
-  - DBコネクション、ファイルストリーム、外部プロセスなどのリソース解放（close/dispose）が、`finally` ブロックや言語標準の破棄ライフサイクル（using, RAII, Dispose等）で保証されていない。
-  - リソース破棄処理のべき等性（Idempotency）が保証されていない、または破棄時に一部で発生した例外によって後続の破棄処理が中断され、リークが発生する。
-  - 共有変数に対するミューテーションがあり、スレッドセーフ（排他制御）が担保されていない。
+   After the extraction, register the target files in the session context:
 
-## 2. [責務の分離]
+   ```bash
+   node .agents/skills/phased-session-manager/scripts/session.js set-targets --scenario code-reviews --sub-id main --session-id {SSS} --targets-file ./tmp/code-reviews/{SSS}-targets.json
+   ```
 
-- **【致命的】**
-  - 1つの関数/メソッド内で、外部I/O（DB通信、API呼び出し、ファイル操作）と、ドメイン固有の計算/分岐ロジックの両方が直接記述されている（関数抽出されていない）。
-- **【重大】**
-  - クラス/モジュールの行数が 300行 を超過している（単一責任を超えている強い兆候）。
-  - 引数で受け取ったオブジェクトのプロパティを3つ以上直接参照・操作して計算を行っている（Feature Envy / 機能の羨望）。
-  - **[YAGNI原則違反 / 過剰な抽象化]**: 「将来の拡張」を想定して記述されているが、現在1つの実装しか持たない形骸化したインターフェース、意味のない抽象クラス、または多重構造の過剰なラッパーサービス層が存在する。
-- **【軽微】**
-  - **[貧血ドメインモデル]**: ロジックを持たないプロパティのみの構造体であるにもかかわらず、不必要なカプセル化（空のコンストラクタ、不要なゲッターメソッドなど）が施され、無駄にコードが肥大化している。
+3. **Measure test coverage beforehand**:
+   To raise the review accuracy, run the following command to generate `./tmp/code-reviews/{SSS}-coverage.json`.
 
-## 3. [認知負荷・可読性 / KISS原則の推奨]
+   ```bash
+   node .agents/skills/code-review/scripts/collect-coverage.js --session-id {SSS}
+   ```
 
-- **【重大】**
-  - `if`, `for`, `while`, `switch` 等のネストが関数内で 3階層（レベル3）以上になっている。
-  - 関数/メソッドの行数が 50行 を超過している。
-  - 意味を持たない数値（0, 1 などの一般的な初期値を除く）や文字列が、定数化されずにコード内に「マジックナンバー」として直書きされている。
-  - **[KISS原則違反 / 状態なき手続きクラス]**: メンバー変数（内部状態）を一切保持せず、不変条件のガードも行わないにもかかわらず、メソッドを呼び出すためだけにインスタンス化（`new`）を要求するクラス。
-- **【軽微】**
-  - 早期リターン（Guard Clause）を利用すればフラットに書ける処理において、不要な `else` ブロックを使用している。
-  - `const` や不変（Immutable）宣言が可能な変数に対して、不要に再代入可能（`let`, `var`, mutable修飾子）な宣言をしている。
+---
 
-## 4. [リスク網羅性とエラー処理]
+## STEP 1: Parallel meta scan by Flash subagents (Fast Indexing Phase)
 
-- **【致命的】**
-  - `try-catch` (または等価なエラーハンドリング) において、例外を握りつぶしている（空のブロック、またはログ出力のみで再スローや代替処理の返却がない）。
-- **【重大】**
-  - コアロジック層・ビジネスルール層において、異常系（境界値、Null/Undefined、エラー応答）のテストケースが1つも存在しない。
-  - 関数が特定の条件下で暗黙的に `null` や `undefined` などを返し、その型シグネチャ（返り値の型定義）が明示されていない。
+The main agent checks `./tmp/code-reviews/{SSS}-targets.json` and splits the target files into **chunks of about 10 to 15 files each** (exclude generated code such as `*.g.cs` and `*.generated.*`).
 
-## 5. [テストのROI]
+### 1-1. Start the Flash subagents as a parallel batch
 
-- **【重大】**
-  - テストコード内の `Mock/Stub` のセットアップ行数が、テスト対象メソッドの呼び出しおよびアサーションの行数の 3倍 を超えている（過剰なモック）。
-  - ロジックを含まない単なるGetter/Setterや、定数の定義のみのファイルに対してカバレッジを満たすためだけのテストが存在する。
+Use the `invoke_subagent` tool to start, as a parallel batch, one subagent per chunk with **`Model: "flash"`**.
 
-## ⭐ 特別評価: ボーナス加点
+- **`TypeName`**: `"self"`
+- **`Model`**: `"flash"`
+- **`Role`**: `"Flash Meta Scanner (Chunk 01)"` (append the chunk number)
+- **`Prompt`**: give the following instructions clearly.
+  1. Always actually read the assigned target file list with the `view_file` tool or similar, and extract mechanically the places that match the following **six spot criteria** (do not include clean code):
+     - `code_duplication`: places whose processing structure or logic closely resembles other files or methods (state the target in `notes`)
+     - `complex_layout`: complex visual structure such as deep nesting or extremely long blocks
+     - `conditional_bloat`: multiple branching through consecutive `switch-case` or `if-else-if`
+     - `silent_error`: empty `catch` blocks, or places that only write a log without rethrowing or an alternative handling
+     - `io_interactions`: direct calls to DB operations, file I/O, HTTP communication, concurrency (Thread/lock)
+     - `cross_cutting`: exception wrapping, logging, locking, etc. mixed directly into the core logic
+  2. Save the extraction result to `./tmp/code-reviews/{SSS}-meta-index-chunk-{2-digit chunk number}.json` (e.g. `001-meta-index-chunk-01.json`) in the following JSON format:
+     ```json
+     {
+       "meta_index": [
+         {
+           "file_path": "relative file path",
+           "type": "class | method",
+           "name": "class name or method name",
+           "line_range": "start line-end line",
+           "detected_flags": ["complex_layout", "io_interactions"],
+           "notes": "a brief note on the concrete visual feature or the duplication target"
+         }
+       ]
+     }
+     ```
+  3. When the file is saved, do not include the full JSON in the chat output; report only the saved file path and the number of detections, briefly, and finish.
 
-- **【ボーナス】** デザインパターン（Strategy, Factory, Repositoryなど）を適切に適用し、見事に責務が分離されている。
-- **【ボーナス】** エッジケース（境界値解析、極端な入力など）に対するテストコードが極めて堅牢に記述されている。
+### 1-2. Merge and normalize the meta index
 
-# 出力フォーマット
+When completion notices have been received from all Flash subagents, the main agent runs the following command to combine all chunks, remove duplicates, normalize paths, and finalize `./tmp/code-reviews/{SSS}-meta-index-active.json`.
 
-1行目の大見出し（`#`）として、必ず以下の形式でフェーズ名と、レビュー対象のファイル群や機能の役割を簡潔に表現した「コンポーネント名 / タイトル（レビュー対象に応じて適切に考案・生成すること）」を出力してください。この情報は集計システムで利用されます。
-例: `# 【Phase 1-01】[<レビュー対象を表現するコンポーネント名・機能名（例: Domain / Models - Core Enums）>]`
+```bash
+node .agents/skills/code-review/scripts/normalize-meta-index.js --session-id {SSS}
+```
 
-- **アーキテクチャ総評:** 現状のコードが抱える最大のボトルネックと、リファクタリングによって得られるROIについての総括。（ボーナス加点がある場合は、その優れた点も賞賛すること。また、KISS/YAGNI原則に準拠した素晴らしいシンプルさがある場合もここで評価すること）
-- **検証サマリー:** エージェントが実行したテスト・ビルド・静的解析等の結果概要。
+---
 
-## 検出された欠陥（減点対象）
+## STEP 2: Phase split and parallel precise review by Pro subagents
 
-### ⚠️ 欠陥判定に関する厳格なルール
-- **カテゴリ1〜5は「欠陥（バグ・アンチパターン・リスク）」のみを記載**する専用スペースです。ポジティブな評価や称賛をカテゴリ1〜5に絶対に書かないでください。
-- もしそのカテゴリにおいて指摘すべき欠陥が一つもない場合は、必ず `[欠陥] なし (0件)` とだけ記述してください。
-- 優れたアーキテクチャや称賛すべき点は、**すべて例外なく「⭐ ボーナス加点」に集約**して記載してください。
-- カテゴリ1〜5に記載した欠陥は、必ず末尾のJSONメタデータ（fatal, major, minor）のいずれかのペナルティと1対1で対応させる必要があります。
+### 2-1. Build the phases from a bottom-up layer classification
 
-発見された欠陥の件数とその根拠（該当行や関数名）のみを列挙します。点数の計算や数式（`[減点計算メモ]` など）は出力しないでください。
+The main agent refers to `./tmp/code-reviews/{SSS}-targets.json` and `./tmp/code-reviews/{SSS}-meta-index-active.json` and classifies the target files starting from the downstream layers with the deepest dependencies.
+To maximize the context density of each subagent, split them into **about 3 to 5 files per phase**, and add a branch number (`01-01`, `01-02`, etc.) where necessary.
 
-- **1. 堅牢性・セキュリティ・パフォーマンス**
-  - [欠陥] 致命的: `関数XXXで外部入力をサニタイズせずにSQLに渡している` (1件)
-- **2. 責務の分離**
-  - [欠陥] なし (0件)
-- **3. 認知負荷・可読性**
-  - [欠陥] 重大: `定数化されていないマジックナンバー(86400)がZ行目に存在する` (1件)
-  - [欠陥] 軽微: `関数Wで不要なelseブロックを使用している` (1件)
-- **4. リスク網羅性とエラー処理**
-  - [欠陥] 致命的: `catchブロックでの例外の握りつぶし` (1件)
-- **5. テストのROI**
-  - [欠陥] なし (0件)
-- **⭐ ボーナス加点**
-  - `機能AにおいてStrategyパターンを用いて分岐を排除しており拡張性が高い`
+1. **Phase 01**: Domain and model layer
+2. **Phase 02**: Core algorithm and signal processing layer
+3. **Phase 03**: Infrastructure, I/O and parser layer
+4. **Phase 04**: Use case and core logic service layer
+5. **Phase 05**: Presentation, controller and state management layer
+6. **Phase 06**: View, UI rendering and behavior layer
+7. **Phase 07**: Unit test layer
+8. **Phase 08**: Integration test layer (always place the tests in the final phase groups)
 
-## A. 脆弱性と構造の改善提案（リファクタリング対象）
+### 2-2. Start the Pro subagents as a parallel batch
 
-1. **[優先度: 致命的]** (安全上の欠陥、N+1問題、バグ、または認知負荷が限界を超えている箇所)
-   - **What/Why:** 問題の現象と根本原因（言語仕様上のリスク、設計上の欠陥など）。
-   - **Source of Risk:** リスクの原因となっている具体的なコード箇所やデータフローの指摘。
-   - **How (修正案):** 脆弱性の修正、関数の抽出、クラスの分割、状態管理の隔離、無駄なボイラープレートを持つ貧血ドメインクラスからC#の `record` や TypeScriptの `type` / `interface`（純粋なデータ構造）への移行によるスマートなコード削減、または 過剰設計・不要な抽象クラスの排除）を行うことで劇的に保守性が向上する設計変更案。
-2. **[優先度: 高]** 責務の分離（関数の抽出、クラスの分割、状態管理の隔離、または **過剰設計・不要な抽象クラスの排除**）を行うことで劇的に保守性が向上する設計変更案。
-3. **[優先度: 低]** パフォーマンスの微細な最適化や、宣言的コードにおける軽微なリファクタリング。
+Based on the phase list you created, use the `invoke_subagent` tool to start, as a parallel batch, one subagent per phase with **`Model: "pro"`** (if there are very many phases, you may start them in batches of 3 to 5 subagents).
 
-## B. テスト戦略 of 改善提案（カバレッジ実測値: XX%）
+- **`TypeName`**: `"self"`
+- **`Model`**: `"pro"`
+- **`Role`**: `"Pro Code Reviewer (Phase 0X-0Y)"`
+- **`Prompt`**: pass each subagent the following instructions, the list of target files, the session ID `{SSS}` and the phase identifier (e.g. `phase01-01`).
 
-1. **[追加要求]** カバレッジが不足しており、かつビジネス/セキュリティリスクが高いためROIが極めて高い実行パスの指摘。
-2. **[削減・維持要求]** 過剰なモックの指摘、または「数値は低いがGlueコードであるため現状のカバレッジで十分（あるいは削るべき）」というROI観点からの助言。
+#### [Mandatory instructions for Pro subagents]
 
-### 補足：目標カバレッジの設計思想（評価の基準値）
-
-- コアロジック (決済/権限/複雑な状態遷移): 95〜100%
-- ビジネスルール (計算/データ変換): 80〜90%
-- Glueコード (DTO/読み込み/単なるルーティング): 50〜70%
-- 設定/定数/宣言的UI: 0〜30%
-
-## エージェントへの指示（最末尾の出力ルール）
-
-レビュー結果の最末尾には、集計システムがパースできるように、以下の【出力対象】ブロック内の文字列と構造を、改行位置やスペースを含め「一文字違わずそのまま」出力してください。
-
-### JSON生成に関する絶対制約
-
-1. **完全一行（Single Line）の遵守**: JSONオブジェクトの内部（キー、値、配列内、ブラケット前後含むすべて）には、一切の改行（`\n`）、スペース、インデントを挿入してはなりません。必ず完全な1行に圧縮してください。
-2. **生の欠陥内容を格納**: カウント（件数）ではなく、特定した「ファイル名、行数、具体的な欠陥内容」を直接文字列配列の要素として格納してください。該当がないキーは空の配列 `[]` のまま残してください。
-
-### 【出力対象】（ここから下の内容をレポートの最末尾に完全に出力すること）
-
-## メタデータ（集計システム用）
+1. **Absolute constraints**:
+   - It is strictly forbidden to write and run scripts for the purpose of generating the plan or the review JSON.
+   - Read the assigned target files one by one in order, and read them carefully and autonomously, including the wide context of callers and callees.
+   - Select the "Code Smells" you point out strictly, only those that are necessary and sufficient and that seriously affect architecture or maintainability.
+2. **Refer to skills and specifications**:
+   - Read the skill for the area (`.agents/skills/code-review-rules/SKILL.md` or `.agents/skills/gpu-code-review/SKILL.md`) and follow its evaluation criteria.
+   - If the target is G# code, read the `.md` files in `P:\Projects\Active\Henicos\docs\spec\en` and verify violations of constraints such as memory limits.
+   - Refer to `./tmp/code-reviews/{SSS}-coverage.json` and `./tmp/code-reviews/{SSS}-meta-index-active.json` (the part for the relevant files).
+3. **Deliverable 1: output the per-phase plan file**:
+   - Output a plan describing the target files, the purpose of the review and the commit-splitting strategy to `./tmp/code-reviews/{SSS}-phase{XX}-plan_{YYYYMMDD_HHMMSS}.md`.
+4. **Deliverable 2: output the review result in a strict JSON schema**:
+   - Output to `./tmp/code-reviews/{SSS}-phase{XX}-review_{YYYYMMDD_HHMMSS}.json`.
+   - In `refactoring_proposals`, derive the best refactoring proposal based on Martin Fowler's classification of "Code Smells" (the minimum necessary) and on an analysis of "commonality (invariant behavior)" and "variability (factors that will change in the future)" (CVA) that takes the latest paradigms of the target language into account.
+   - **Conform 100%** to the following JSON schema, and never add keys of your own:
 
 ```json
-{"robustness":{"fatal":[],"major":[]},"responsibility":{"fatal":[],"major":[],"minor":[]},"cognitive":{"major":[],"minor":[]},"risk":{"fatal":[],"major":[]},"roi":{"major":[]},"bonus":{"patterns":false,"edge_cases":false}}
+{
+  "phase_title": "【Phase 01-01】Component name",
+  "target_files": ["src/Models/Foo.cs"],
+  "architectural_summary": "Summary of the biggest bottleneck and the ROI of the refactoring.",
+  "verification_summary": "Summary of the results of the tests, build, static analysis, etc. that were run.",
+  "defects": {
+    "robustness": { "fatal": ["file path: line number - defect description"], "major": [] },
+    "responsibility": { "fatal": [], "major": [], "minor": [] },
+    "cognitive": { "major": [], "minor": [] },
+    "risk": { "fatal": [], "major": [] },
+    "roi": { "major": [] },
+    "bonus": { "patterns": false, "edge_cases": false, "details": [] }
+  },
+  "refactoring_proposals": [
+    {
+      "priority": "fatal | major | minor",
+      "what_why": "[Name of the smell (keep to the minimum necessary)] and [result of the commonality and variability analysis]. Describe the phenomenon and the root cause logically.",
+      "source_of_risk": "The concrete place in the code or the data flow that causes the risk.",
+      "how": "A concrete design change to separate and encapsulate the identified 'variability' (including an alternative using the latest paradigms of the target language, with the trade-offs considered)."
+    }
+  ],
+  "test_strategy": {
+    "coverage_measured": "XX%",
+    "additions": "Points out under-covered places and high-ROI test paths.",
+    "reductions": "Points out excessive mocks, or advises keeping things as they are."
+  }
+}
 ```
+
+5. **Completion report**:
+   - Do not output the full JSON to the chat; reply to the main agent briefly with only the file paths of the generated plan file and review JSON and whether any critical defect was detected, and finish.
+
+---
+
+## STEP 3: Merge into the integrated report and extract the findings (run by the main agent)
+
+When completion notices have been received from all Pro subagents, the main agent runs the following steps synchronously.
+
+1. **Record the completion of the session state**:
+   ```bash
+   node .agents/skills/phased-session-manager/scripts/session.js update --scenario code-reviews --sub-id main --session-id {SSS} --next-phase DONE
+   ```
+
+2. **Merge into the integrated report and extract the findings**:
+   ```bash
+   node .agents/skills/code-review/scripts/merge-code-reviews.js --session-id {SSS}
+   node .agents/skills/code-review/scripts/extract-issues.js --session-id {SSS}
+   ```
+
+---
+
+## STEP 4: Assessment and proposals based on the summary (run by the main agent)
+
+Read **only** `./tmp/code-reviews/{SSS}-extracted_issues.md` (do not read the integrated report itself, to save context) and output the following to the user.
+
+1. **Overall assessment**: an overall assessment of the architecture and code quality (including the total score and the quality gate result)
+2. **What to improve right away**: a summary of the red cards (Fatal / Major) that need urgent fixes
+3. **The most recommended next action**: the highest-ROI improvement proposal given the current state
+
+---
+
+## STEP 5: Build the refactoring plan
+
+1. Refer to `./tmp/code-reviews/{SSS}-extracted_issues.md` and draw up a plan that gathers the concrete implementation policy, the task split and the impact range.
+2. Do not output the approach and design you drafted in full in the chat; **create them as a dedicated artifact (`implementation_plan.md`)**.
+   - **Location**: under the agent's artifact directory (`implementation_plan.md`)
+   - **Metadata**: specify `ArtifactMetadata` when running `write_to_file`, and to enable the user's approval (the Proceed button), **always set `RequestFeedback: true` and `UserFacing: true`**.
+3. In the chat, report an outline of the plan you created and that it is complete, and prompt the user to review and approve the artifact (the Proceed button).

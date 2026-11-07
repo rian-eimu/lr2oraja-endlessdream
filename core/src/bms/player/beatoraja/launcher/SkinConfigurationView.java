@@ -184,7 +184,7 @@ public class SkinConfigurationView implements Initializable {
 					skinheader.add(header);
 				}
 			} else if (pathString.endsWith(".luaskin")) {
-				LuaSkinLoader loader = new LuaSkinLoader();
+				LuaSkinLoader loader = LuaSkinLoader.sandboxed(path);
 				SkinHeader header = loader.loadHeader(path);
 				if (header != null) {
 					skinheader.add(header);
@@ -219,7 +219,10 @@ public class SkinConfigurationView implements Initializable {
     }
     
 	private void scan(Path p, final List<Path> paths) {
-		if (Files.isDirectory(p)) {
+		if (Files.isSymbolicLink(p)) {
+			return;
+		}
+		if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
 			try (Stream<Path> sub = Files.list(p)) {
 				sub.forEach((t) -> {
 						scan(t, paths);

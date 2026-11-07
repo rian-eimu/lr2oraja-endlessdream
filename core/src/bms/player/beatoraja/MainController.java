@@ -219,7 +219,21 @@ public class MainController {
 		}
 	}
 
+	private void closeIRConnections() {
+		if (ir != null) {
+			for (IRStatus status : ir) {
+				if (status != null && status.connection instanceof AutoCloseable closeable) {
+					try {
+						closeable.close();
+					} catch (Exception e) {
+					}
+				}
+			}
+		}
+	}
+
 	private void initializeIRConfig() {
+		closeIRConnections();
 		Array<IRStatus> irarray = new Array<IRStatus>();
 		for(IRConfig irconfig : player.getIrconfig()) {
 			// IR名の判定とDX MODEの状態に基づいて接続をスキップするか決定
@@ -344,9 +358,9 @@ public class MainController {
 			changeState(newState);
 		}
 		if (current.getStage() != null) {
-			Gdx.input.setInputProcessor(new InputMultiplexer(current.getStage(), input.getKeyBoardInputProcesseor()));
+			Gdx.input.setInputProcessor(new InputMultiplexer(input.getSkinMouseInput(), current.getStage(), input.getKeyBoardInputProcesseor()));
 		} else {
-			Gdx.input.setInputProcessor(input.getKeyBoardInputProcesseor());
+			Gdx.input.setInputProcessor(new InputMultiplexer(input.getSkinMouseInput(), input.getKeyBoardInputProcesseor()));
 		}
 	}
 
@@ -381,9 +395,9 @@ public class MainController {
 
 		changeState(selector);
 		if (current.getStage() != null) {
-			Gdx.input.setInputProcessor(new InputMultiplexer(current.getStage(), input.getKeyBoardInputProcesseor()));
+			Gdx.input.setInputProcessor(new InputMultiplexer(input.getSkinMouseInput(), current.getStage(), input.getKeyBoardInputProcesseor()));
 		} else {
-			Gdx.input.setInputProcessor(input.getKeyBoardInputProcesseor());
+			Gdx.input.setInputProcessor(new InputMultiplexer(input.getSkinMouseInput(), input.getKeyBoardInputProcesseor()));
 		}
 
 		lastConfigSave = System.nanoTime();
@@ -537,7 +551,7 @@ public class MainController {
 								if(score.isSent) {
 									removeIrSendStatus.add(score);
 								}
-								if(score.retry > getConfig().getIrSendCount()) {
+								if(score.retry < 0 || score.retry > getConfig().getIrSendCount()) {
 									removeIrSendStatus.add(score);
 									ImGuiNotify.error(String.format("Failed to send a score for %s %s", score.song.getTitle(), score.song.getSubtitle()));
 								}
@@ -587,6 +601,7 @@ public class MainController {
 		String lnModeName = switch (player.getLnmode()) {
 			case 1 -> "CN";
 			case 2 -> "HCN";
+			case 3 -> "HLN";
 			default -> "LN";
 		};
 		if (!lnModeName.equals("LN")) {
@@ -613,6 +628,7 @@ public class MainController {
 
 	public void render() {
 //		input.poll();
+		input.beginSkinInputFrame();
 		timer.update();
 
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -729,11 +745,7 @@ public class MainController {
             	input.setMouseMoved(false);
             	mouseMovedTime = time;
 			}
-            if (!getShowModMenu() && current instanceof BMSPlayer) {
-                Gdx.input.setCursorCatched(time > mouseMovedTime + 2000);
-            } else {
-            	Gdx.input.setCursorCatched(false);
-            }
+			setCursorCatched(time);
 			// FPS表示切替
             if (input.isActivated(KeyCommand.SHOW_FPS)) {
                 showfps = !showfps;
@@ -839,12 +851,27 @@ public class MainController {
         }
 	}
 
+	private void setCursorCatched(long time) {
+		PlayModeConfig.MouseScratchConfig config = player.getPlayConfig(player.getMode())
+				.getKeyboardConfig()
+				.getMouseScratchConfig();
+        if (config.isMouseScratchEnabled()) {
+			Gdx.input.setCursorCatched(!getShowModMenu());
+		}
+		else if (!getShowModMenu() && current instanceof BMSPlayer) {
+			Gdx.input.setCursorCatched(time > mouseMovedTime + 2000);
+		} else {
+			Gdx.input.setCursorCatched(false);
+		}
+	}
+
 	public void dispose() {
 		if (obsListener != null) {
 			obsListener.triggerMainEnded();
 		}
 
 		saveConfig();
+		closeIRConnections();
 
 		if (selector != null) {
 			selector.dispose();
@@ -1182,6 +1209,7 @@ public class MainController {
 		}
 
 		public boolean send() {
+			if (retry < 0) return isSent;
 			logger.info("IRへスコア送信中 : {}", song.getTitle());
 			lastTry = System.currentTimeMillis();
 			bms.player.beatoraja.ir.IRScoreData irScore = new bms.player.beatoraja.ir.IRScoreData(score);
@@ -1194,6 +1222,10 @@ public class MainController {
 				return true;
 			} else {
 				logger.warn("IRスコア送信失敗 : {}", send1.getMessage());
+				if (IRSubmissionResponse.isOutcomeUnknown(send1)) {
+					retry = -1;
+					logger.warn("IR送信結果が不明なため自動再送を中止します");
+				}
 				return false;
 			}
 

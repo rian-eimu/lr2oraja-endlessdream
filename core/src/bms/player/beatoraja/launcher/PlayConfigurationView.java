@@ -1,5 +1,6 @@
 package bms.player.beatoraja.launcher;
 
+import bms.player.beatoraja.external.DesktopActions;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
@@ -174,6 +175,8 @@ public class PlayConfigurationView implements Initializable {
 	@FXML
 	private CheckBox bpmguide;
 	@FXML
+	private CheckBox autoscratch;
+	@FXML
 	private ComboBox<Integer> gaugeautoshift;
 	@FXML
 	private ComboBox<Integer> bottomshiftablegauge;
@@ -273,6 +276,8 @@ public class PlayConfigurationView implements Initializable {
 	private TextField defaultDownloadURL;
 	@FXML
 	private TextField overrideDownloadURL;
+	@FXML
+	private CheckBox waitAllNotesResult;
 
 	@FXML
 	private VBox skin;
@@ -342,7 +347,7 @@ public class PlayConfigurationView implements Initializable {
 		initComboBox(gaugeop, new String[] { "ASSIST EASY", "EASY", "NORMAL", "HARD", "EX-HARD", "HAZARD" });
 		initComboBox(fixhispeed, new String[] { "OFF", "START BPM", "MAX BPM", "MAIN BPM", "MIN BPM" });
 		playconfig.getItems().setAll(PlayMode.values());
-		initComboBox(lntype, new String[] { "LONG NOTE", "CHARGE NOTE", "HELL CHARGE NOTE" });
+		initComboBox(lntype, new String[] { "LONG NOTE", "CHARGE NOTE", "HELL CHARGE NOTE", "HELL LONG NOTE" });
 		initComboBox(gaugeautoshift, new String[] { "NONE", "CONTINUE", "SURVIVAL TO GROOVE","BEST CLEAR","SELECT TO UNDER" });
 		initComboBox(bottomshiftablegauge, new String[] { "ASSIST EASY", "EASY", "NORMAL" });
 		initComboBox(minemode, new String[] { "OFF", "REMOVE", "ADD RANDOM", "ADD NEAR", "ADD ALL" });
@@ -430,17 +435,7 @@ public class PlayConfigurationView implements Initializable {
 
 						@Override
 						public void handle(ActionEvent event) {
-							Desktop desktop = Desktop.getDesktop();
-                            java.awt.EventQueue.invokeLater(() -> {
-                                try {
-                                    URI uri;
-                                    uri = new URI(downloadURL);
-                                    desktop.browse(uri);
-                                }
-                                catch (Exception e) {
-                                    logger.warn("最新版URLアクセス時例外:" + e.getMessage());
-                                }
-                            });
+							DesktopActions.openUri(downloadURL);
 						}
 					});
 				}
@@ -496,6 +491,7 @@ public class PlayConfigurationView implements Initializable {
 		httpDownloadSource.setValue(config.getDownloadSource());
 		defaultDownloadURL.setText(config.getDefaultDownloadURL());
 		overrideDownloadURL.setText(config.getOverrideDownloadURL());
+		waitAllNotesResult.setSelected(config.isWaitAllNotesResult());
 
 		if(players.getItems().contains(config.getPlayername())) {
 			players.setValue(config.getPlayername());
@@ -566,6 +562,7 @@ public class PlayConfigurationView implements Initializable {
 		notesdisplaytimingautoadjust.setSelected(player.isNotesDisplayTimingAutoAdjust());
 
 		bpmguide.setSelected(player.isBpmguide());
+		autoscratch.setSelected(player.isAutoscratch());
 		gaugeautoshift.setValue(player.getGaugeAutoShift());
 		bottomshiftablegauge.setValue(player.getBottomShiftableGauge());
 
@@ -650,6 +647,7 @@ public class PlayConfigurationView implements Initializable {
 
 		config.setClipboardWhenScreenshot(clipboardScreenshot.isSelected());
 		config.setScreenshotFormat(screenshotFormat.getValue());
+		config.setWaitAllNotesResult(waitAllNotesResult.isSelected());
 
 		commitPlayer();
 
@@ -686,6 +684,7 @@ public class PlayConfigurationView implements Initializable {
 		player.setPmsSwitchLaneCover(pmsSwitchLaneCover.isSelected());
 
 		player.setBpmguide(bpmguide.isSelected());
+		player.setAutoscratch(autoscratch.isSelected());
 		player.setGaugeAutoShift(gaugeautoshift.getValue());
 		player.setBottomShiftableGauge(bottomshiftablegauge.getValue());
 		player.setCustomJudge(customjudge.isSelected());
@@ -928,30 +927,33 @@ public class PlayConfigurationView implements Initializable {
         };
 
         Runnable loadBMSRunnable = () -> {
+            boolean updated = false;
             try {
                 SongDatabaseAccessor songdb = MainLoader.getScoreDatabaseAccessor();
+                if (songdb instanceof SQLiteSongDatabaseAccessor sqliteSongDb) {
+                    sqliteSongDb.setArchiveConfig(config.isScanSongArchives(), config.getSongArchiveExtractMode());
+                }
                 SongInformationAccessor infodb = config.isUseSongInfo() ?
                         new SongInformationAccessor(Paths.get("songinfo.db").toString()) : null;
                 logger.info("song.db更新開始");
                 songdb.updateSongDatas(updatepath, config.getBmsroot(), updateAll, false, infodb, songDatabaseUpdateListener);
                 logger.info("song.db更新完了");
-                songUpdated = true;
-
-				// Once again, JavaFX UI code must be run inside a Platform context. Hide progress bar and resume
-				// normal launcher behaviour
-				Platform.runLater(new Runnable() {
-					@Override
-					public void run() {
-						loadingBarStage.hide();
-					}
-				});
-            } catch (ClassNotFoundException e) {
-                e.printStackTrace();
+                updated = true;
+            } catch (Throwable e) {
+                logger.error("song.db更新中の予期しない例外", e);
+            } finally {
+                final boolean completed = updated;
+                Platform.runLater(() -> {
+                    if (completed) {
+                        songUpdated = true;
+                    }
+                    loadingBarStage.hide();
+                });
             }
         };
 
-        new Thread(progressRunnable).start();
-        new Thread(loadBMSRunnable).start();
+        progressRunnable.run();
+        new Thread(loadBMSRunnable, "song database update").start();
 	}
 
     @FXML
@@ -990,9 +992,7 @@ public class PlayConfigurationView implements Initializable {
 		Twitter twitter = twitterfactory.getInstance();
 		try {
 			requestToken = twitter.getOAuthRequestToken();
-			Desktop desktop = Desktop.getDesktop();
-			URI uri = new URI(requestToken.getAuthorizationURL());
-			desktop.browse(uri);
+			DesktopActions.openUri(requestToken.getAuthorizationURL());
 			player.setTwitterConsumerKey(txtTwitterConsumerKey.getText());
 			player.setTwitterConsumerSecret(txtTwitterConsumerSecret.getText());
 			player.setTwitterAccessToken("");

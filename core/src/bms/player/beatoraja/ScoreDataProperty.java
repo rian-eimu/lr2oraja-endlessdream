@@ -111,6 +111,12 @@ public class ScoreDataProperty {
             nowrank[i] = totalnotes != 0 && nowrate >= 1f * i / nowrank.length;
         }
 
+        if (useBestGhost && (bestGhost == null || bestGhost.length != totalnotes)) {
+            useBestGhost = false;
+        }
+        if (useRivalGhost && (rivalGhost == null || rivalGhost.length != totalnotes)) {
+            useRivalGhost = false;
+        }
         if (useBestGhost) {
             for (int i=previousNotes; i<notes; i++) {
                 nowbestscore += getExScore(bestGhost[i]);

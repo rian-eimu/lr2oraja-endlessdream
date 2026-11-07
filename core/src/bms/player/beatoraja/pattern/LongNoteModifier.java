@@ -29,7 +29,17 @@ public class LongNoteModifier extends PatternModifier {
 			AssistLevel assist = AssistLevel.NONE;
 			for (TimeLine tl : model.getAllTimeLines()) {
 				for(int lane = 0;lane < model.getMode().key;lane++) {
-					if(tl.getNote(lane) instanceof LongNote ln && Math.random() < rate) {
+					if(tl.getNote(lane) instanceof LongNote ln && !ln.isFreeZoneInner() && Math.random() < rate) {
+						if (ln.isDummy()) {
+							if (ln.isEnd()) {
+								tl.setNote(lane, null);
+							} else {
+								NormalNote dn = new NormalNote(-1);
+								dn.setDummy(true);
+								tl.setNote(lane, dn);
+							}
+							continue;
+						}
 						tl.setNote(lane, ln.isEnd() ? null : new NormalNote(ln.getWav()));
 						assist = AssistLevel.ASSIST;
 					}
@@ -44,7 +54,7 @@ public class LongNoteModifier extends PatternModifier {
 			TimeLine[] tls = model.getAllTimeLines();
 			for (int i = 0;i < tls.length - 1;i++) {
 				for(int lane = 0;lane < model.getMode().key;lane++) {
-					if(tls[i].getNote(lane) instanceof NormalNote && !tls[i + 1].existNote(lane) && Math.random() < rate) {
+					if(tls[i].getNote(lane) instanceof NormalNote nn && !nn.isDummy() && !nn.isFreeZoneInner() && !tls[i + 1].existNote(lane) && Math.random() < rate) {
 						int lntype = switch(mode) {
 							case ADD_LN -> LongNote.TYPE_LONGNOTE;
 							case ADD_CN -> LongNote.TYPE_CHARGENOTE;

@@ -258,6 +258,7 @@ public class MusicResult extends AbstractResult {
 								}
 							}
 							// 不合格リザルト
+							restoreMode();
 							main.changeState(MainStateType.COURSERESULT);
 						} else {
 							// コーススコアがない場合は選曲画面へ
@@ -272,9 +273,11 @@ public class MusicResult extends AbstractResult {
 						}
 						resource.setRankingData(songrank);
 
+						restoreMode();
 						main.changeState(MainStateType.PLAY);
 					} else {
 						// 合格リザルト
+						restoreMode();
 						main.changeState(MainStateType.COURSERESULT);
 					}
 				} else {
@@ -295,6 +298,7 @@ public class MusicResult extends AbstractResult {
 						logger.info("オプションを変更せずリプレイ");
 						// オプションを変更せず同じ譜面でリプレイ
 						resource.getReplayData().randomoptionseed = -1;
+						restoreMode();
 						resource.reloadBMSFile();
 						main.changeState(MainStateType.PLAY);
 					} else if (resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY
@@ -306,6 +310,7 @@ public class MusicResult extends AbstractResult {
 							logger.info("アシストモード時は同じ譜面でリプレイできません");
 							resource.getReplayData().randomoptionseed = -1;
 						}
+						restoreMode();
 						resource.reloadBMSFile();
 						main.changeState(MainStateType.PLAY);
 					} else {
@@ -422,7 +427,11 @@ public class MusicResult extends AbstractResult {
 		for (TimeLine tl : model.getAllTimeLines()) {
 			for (int i = 0; i < lanes; i++) {
 				Note n = tl.getNote(i);
-				if (n != null && !((model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE))
+				final boolean isIgnoredLnEnd = n instanceof LongNote ln && ln.isEnd()
+						&& (ln.getType() == LongNote.TYPE_LONGNOTE || ln.getType() == LongNote.TYPE_HELLLONGNOTE
+						|| (ln.getType() == LongNote.TYPE_UNDEFINED && (model.getLnmode() == 1 || model.getLnmode() == 4
+						|| (model.getLnmode() == 0 && (model.getLntype() == BMSModel.LNTYPE_LONGNOTE || model.getLntype() == BMSModel.LNTYPE_HELLLONGNOTE)))));
+				if (n != null && !isIgnoredLnEnd && !((model.getLnmode() == 1 || (model.getLnmode() == 0 && model.getLntype() == BMSModel.LNTYPE_LONGNOTE))
 						&& n instanceof LongNote && ((LongNote) n).isEnd())) {
 					int state = n.getState();
 					int time = n.getPlayTime();

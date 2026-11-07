@@ -15,6 +15,19 @@ val platform = System.getProperty("platform") ?: "windows"
 // Defauls to x86-64
 val arch = System.getProperty("arch") ?: "x86-64"
 
+// テスト実行時はクロスビルド指定(-Dplatform/-Darch)ではなくホストOSのネイティブライブラリを解決する
+val osName = System.getProperty("os.name").lowercase()
+val hostPlatform = when {
+    osName.contains("win") -> OperatingSystemFamily.WINDOWS
+    osName.contains("mac") || osName.contains("darwin") -> OperatingSystemFamily.MACOS
+    else -> OperatingSystemFamily.LINUX
+}
+val osArch = System.getProperty("os.arch").lowercase()
+val hostArch = when {
+    hostPlatform != OperatingSystemFamily.WINDOWS && (osArch == "aarch64" || osArch == "arm64") -> "aarch64"
+    else -> "x86-64"
+}
+
 tasks {
     register<Copy>("resolveRuntimeClasspath") {
         from(configurations.runtimeClasspath)
@@ -25,9 +38,10 @@ tasks {
 configurations.matching {
     it.name.endsWith("runtimeClasspath", ignoreCase = true)
 }.configureEach {
+    val isTestClasspath = name.startsWith("test", ignoreCase = true)
     attributes {
-        attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named(platform))
-        attribute(MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(arch))
+        attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named(if (isTestClasspath) hostPlatform else platform))
+        attribute(MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(if (isTestClasspath) hostArch else arch))
         attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
     }
 }
@@ -35,28 +49,38 @@ configurations.matching {
 configurations.all {
     afterEvaluate {
         if (isCanBeResolved) {
-            attributes.attribute(platformModified, true)
+            val isTargetRuntime = name.equals("runtimeClasspath", ignoreCase = true)
+            attributes.attribute(platformModified, if (isTargetRuntime) "target" else "host")
         }
     }
 }
 
 val artifactType = Attribute.of("artifactType", String::class.java)
-val platformModified = Attribute.of("platformModified", Boolean::class.javaObjectType)
+val platformModified = Attribute.of("platformModified", String::class.java)
 
 dependencies {
     attributesSchema {
         attribute(platformModified)
     }
     artifactTypes.getByName("jar") {
-        attributes.attribute(platformModified, false)
+        attributes.attribute(platformModified, "unfiltered")
     }
     registerTransform(PlatformFilter::class) {
-        from.attribute(platformModified, false).attribute(artifactType, "jar")
-        to.attribute(platformModified, true).attribute(artifactType, "jar")
+        from.attribute(platformModified, "unfiltered").attribute(artifactType, "jar")
+        to.attribute(platformModified, "target").attribute(artifactType, "jar")
 
         parameters {
             platformString = platform
             archString = arch
+        }
+    }
+    registerTransform(PlatformFilter::class) {
+        from.attribute(platformModified, "unfiltered").attribute(artifactType, "jar")
+        to.attribute(platformModified, "host").attribute(artifactType, "jar")
+
+        parameters {
+            platformString = hostPlatform
+            archString = hostArch
         }
     }
     components {

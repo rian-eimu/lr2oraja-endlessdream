@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import bms.player.beatoraja.Config;
+import bms.player.beatoraja.song.SongResource;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.files.FileHandle;
@@ -57,6 +58,15 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 		return null;		
 	}
 
+	@Override
+	protected Sound getKeySound(SongResource resource) {
+		if (resource.localPath().isPresent()) {
+			return getKeySound(resource.localPath().get());
+		}
+		PCM pcm = PCM.load(resource, this);
+		return pcm != null ? getKeySound(pcm) : null;
+	}
+
 	private Sound getKeySound(String name, String ext) {
 		switch (ext.toLowerCase(Locale.ROOT)) {
 			case ".wav":
@@ -102,10 +112,13 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 			mixer.put(pcm, channel, volume, getGlobalPitch() * pitch);
 		} else {
 			synchronized (lock) {
-				sounds[soundPos].sound = pcm;
-				sounds[soundPos].id = pcm.play(volume, getGlobalPitch() * pitch, 0);
-				sounds[soundPos].channel = channel;
-				soundPos = (soundPos + 1) % sounds.length;
+				long id = pcm.play(volume, getGlobalPitch() * pitch, 0);
+				if (id != -1) {
+					sounds[soundPos].sound = pcm;
+					sounds[soundPos].id = id;
+					sounds[soundPos].channel = channel;
+					soundPos = (soundPos + 1) % sounds.length;
+				}
 			}
 		}
 	}
@@ -142,7 +155,8 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 			mixer.stop(id, 0);
 		} else {
 			synchronized (lock) {
-				id.stop();			
+				id.stop();
+				clearSoundInstances(id);
 			}			
 		}
 	}
@@ -152,9 +166,9 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 		if (soundthread) {
 			mixer.stop(id, channel);
 		} else {
-			for (int i = 0; i < sounds.length; i++) {
-				if (sounds[i].sound == id && sounds[i].channel == channel) {
-					synchronized (lock) {
+			synchronized (lock) {
+				for (int i = 0; i < sounds.length; i++) {
+					if (sounds[i].sound == id && sounds[i].channel == channel) {
 						sounds[i].sound.stop(sounds[i].id);						
 						sounds[i].sound = null;
 					}
@@ -168,9 +182,9 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 		if (soundthread) {
 			mixer.setVolume(id, channel, volume);
 		} else {
-			for (int i = 0; i < sounds.length; i++) {
-				if (sounds[i].sound == id && sounds[i].channel == channel) {
-					synchronized (lock) {
+			synchronized (lock) {
+				for (int i = 0; i < sounds.length; i++) {
+					if (sounds[i].sound == id && sounds[i].channel == channel) {
 						sounds[i].sound.setVolume(sounds[i].id, volume);						
 					}
 				}
@@ -180,7 +194,24 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 
 	@Override
 	protected void disposeKeySound(Sound pcm) {
-		pcm.dispose();
+		synchronized (lock) {
+			try {
+				stop(pcm);
+			} finally {
+				clearSoundInstances(pcm);
+				pcm.dispose();
+			}
+		}
+	}
+
+	private void clearSoundInstances(Sound sound) {
+		for (SoundInstance instance : sounds) {
+			if (instance.sound == sound) {
+				instance.sound = null;
+				instance.id = -1;
+				instance.channel = -1;
+			}
+		}
 	}
 
 	class SoundMixer extends Thread {
@@ -395,14 +426,20 @@ public class GdxSoundDriver extends AbstractAudioDriver<Sound> {
 				} else if(pcm instanceof ShortDirectPCM) {
 					result = ((ByteBuffer)pcm.sample).get(pos - 44 + pcm.start * 2) & 0xff;
 				} else if(pcm instanceof FloatPCM) {
-					short s = (short) (((float[])pcm.sample)[(pos - 44) / 2 + pcm.start] * Short.MAX_VALUE);					
+					float f = ((float[])pcm.sample)[(pos - 44) / 2 + pcm.start];
+					short s = (short) ((Float.isFinite(f) ? Math.max(-1.0f, Math.min(1.0f, f)) : 0.0f) * Short.MAX_VALUE);					
 					if (pos % 2 == 0) {
 						result = (s & 0x00ff);
 					} else {
 						result = ((s & 0xff00) >>> 8);
 					}
 				} else if(pcm instanceof BytePCM) {
-					result = pos % 2 != 0 ? (((byte[])pcm.sample)[(pos - 44) / 2 + pcm.start]) & 0x000000ff : 0;
+					short s = (short) (((byte[])pcm.sample)[(pos - 44) / 2 + pcm.start] << 8);
+					if (pos % 2 == 0) {
+						result = (s & 0x00ff);
+					} else {
+						result = ((s & 0xff00) >>> 8);
+					}
 				}
 				pos++;
 			}

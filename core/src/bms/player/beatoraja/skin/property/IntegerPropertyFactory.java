@@ -4,6 +4,7 @@ import static bms.player.beatoraja.skin.SkinProperty.*;
 
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.function.IntFunction;
 
 import bms.model.Mode;
 import bms.player.beatoraja.modmenu.SongManagerMenu;
@@ -18,7 +19,6 @@ import bms.player.beatoraja.ir.IRScoreData;
 import bms.player.beatoraja.ir.RankingData;
 import bms.player.beatoraja.play.*;
 import bms.player.beatoraja.result.AbstractResult;
-import bms.player.beatoraja.result.AbstractResult.TimingDistribution;
 import bms.player.beatoraja.result.CourseResult;
 import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.select.bar.Bar;
@@ -39,81 +39,8 @@ public class IntegerPropertyFactory {
 		if(vcache[optionid] != null) {
 			return vcache[optionid];
 		}
-		IntegerProperty result = null;
-		if (optionid >= NUMBER_DURATION_LANECOVER_ON && optionid <= NUMBER_MAXBPM_DURATION_GREEN_LANECOVER_OFF) {
-			final boolean green = (optionid - NUMBER_DURATION_LANECOVER_ON) % 2 == 1;
-			final boolean cover = (optionid - NUMBER_DURATION_LANECOVER_ON) % 4 < 2;
-			final int mode = (optionid - NUMBER_DURATION_LANECOVER_ON) / 4;
-			result = (state) -> {
-				if (state instanceof BMSPlayer) {
-					final LaneRenderer lanerender = ((BMSPlayer) state).getLanerender();
-					double bpm = switch (mode) {
-						case 0 -> lanerender.getNowBPM();
-						case 1 -> lanerender.getMainBPM();
-						case 2 -> lanerender.getMinBPM();
-						case 3 -> lanerender.getMaxBPM();
-						default -> 0;
-					};
-					return (int) Math.round((240000 / bpm / lanerender.getHispeed())
-							* (cover ? 1 - lanerender.getLanecover() : 1) * (green ? 0.6 : 1));
-				}
-				return 0;
-			};
-		}
-
-		if (optionid == NUMBER_TOTALNOTES || optionid == NUMBER_TOTALNOTES2) {
-			result = (state) -> {
-				if(state instanceof CourseResult) {
-					int notes = 0;
-					for (BMSModel model : state.main.getPlayerResource().getCourseBMSModels()) {
-						notes += model.getTotalNotes();
-					}
-					return notes;
-				}
-				return state.main.getPlayerResource().getSongdata() != null
-						? state.main.getPlayerResource().getSongdata().getNotes()
-						: state.main.getPlayerResource().getCourseData() != null
-							? Arrays.asList(state.main.getPlayerResource().getCourseData().getSong()).stream()
-								.mapToInt(sd -> sd.getNotes()).sum()
-							: Integer.MIN_VALUE;
-			};
-		}
-
-		if (optionid >= NUMBER_PERFECT2 && optionid <= NUMBER_POOR2) {
-			final int index = optionid - NUMBER_PERFECT2;
-			result = (state) -> (state.getScoreDataProperty().getScoreData() != null ? 
-					state.getScoreDataProperty().getScoreData().getJudgeCount(index) : Integer.MIN_VALUE);
-		}
-		if (optionid >= NUMBER_PERFECT_RATE && optionid <= NUMBER_POOR_RATE) {
-			final int index = optionid - NUMBER_PERFECT_RATE;
-			result = (state) -> {
-				final ScoreData score = state.getScoreDataProperty().getScoreData();
-				return score != null && score.getNotes() > 0 ? score.getJudgeCount(index) * 100 / score.getNotes() : Integer.MIN_VALUE;
-						};
-		}
-		if (optionid >= NUMBER_PERFECT && optionid <= NUMBER_POOR) {
-			final int index = optionid - NUMBER_PERFECT;
-			result = (state) -> (state.getJudgeCount(index, true) + state.getJudgeCount(index, false));
-		}
-		if (optionid >= NUMBER_EARLY_PERFECT && optionid <= NUMBER_LATE_POOR) {
-			final int index = (optionid - NUMBER_EARLY_PERFECT) / 2;
-			final boolean early = (optionid - NUMBER_EARLY_PERFECT) % 2 == 0;
-			result = (state) -> (state.getJudgeCount(index, early));
-		}
-		if (optionid >= NUMBER_RIVAL_PERFECT && optionid <= NUMBER_RIVAL_POOR) {
-			final int index = optionid - NUMBER_RIVAL_PERFECT;
-			result = (state) -> (state.getScoreDataProperty().getRivalScoreData() != null ? 
-					state.getScoreDataProperty().getRivalScoreData().getJudgeCount(index) : Integer.MIN_VALUE);
-		}
-		if (optionid >= NUMBER_RIVAL_PERFECT_RATE && optionid <= NUMBER_RIVAL_POOR_RATE) {
-			final int index = optionid - NUMBER_RIVAL_PERFECT_RATE;
-			result = (state) -> {
-				final ScoreData rival = state.getScoreDataProperty().getRivalScoreData();
-				return rival != null && rival.getNotes() > 0 ? rival.getJudgeCount(index) * 100 / rival.getNotes() : Integer.MIN_VALUE;
-						};
-		}
-
-		if(result == null) {
+		IntegerProperty result = IntegerPropertyPattern.get(PropertyScope.VALUE, optionid);
+		if (result == null) {
 			for(ValueType t : ValueType.values()) {
 				if(t.id == optionid) {
 					result = t.property;
@@ -122,331 +49,15 @@ public class IntegerPropertyFactory {
 			}
 		}
 		
-		if (result == null) {
-			result = getIntegerProperty0(optionid);
-		}
-		
 		vcache[optionid] = result;
 		return result;
 	}
 	
-	private static IntegerProperty getIntegerProperty0(int optionid) {
-		switch (optionid) {
-
-		case NUMBER_MISS:
-			return (state) -> (state.getJudgeCount(5, true) + state.getJudgeCount(5, false));
-		case NUMBER_EARLY_MISS:
-			return (state) -> (state.getJudgeCount(5, true));
-		case NUMBER_LATE_MISS:
-			return (state) -> (state.getJudgeCount(5, false));
-		case NUMBER_POOR_PLUS_MISS:
-			return (state) -> (state.getJudgeCount(4, true) + state.getJudgeCount(4, false)
-					+ state.getJudgeCount(5, true) + state.getJudgeCount(5, false));
-		case NUMBER_BAD_PLUS_POOR_PLUS_MISS:
-			return (state) -> (state.getJudgeCount(3, true) + state.getJudgeCount(3, false)
-					+ state.getJudgeCount(4, true) + state.getJudgeCount(4, false) + state.getJudgeCount(5, true)
-					+ state.getJudgeCount(5, false));
-		case NUMBER_PLAYLEVEL:
-		case NUMBER_FOLDER_BEGINNER:
-		case NUMBER_FOLDER_NORMAL:
-		case NUMBER_FOLDER_HYPER:
-		case NUMBER_FOLDER_ANOTHER:
-		case NUMBER_FOLDER_INSANE:
-			return (state) -> (state.main.getPlayerResource().getSongdata() != null
-					? state.main.getPlayerResource().getSongdata().getLevel()
-					: Integer.MIN_VALUE);
-		case NUMBER_POINT:
-			return (state) -> (state.getScoreDataProperty().getNowScore());
-		case NUMBER_MAXSCORE:
-			return (state) -> (state.getScoreDataProperty().getScoreData() != null
-					? state.getScoreDataProperty().getScoreData().getNotes() * 2
-					: 0);
-		case NUMBER_DIFF_NEXTRANK:
-			return (state) -> (state.getScoreDataProperty().getNextRank());
-		case NUMBER_SCORE_RATE:
-			return (state) -> (state.getScoreDataProperty().getScoreData() != null
-					? state.getScoreDataProperty().getNowRateInt()
-					: Integer.MIN_VALUE);
-		case NUMBER_SCORE_RATE_AFTERDOT:
-			return (state) -> (state.getScoreDataProperty().getScoreData() != null
-					? state.getScoreDataProperty().getNowRateAfterDot()
-					: Integer.MIN_VALUE);
-		case NUMBER_TOTAL_RATE:
-		case NUMBER_SCORE_RATE2:
-			return (state) -> (state.getScoreDataProperty().getScoreData() != null
-					? state.getScoreDataProperty().getRateInt()
-					: Integer.MIN_VALUE);
-		case NUMBER_TOTAL_RATE_AFTERDOT:
-		case NUMBER_SCORE_RATE_AFTERDOT2:
-			return (state) -> (state.getScoreDataProperty().getScoreData() != null
-					? state.getScoreDataProperty().getRateAfterDot()
-					: Integer.MIN_VALUE);
-		case NUMBER_BEST_RATE:
-			return (state) -> (state.getScoreDataProperty().getBestRateInt());
-		case NUMBER_BEST_RATE_AFTERDOT:
-			return (state) -> (state.getScoreDataProperty().getBestRateAfterDot());
-		case NUMBER_TARGET_SCORE:
-		case NUMBER_TARGET_SCORE2:
-		case NUMBER_RIVAL_SCORE:
-			return (state) -> (state.getScoreDataProperty().getRivalScore());
-		case NUMBER_TARGET_SCORE_RATE:
-		case NUMBER_TARGET_TOTAL_RATE:
-		case NUMBER_TARGET_SCORE_RATE2:
-			return (state) -> (state.getScoreDataProperty().getRivalRateInt());
-		case NUMBER_TARGET_SCORE_RATE_AFTERDOT:
-		case NUMBER_TARGET_TOTAL_RATE_AFTERDOT:
-		case NUMBER_TARGET_SCORE_RATE_AFTERDOT2:
-			return (state) -> (state.getScoreDataProperty().getRivalRateAfterDot());
-		case NUMBER_DIFF_HIGHSCORE:
-		case NUMBER_DIFF_HIGHSCORE2:
-			return (state) -> (state.getScoreDataProperty().getNowEXScore()
-					- state.getScoreDataProperty().getNowBestScore());
-		case NUMBER_DIFF_EXSCORE:
-		case NUMBER_DIFF_EXSCORE2:
-		case NUMBER_DIFF_TARGETSCORE:
-			return (state) -> (state.getScoreDataProperty().getNowEXScore()
-					- state.getScoreDataProperty().getNowRivalScore());
-		case NUMBER_TOTALEARLY:
-			return (state) -> {
-				int ecount = 0;
-				for (int i = 1; i < 6; i++) {
-					ecount += state.getJudgeCount(i, true);
-				}
-				return ecount;
-			};
-		case NUMBER_TOTALLATE:
-			return (state) -> {
-				int ecount = 0;
-				for (int i = 1; i < 6; i++) {
-					ecount += state.getJudgeCount(i, false);
-				}
-				return ecount;
-			};
-		case NUMBER_COMBOBREAK:
-			return (state) -> (state.getJudgeCount(3, true) + state.getJudgeCount(3, false)
-					+ state.getJudgeCount(4, true) + state.getJudgeCount(4, false));
-		case NUMBER_HISPEED_LR2:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) (((BMSPlayer) state).getLanerender().getHispeed() * 100);
-				} else if (state.main.getPlayerResource().getSongdata() != null) {
-					SongData song = state.main.getPlayerResource().getSongdata();
-					PlayConfig pc = state.main.getPlayerResource().getPlayerConfig().getPlayConfig(song.getMode())
-							.getPlayconfig();
-					return (int) (pc.getHispeed() * 100);
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_HISPEED:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) (((BMSPlayer) state).getLanerender().getHispeed());
-				} else if (state.main.getPlayerResource().getSongdata() != null) {
-					SongData song = state.main.getPlayerResource().getSongdata();
-					PlayConfig pc = state.main.getPlayerResource().getPlayerConfig().getPlayConfig(song.getMode())
-							.getPlayconfig();
-					return (int) pc.getHispeed();
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_HISPEED_AFTERDOT:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) ((((BMSPlayer) state).getLanerender().getHispeed() * 100) % 100);
-				} else if (state.main.getPlayerResource().getSongdata() != null) {
-					SongData song = state.main.getPlayerResource().getSongdata();
-					PlayConfig pc = state.main.getPlayerResource().getPlayerConfig().getPlayConfig(song.getMode())
-							.getPlayconfig();
-					return (int) (pc.getHispeed() * 100) % 100;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_FOLDER_TOTALSONGS:
-			return new FolderTotalClearCountProperty(new int[]{0,1,2,3,4,5,6,7,8,9,10});
-		case NUMBER_LANECOVER1:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) (((BMSPlayer) state).getLanerender().getLanecover() * 1000);
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_LANECOVER2:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					LaneRenderer laneRenderer = ((BMSPlayer) state).getLanerender();
-					int laneCover = (int)((1.0 - laneRenderer.getLiftRegion()) * laneRenderer.getLanecover() * 1000);
-					return laneCover;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_LIFT1:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) (((BMSPlayer) state).getLanerender().getLiftRegion() * 1000);
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_HIDDEN1:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) (((BMSPlayer) state).getLanerender().getHiddenCover() * 1000);
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_GROOVEGAUGE:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					return (int) (((BMSPlayer) state).getGauge().getValue());
-				}
-				if (state instanceof AbstractResult) {
-					final int gaugeType = ((AbstractResult) state).getGaugeType();
-					return (int) state.resource.getGauge()[gaugeType]
-							.get(state.resource.getGauge()[gaugeType].size - 1);
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_GROOVEGAUGE_AFTERDOT:
-			return (state) -> {
-				if (state instanceof BMSPlayer) {
-					final GrooveGauge gauge = ((BMSPlayer) state).getGauge();
-					return gauge.getValue() > 0 && gauge.getValue() < 0.1 ? 1 : ((int) (gauge.getValue() * 10)) % 10;
-				}
-				if (state instanceof AbstractResult) {
-					final int gaugeType = ((AbstractResult) state).getGaugeType();
-					float value = state.resource.getGauge()[gaugeType]
-							.get(state.resource.getGauge()[gaugeType].size - 1) * 10;
-					if (value > 0 && value < 1)
-						value = 1;
-					return ((int) value) % 10;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_MAXCOMBO:
-		case NUMBER_MAXCOMBO2:
-			return (state) -> {
-				if (state instanceof MusicSelector) {
-					final ScoreData score = ((MusicSelector)state).getBarManager().getSelected().getScore();
-					return score != null ? score.getCombo() : Integer.MIN_VALUE;
-				}
-				if (state instanceof BMSPlayer) {
-					return ((BMSPlayer) state).getJudgeManager().getScoreData().getCombo();
-				}
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getNewScore();
-					return score != null ? score.getCombo() : Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_CLEAR:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getNewScore();
-					return score != null ? score.getClear() : Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_TARGET_CLEAR:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					return ((AbstractResult) state).getOldScore().getClear();
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_SCORE:
-		case NUMBER_SCORE2:
-		case NUMBER_SCORE3:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getNewScore();
-					return score != null ? score.getExscore() : Integer.MIN_VALUE;
-				}
-				return state.getScoreDataProperty().getScoreData() != null
-						? state.getScoreDataProperty().getNowEXScore()
-						: Integer.MIN_VALUE;
-			};
-		case NUMBER_HIGHSCORE:
-		case NUMBER_HIGHSCORE2:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					return ((AbstractResult) state).getOldScore().getExscore();
-				}
-				return state.getScoreDataProperty().getBestScore();
-			};
-		case NUMBER_TARGET_MISSCOUNT:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getOldScore();
-					return score.getMinbp() != Integer.MAX_VALUE ? score.getMinbp() : Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_DIFF_MISSCOUNT:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getOldScore();
-					return score.getMinbp() != Integer.MAX_VALUE
-							? ((AbstractResult) state).getNewScore().getMinbp() - score.getMinbp()
-							: Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_TARGET_MAXCOMBO:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getOldScore();
-					return score.getCombo() > 0 ? score.getCombo() : Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_DIFF_MAXCOMBO:
-			return (state) -> {
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getOldScore();
-					return score.getCombo() > 0 ? ((AbstractResult) state).getNewScore().getCombo() - score.getCombo()
-							: Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_MISSCOUNT:
-		case NUMBER_MISSCOUNT2:
-			return (state) -> {
-				if (state instanceof MusicSelector) {
-					final ScoreData score = ((MusicSelector)state).getBarManager().getSelected().getScore();
-					return score != null ? score.getMinbp() : Integer.MIN_VALUE;
-				}
-				if (state instanceof AbstractResult) {
-					final ScoreData score = ((AbstractResult) state).getNewScore();
-					return score != null ? score.getMinbp() : Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};
-		case NUMBER_IR_TOTALPLAYER:
-		case NUMBER_IR_TOTALPLAYER2:
-			return (state) -> {
-				if (state instanceof MusicSelector) {
-					final RankingData irc = ((MusicSelector) state).getCurrentRankingData();
-					return irc != null && irc.getState() == RankingData.FINISH ? irc.getTotalPlayer() : Integer.MIN_VALUE;
-				}
-				if (state instanceof AbstractResult) {
-					return ((AbstractResult) state).getState() != AbstractResult.STATE_OFFLINE
-							? ((AbstractResult) state).getIRTotalPlayer()
-							: Integer.MIN_VALUE;
-				}
-				return Integer.MIN_VALUE;
-			};	
-		case NUMBER_DIFFICULTY_FILTER:
-			return (state) -> (state.main.getPlayerResource().getPlayerConfig().getDifficultyFilter());
-		case NUMBER_FAIL_MEASURE:
-			return (state) -> {
-				double measure = state.main.getPlayerResource().getFailMeasure();
-				return Double.isNaN(measure) ? -1 : (int) measure;
-			};
-		}
-		
-		return null;
-	}
-	
 	public static IntegerProperty getIntegerProperty(String name) {
+		IntegerProperty property = IntegerPropertyPattern.get(PropertyScope.VALUE, name);
+		if (property != null) {
+			return property;
+		}
 		for(ValueType t : ValueType.values()) {
 			if(t.name().equals(name)) {
 				return t.property;
@@ -584,17 +195,6 @@ public class IntegerPropertyFactory {
 			}
 			return Integer.MIN_VALUE;
 		}),
-		ir_player_noplay(202, createIRClearCountProperty(0)),
-		ir_player_failed(210, createIRClearCountProperty(1)),
-		ir_player_assist(204, createIRClearCountProperty(2)),
-		ir_player_lightassist(206, createIRClearCountProperty(3)),
-		ir_player_easy(212, createIRClearCountProperty(4)),
-		ir_player_normal(214, createIRClearCountProperty(5)),
-		ir_player_hard(216, createIRClearCountProperty(6)),
-		ir_player_exhard(208, createIRClearCountProperty(7)),
-		ir_player_fullcombo(218, createIRClearCountProperty(8)),
-		ir_player_perfect(222, createIRClearCountProperty(9)),
-		ir_player_max(224, createIRClearCountProperty(10)),
 		
 		ir_update_waiting(220, (state) -> {
 			if (state instanceof MusicSelector) {
@@ -607,35 +207,20 @@ public class IntegerPropertyFactory {
 			}
 			return Integer.MIN_VALUE;
 		}),
+		difficulty_filter(NUMBER_DIFFICULTY_FILTER, (state) -> (state.main.getPlayerResource().getPlayerConfig().getDifficultyFilter())),
 		ir_totalclear(226, createIRTotalClearCountProperty(new int[]{2,3,4,5,6,7,8,9,10})),
 		ir_totalclearrate(227, createIRTotalClearRateProperty(new int[]{2,3,4,5,6,7,8,9,10}, false)),
 		ir_totalclearrate_afterdot(241, createIRTotalClearRateProperty(new int[]{2,3,4,5,6,7,8,9,10}, true)),
 		ir_totalfullcombo(228,createIRTotalClearCountProperty(new int[]{8,9,10})),
 		ir_totalfullcomborate(229,createIRTotalClearRateProperty(new int[]{8,9,10}, false)),
 		ir_totalfullcomborate_afterdot(242,createIRTotalClearRateProperty(new int[]{8,9,10}, true)),		
-
-		ir_player_noplay_rate(203, createIRClearRateProperty(0, false)),
-		ir_player_noplay_rate_afterdot(230, createIRClearRateProperty(0, true)),
-		ir_player_failed_rate(211, createIRClearRateProperty(1, false)),
-		ir_player_failed_rate_afterdot(234, createIRClearRateProperty(1, true)),
-		ir_player_assist_rate(205, createIRClearRateProperty(2, false)),
-		ir_player_assist_rate_afterdot(231, createIRClearRateProperty(2, true)),
-		ir_player_lightassist_rate(207, createIRClearRateProperty(3, false)),
-		ir_player_lightassist_rate_afterdot(232, createIRClearRateProperty(3, true)),
-		ir_player_easy_rate(213, createIRClearRateProperty(4, false)),
-		ir_player_easy_rate_afterdot(235, createIRClearRateProperty(4, true)),
-		ir_player_normal_rate(215, createIRClearRateProperty(5, false)),
-		ir_player_normal_rate_afterdot(236, createIRClearRateProperty(5, true)),
-		ir_player_hard_rate(217, createIRClearRateProperty(6, false)),
-		ir_player_hard_rate_afterdot(237, createIRClearRateProperty(6, true)),
-		ir_player_exhard_rate(209, createIRClearRateProperty(7, false)),
-		ir_player_exhard_rate_afterdot(233, createIRClearRateProperty(7, true)),
-		ir_player_fullcombo_rate(219, createIRClearRateProperty(8, false)),
-		ir_player_fullcombo_rate_afterdot(238, createIRClearRateProperty(8, true)),
-		ir_player_perfect_rate(223, createIRClearRateProperty(9, false)),
-		ir_player_perfect_rate_afterdot(239, createIRClearRateProperty(9, true)),
-		ir_player_max_rate(225, createIRClearRateProperty(10, false)),
-		ir_player_max_rate_afterdot(240, createIRClearRateProperty(10, true)),
+		lastplay_timestamp(243, createLastPlayTimestampProperty()),
+		lastplay_year(244, createLastPlayDateProperty(Calendar.YEAR)),
+		lastplay_month(245, createLastPlayDateProperty(Calendar.MONTH)),
+		lastplay_day(246, createLastPlayDateProperty(Calendar.DATE)),
+		lastplay_hour(247, createLastPlayDateProperty(Calendar.HOUR_OF_DAY)),
+		lastplay_minute(248, createLastPlayDateProperty(Calendar.MINUTE)),
+		lastplay_second(249, createLastPlayDateProperty(Calendar.SECOND)),
 
 		duration(312, (state) -> {
 			if (state instanceof MusicSelector selector) {
@@ -663,18 +248,6 @@ public class IntegerPropertyFactory {
 			}
 			return Integer.MIN_VALUE;
 		}),
-
-		folder_noplay(320, createFolderClearCountProperty(0)),
-		folder_failed(321, createFolderClearCountProperty(1)),
-		folder_assist(322, createFolderClearCountProperty(2)),
-		folder_lightassist(323, createFolderClearCountProperty(3)),
-		folder_easy(324, createFolderClearCountProperty(4)),
-		folder_normal(325, createFolderClearCountProperty(5)),
-		folder_hard(326, createFolderClearCountProperty(6)),
-		folder_exhard(327, createFolderClearCountProperty(7)),
-		folder_fullcombo(328, createFolderClearCountProperty(8)),
-		folder_prefect(329, createFolderClearCountProperty(9)),
-		folder_max(330, createFolderClearCountProperty(10)),
 	
 		chart_totalnote_n(350, (state) -> {
 			final SongData song = state.resource.getSongdata();
@@ -790,31 +363,6 @@ public class IntegerPropertyFactory {
 			}
 			return Integer.MIN_VALUE;
 		}),
-		score_date(378, (state) -> (state.getScoreDataProperty().getScoreData() != null
-				? (int) state.getScoreDataProperty().getScoreData().getDate()
-				: 0)),
-
-		ranking_exscore1(380, createRankingexscore(0)),
-		ranking_exscore2(381, createRankingexscore(1)),
-		ranking_exscore3(382, createRankingexscore(2)),
-		ranking_exscore4(383, createRankingexscore(3)),
-		ranking_exscore5(384, createRankingexscore(4)),
-		ranking_exscore6(385, createRankingexscore(5)),
-		ranking_exscore7(386, createRankingexscore(6)),
-		ranking_exscore8(387, createRankingexscore(7)),
-		ranking_exscore9(388, createRankingexscore(8)),
-		ranking_exscore10(389, createRankingexscore(9)),
-
-		ranking_index1(390, createRankingindex(0)),
-		ranking_index2(391, createRankingindex(1)),
-		ranking_index3(392, createRankingindex(2)),
-		ranking_index4(393, createRankingindex(3)),
-		ranking_index5(394, createRankingindex(4)),
-		ranking_index6(395, createRankingindex(5)),
-		ranking_index7(396, createRankingindex(6)),
-		ranking_index8(397, createRankingindex(7)),
-		ranking_index9(398, createRankingindex(8)),
-		ranking_index10(399, createRankingindex(9)),
 
 		judgerank(400, (state) -> (state.resource.getSongdata() != null
 				? state.resource.getSongdata().getJudge() : Integer.MIN_VALUE)),
@@ -830,6 +378,296 @@ public class IntegerPropertyFactory {
 			? (state.resource.getSongdata().getLength() / 1000) % 60
 					: Integer.MIN_VALUE)),
 
+		miss(NUMBER_MISS, (state) -> (state.getJudgeCount(5, true) + state.getJudgeCount(5, false))),
+		early_miss(NUMBER_EARLY_MISS, (state) -> (state.getJudgeCount(5, true))),
+		late_miss(NUMBER_LATE_MISS, (state) -> (state.getJudgeCount(5, false))),
+		poor_plus_miss(NUMBER_POOR_PLUS_MISS, (state) -> (state.getJudgeCount(4, true) + state.getJudgeCount(4, false)
+				+ state.getJudgeCount(5, true) + state.getJudgeCount(5, false))),
+		bad_plus_poor_plus_miss(NUMBER_BAD_PLUS_POOR_PLUS_MISS, (state) -> (state.getJudgeCount(3, true) + state.getJudgeCount(3, false)
+				+ state.getJudgeCount(4, true) + state.getJudgeCount(4, false) + state.getJudgeCount(5, true)
+				+ state.getJudgeCount(5, false))),
+		playlevel(NUMBER_PLAYLEVEL, createSongLevelProperty()),
+		folder_beginner(NUMBER_FOLDER_BEGINNER, createSongLevelProperty()),
+		folder_normal(NUMBER_FOLDER_NORMAL, createSongLevelProperty()),
+		folder_hyper(NUMBER_FOLDER_HYPER, createSongLevelProperty()),
+		folder_another(NUMBER_FOLDER_ANOTHER, createSongLevelProperty()),
+		folder_insane(NUMBER_FOLDER_INSANE, createSongLevelProperty()),
+		point(NUMBER_POINT, (state) -> (state.getScoreDataProperty().getNowScore())),
+		maxscore(NUMBER_MAXSCORE, (state) -> (state.getScoreDataProperty().getScoreData() != null
+				? state.getScoreDataProperty().getScoreData().getNotes() * 2
+				: 0)),
+		diff_nextrank(NUMBER_DIFF_NEXTRANK, (state) -> (state.getScoreDataProperty().getNextRank())),
+		score_rate(NUMBER_SCORE_RATE, (state) -> (state.getScoreDataProperty().getScoreData() != null
+				? state.getScoreDataProperty().getNowRateInt()
+				: Integer.MIN_VALUE)),
+		score_rate_afterdot(NUMBER_SCORE_RATE_AFTERDOT, (state) -> (state.getScoreDataProperty().getScoreData() != null
+				? state.getScoreDataProperty().getNowRateAfterDot()
+				: Integer.MIN_VALUE)),
+		total_rate(NUMBER_TOTAL_RATE, createRateIntProperty()),
+		score_rate2(NUMBER_SCORE_RATE2, createRateIntProperty()),
+		total_rate_afterdot(NUMBER_TOTAL_RATE_AFTERDOT, createRateAfterDotProperty()),
+		score_rate_afterdot2(NUMBER_SCORE_RATE_AFTERDOT2, createRateAfterDotProperty()),
+		best_rate(NUMBER_BEST_RATE, (state) -> (state.getScoreDataProperty().getBestRateInt())),
+		best_rate_afterdot(NUMBER_BEST_RATE_AFTERDOT, (state) -> (state.getScoreDataProperty().getBestRateAfterDot())),
+		target_score(NUMBER_TARGET_SCORE, createRivalScoreProperty()),
+		target_score2(NUMBER_TARGET_SCORE2, createRivalScoreProperty()),
+		rival_score(NUMBER_RIVAL_SCORE, createRivalScoreProperty()),
+		target_score_rate(NUMBER_TARGET_SCORE_RATE, createRivalRateIntProperty()),
+		target_total_rate(NUMBER_TARGET_TOTAL_RATE, createRivalRateIntProperty()),
+		target_score_rate2(NUMBER_TARGET_SCORE_RATE2, createRivalRateIntProperty()),
+		target_score_rate_afterdot(NUMBER_TARGET_SCORE_RATE_AFTERDOT, createRivalRateAfterDotProperty()),
+		target_total_rate_afterdot(NUMBER_TARGET_TOTAL_RATE_AFTERDOT, createRivalRateAfterDotProperty()),
+		target_score_rate_afterdot2(NUMBER_TARGET_SCORE_RATE_AFTERDOT2, createRivalRateAfterDotProperty()),
+		diff_highscore(NUMBER_DIFF_HIGHSCORE, createDiffHighscoreProperty()),
+		diff_highscore2(NUMBER_DIFF_HIGHSCORE2, createDiffHighscoreProperty()),
+		diff_exscore(NUMBER_DIFF_EXSCORE, createDiffTargetscoreProperty()),
+		diff_exscore2(NUMBER_DIFF_EXSCORE2, createDiffTargetscoreProperty()),
+		diff_targetscore(NUMBER_DIFF_TARGETSCORE, createDiffTargetscoreProperty()),
+		totalearly(NUMBER_TOTALEARLY, (state) -> {
+			int ecount = 0;
+			for (int i = 1; i < 6; i++) {
+				ecount += state.getJudgeCount(i, true);
+			}
+			return ecount;
+		}),
+		totallate(NUMBER_TOTALLATE, (state) -> {
+			int ecount = 0;
+			for (int i = 1; i < 6; i++) {
+				ecount += state.getJudgeCount(i, false);
+			}
+			return ecount;
+		}),
+		combobreak(NUMBER_COMBOBREAK, (state) -> (state.getJudgeCount(3, true) + state.getJudgeCount(3, false)
+				+ state.getJudgeCount(4, true) + state.getJudgeCount(4, false))),
+		hispeed_lr2(NUMBER_HISPEED_LR2, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) (((BMSPlayer) state).getLanerender().getHispeed() * 100);
+			} else if (state.main.getPlayerResource().getSongdata() != null) {
+				SongData song = state.main.getPlayerResource().getSongdata();
+				PlayConfig pc = state.main.getPlayerResource().getPlayerConfig().getPlayConfig(song.getMode())
+						.getPlayconfig();
+				return (int) (pc.getHispeed() * 100);
+			}
+			return Integer.MIN_VALUE;
+		}),
+		hispeed(NUMBER_HISPEED, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) (((BMSPlayer) state).getLanerender().getHispeed());
+			} else if (state.main.getPlayerResource().getSongdata() != null) {
+				SongData song = state.main.getPlayerResource().getSongdata();
+				PlayConfig pc = state.main.getPlayerResource().getPlayerConfig().getPlayConfig(song.getMode())
+						.getPlayconfig();
+				return (int) pc.getHispeed();
+			}
+			return Integer.MIN_VALUE;
+		}),
+		hispeed_afterdot(NUMBER_HISPEED_AFTERDOT, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) ((((BMSPlayer) state).getLanerender().getHispeed() * 100) % 100);
+			} else if (state.main.getPlayerResource().getSongdata() != null) {
+				SongData song = state.main.getPlayerResource().getSongdata();
+				PlayConfig pc = state.main.getPlayerResource().getPlayerConfig().getPlayConfig(song.getMode())
+						.getPlayconfig();
+				return (int) (pc.getHispeed() * 100) % 100;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		folder_totalsongs(NUMBER_FOLDER_TOTALSONGS, new FolderTotalClearCountProperty(new int[]{0,1,2,3,4,5,6,7,8,9,10})),
+		lanecover1(NUMBER_LANECOVER1, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) (((BMSPlayer) state).getLanerender().getLanecover() * 1000);
+			}
+			return Integer.MIN_VALUE;
+		}),
+		lanecover2(NUMBER_LANECOVER2, (state) -> {
+			if (state instanceof BMSPlayer) {
+				LaneRenderer laneRenderer = ((BMSPlayer) state).getLanerender();
+				int laneCover = (int)((1.0 - laneRenderer.getLiftRegion()) * laneRenderer.getLanecover() * 1000);
+				return laneCover;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		lift1(NUMBER_LIFT1, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) (((BMSPlayer) state).getLanerender().getLiftRegion() * 1000);
+			}
+			return Integer.MIN_VALUE;
+		}),
+		hidden1(NUMBER_HIDDEN1, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) (((BMSPlayer) state).getLanerender().getHiddenCover() * 1000);
+			}
+			return Integer.MIN_VALUE;
+		}),
+		groovegauge(NUMBER_GROOVEGAUGE, (state) -> {
+			if (state instanceof BMSPlayer) {
+				return (int) (((BMSPlayer) state).getGauge().getValue());
+			}
+			if (state instanceof AbstractResult) {
+				final int gaugeType = ((AbstractResult) state).getGaugeType();
+				return (int) state.resource.getGauge()[gaugeType]
+						.get(state.resource.getGauge()[gaugeType].size - 1);
+			}
+			return Integer.MIN_VALUE;
+		}),
+		groovegauge_afterdot(NUMBER_GROOVEGAUGE_AFTERDOT, (state) -> {
+			if (state instanceof BMSPlayer) {
+				final GrooveGauge gauge = ((BMSPlayer) state).getGauge();
+				return gauge.getValue() > 0 && gauge.getValue() < 0.1 ? 1 : ((int) (gauge.getValue() * 10)) % 10;
+			}
+			if (state instanceof AbstractResult) {
+				final int gaugeType = ((AbstractResult) state).getGaugeType();
+				float value = state.resource.getGauge()[gaugeType]
+						.get(state.resource.getGauge()[gaugeType].size - 1) * 10;
+				if (value > 0 && value < 1)
+					value = 1;
+				return ((int) value) % 10;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		maxcombo(NUMBER_MAXCOMBO, createMaxcomboProperty()),
+		maxcombo2(NUMBER_MAXCOMBO2, createMaxcomboProperty()),
+		clear(NUMBER_CLEAR, (state) -> {
+			if (state instanceof AbstractResult) {
+				final ScoreData score = ((AbstractResult) state).getNewScore();
+				return score != null ? score.getClear() : Integer.MIN_VALUE;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		target_clear(NUMBER_TARGET_CLEAR, (state) -> {
+			if (state instanceof AbstractResult) {
+				return ((AbstractResult) state).getOldScore().getClear();
+			}
+			return Integer.MIN_VALUE;
+		}),
+		score(NUMBER_SCORE, createScoreProperty()),
+		score2(NUMBER_SCORE2, createScoreProperty()),
+		score3(NUMBER_SCORE3, createScoreProperty()),
+		highscore(NUMBER_HIGHSCORE, createHighscoreProperty()),
+		highscore2(NUMBER_HIGHSCORE2, createHighscoreProperty()),
+		target_misscount(NUMBER_TARGET_MISSCOUNT, (state) -> {
+			if (state instanceof AbstractResult) {
+				final ScoreData score = ((AbstractResult) state).getOldScore();
+				return score.getMinbp() != Integer.MAX_VALUE ? score.getMinbp() : Integer.MIN_VALUE;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		diff_misscount(NUMBER_DIFF_MISSCOUNT, (state) -> {
+			if (state instanceof AbstractResult) {
+				final ScoreData score = ((AbstractResult) state).getOldScore();
+				return score.getMinbp() != Integer.MAX_VALUE
+						? ((AbstractResult) state).getNewScore().getMinbp() - score.getMinbp()
+						: Integer.MIN_VALUE;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		target_maxcombo(NUMBER_TARGET_MAXCOMBO, (state) -> {
+			if (state instanceof AbstractResult) {
+				final ScoreData score = ((AbstractResult) state).getOldScore();
+				return score.getCombo() > 0 ? score.getCombo() : Integer.MIN_VALUE;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		diff_maxcombo(NUMBER_DIFF_MAXCOMBO, (state) -> {
+			if (state instanceof AbstractResult) {
+				final ScoreData score = ((AbstractResult) state).getOldScore();
+				return score.getCombo() > 0 ? ((AbstractResult) state).getNewScore().getCombo() - score.getCombo()
+						: Integer.MIN_VALUE;
+			}
+			return Integer.MIN_VALUE;
+		}),
+		misscount(NUMBER_MISSCOUNT, createMisscountProperty()),
+		misscount2(NUMBER_MISSCOUNT2, createMisscountProperty()),
+		ir_totalplayer(NUMBER_IR_TOTALPLAYER, createIRTotalPlayerProperty()),
+		ir_totalplayer2(NUMBER_IR_TOTALPLAYER2, createIRTotalPlayerProperty()),
+		fail_measure(NUMBER_FAIL_MEASURE, (state) -> {
+			double measure = state.main.getPlayerResource().getFailMeasure();
+			return Double.isNaN(measure) ? -1 : (int) measure;
+		}),
+		totalnotes(NUMBER_TOTALNOTES, createTotalnotesProperty()),
+		totalnotes2(NUMBER_TOTALNOTES2, createTotalnotesProperty()),
+		combo(NUMBER_COMBO, (state) -> state.getScoreDataProperty().getScoreData() != null
+				? state.getScoreDataProperty().getScoreData().getPassnotes()
+				: Integer.MIN_VALUE),
+		maxcombo3(NUMBER_MAXCOMBO3, (state) -> state.getScoreDataProperty().getScoreData() != null
+				? state.getScoreDataProperty().getScoreData().getCombo()
+				: Integer.MIN_VALUE),
+		rival_totalnotes(NUMBER_RIVAL_TOTALNOTES, (state) -> state.getScoreDataProperty().getRivalScoreData() != null
+				? state.getScoreDataProperty().getRivalScoreData().getNotes()
+				: Integer.MIN_VALUE),
+		rival_maxscore(NUMBER_RIVAL_MAXSCORE, (state) -> state.getScoreDataProperty().getRivalScoreData() != null
+				? state.getScoreDataProperty().getRivalScoreData().getNotes() * 2
+				: Integer.MIN_VALUE),
+		rival_maxcombo(NUMBER_RIVAL_MAXCOMBO, (state) -> state.getScoreDataProperty().getRivalScoreData() != null
+				? state.getScoreDataProperty().getRivalScoreData().getCombo()
+				: Integer.MIN_VALUE),
+		rival_misscount(NUMBER_RIVAL_MISSCOUNT, (state) -> state.getScoreDataProperty().getRivalScoreData() != null
+				? state.getScoreDataProperty().getRivalScoreData().getMinbp()
+				: Integer.MIN_VALUE),
+		rival_playcount(NUMBER_RIVAL_PLAYCOUNT, (state) -> state.getScoreDataProperty().getRivalScoreData() != null
+				? state.getScoreDataProperty().getRivalScoreData().getPlaycount()
+				: Integer.MIN_VALUE),
+		rival_clearcount(NUMBER_RIVAL_CLEARCOUNT, (state) -> state.getScoreDataProperty().getRivalScoreData() != null
+				? state.getScoreDataProperty().getRivalScoreData().getClearcount()
+				: Integer.MIN_VALUE),
+		rival_failcount(NUMBER_RIVAL_FAILCOUNT, (state) -> {
+			final ScoreData rival = state.getScoreDataProperty().getRivalScoreData();
+			return rival != null ? rival.getPlaycount() - rival.getClearcount() : Integer.MIN_VALUE;
+		}),
+
+		perfect2(NUMBER_PERFECT2, createScoreJudgeCountProperty(0)),
+		great2(NUMBER_GREAT2, createScoreJudgeCountProperty(1)),
+		good2(NUMBER_GOOD2, createScoreJudgeCountProperty(2)),
+		bad2(NUMBER_BAD2, createScoreJudgeCountProperty(3)),
+		poor2(NUMBER_POOR2, createScoreJudgeCountProperty(4)),
+		perfect_rate(NUMBER_PERFECT_RATE, createScoreJudgeRateProperty(0)),
+		great_rate(NUMBER_GREAT_RATE, createScoreJudgeRateProperty(1)),
+		good_rate(NUMBER_GOOD_RATE, createScoreJudgeRateProperty(2)),
+		bad_rate(NUMBER_BAD_RATE, createScoreJudgeRateProperty(3)),
+		poor_rate(NUMBER_POOR_RATE, createScoreJudgeRateProperty(4)),
+		perfect(NUMBER_PERFECT, createJudgeCountProperty(0)),
+		great(NUMBER_GREAT, createJudgeCountProperty(1)),
+		good(NUMBER_GOOD, createJudgeCountProperty(2)),
+		bad(NUMBER_BAD, createJudgeCountProperty(3)),
+		poor(NUMBER_POOR, createJudgeCountProperty(4)),
+		early_perfect(NUMBER_EARLY_PERFECT, createJudgeCountProperty(0, true)),
+		late_perfect(NUMBER_LATE_PERFECT, createJudgeCountProperty(0, false)),
+		early_great(NUMBER_EARLY_GREAT, createJudgeCountProperty(1, true)),
+		late_great(NUMBER_LATE_GREAT, createJudgeCountProperty(1, false)),
+		early_good(NUMBER_EARLY_GOOD, createJudgeCountProperty(2, true)),
+		late_good(NUMBER_LATE_GOOD, createJudgeCountProperty(2, false)),
+		early_bad(NUMBER_EARLY_BAD, createJudgeCountProperty(3, true)),
+		late_bad(NUMBER_LATE_BAD, createJudgeCountProperty(3, false)),
+		early_poor(NUMBER_EARLY_POOR, createJudgeCountProperty(4, true)),
+		late_poor(NUMBER_LATE_POOR, createJudgeCountProperty(4, false)),
+		rival_perfect(NUMBER_RIVAL_PERFECT, createRivalJudgeCountProperty(0)),
+		rival_great(NUMBER_RIVAL_GREAT, createRivalJudgeCountProperty(1)),
+		rival_good(NUMBER_RIVAL_GOOD, createRivalJudgeCountProperty(2)),
+		rival_bad(NUMBER_RIVAL_BAD, createRivalJudgeCountProperty(3)),
+		rival_poor(NUMBER_RIVAL_POOR, createRivalJudgeCountProperty(4)),
+		rival_perfect_rate(NUMBER_RIVAL_PERFECT_RATE, createRivalJudgeRateProperty(0)),
+		rival_great_rate(NUMBER_RIVAL_GREAT_RATE, createRivalJudgeRateProperty(1)),
+		rival_good_rate(NUMBER_RIVAL_GOOD_RATE, createRivalJudgeRateProperty(2)),
+		rival_bad_rate(NUMBER_RIVAL_BAD_RATE, createRivalJudgeRateProperty(3)),
+		rival_poor_rate(NUMBER_RIVAL_POOR_RATE, createRivalJudgeRateProperty(4)),
+
+		duration_lanecover_on(NUMBER_DURATION_LANECOVER_ON, createDurationProperty(0, true, false)),
+		duration_green_lanecover_on(NUMBER_DURATION_GREEN_LANECOVER_ON, createDurationProperty(0, true, true)),
+		duration_lanecover_off(NUMBER_DURATION_LANECOVER_OFF, createDurationProperty(0, false, false)),
+		duration_green_lanecover_off(NUMBER_DURATION_GREEN_LANECOVER_OFF, createDurationProperty(0, false, true)),
+		mainbpm_duration_lanecover_on(NUMBER_MAINBPM_DURATION_LANECOVER_ON, createDurationProperty(1, true, false)),
+		mainbpm_duration_green_lanecover_on(NUMBER_MAINBPM_DURATION_GREEN_LANECOVER_ON, createDurationProperty(1, true, true)),
+		mainbpm_duration_lanecover_off(NUMBER_MAINBPM_DURATION_LANECOVER_OFF, createDurationProperty(1, false, false)),
+		mainbpm_duration_green_lanecover_off(NUMBER_MAINBPM_DURATION_GREEN_LANECOVER_OFF, createDurationProperty(1, false, true)),
+		minbpm_duration_lanecover_on(NUMBER_MINBPM_DURATION_LANECOVER_ON, createDurationProperty(2, true, false)),
+		minbpm_duration_green_lanecover_on(NUMBER_MINBPM_DURATION_GREEN_LANECOVER_ON, createDurationProperty(2, true, true)),
+		minbpm_duration_lanecover_off(NUMBER_MINBPM_DURATION_LANECOVER_OFF, createDurationProperty(2, false, false)),
+		minbpm_duration_green_lanecover_off(NUMBER_MINBPM_DURATION_GREEN_LANECOVER_OFF, createDurationProperty(2, false, true)),
+		maxbpm_duration_lanecover_on(NUMBER_MAXBPM_DURATION_LANECOVER_ON, createDurationProperty(3, true, false)),
+		maxbpm_duration_green_lanecover_on(NUMBER_MAXBPM_DURATION_GREEN_LANECOVER_ON, createDurationProperty(3, true, true)),
+		maxbpm_duration_lanecover_off(NUMBER_MAXBPM_DURATION_LANECOVER_OFF, createDurationProperty(3, false, false)),
+		maxbpm_duration_green_lanecover_off(NUMBER_MAXBPM_DURATION_GREEN_LANECOVER_OFF, createDurationProperty(3, false, true)),
+
 		;
 		
 		/**
@@ -844,6 +682,213 @@ public class IntegerPropertyFactory {
 		private ValueType(int id, IntegerProperty property) {
 			this.id = id;
 			this.property = property;
+		}
+
+		private static IntegerProperty createDurationProperty(final int mode, final boolean cover, final boolean green) {
+			return (state) -> {
+				if (state instanceof BMSPlayer) {
+					final LaneRenderer lanerender = ((BMSPlayer) state).getLanerender();
+					double bpm = switch (mode) {
+						case 0 -> lanerender.getNowBPM();
+						case 1 -> lanerender.getMainBPM();
+						case 2 -> lanerender.getMinBPM();
+						case 3 -> lanerender.getMaxBPM();
+						default -> 0;
+					};
+					return (int) Math.round((240000 / bpm / lanerender.getHispeed())
+							* (cover ? 1 - lanerender.getLanecover() : 1) * (green ? 0.6 : 1));
+				}
+				return 0;
+			};
+		}
+
+		private static IntegerProperty createTotalnotesProperty() {
+			return (state) -> {
+				if (state instanceof CourseResult) {
+					int notes = 0;
+					for (BMSModel model : state.main.getPlayerResource().getCourseBMSModels()) {
+						notes += model.getTotalNotes();
+					}
+					return notes;
+				}
+				return state.main.getPlayerResource().getSongdata() != null
+						? state.main.getPlayerResource().getSongdata().getNotes()
+						: state.main.getPlayerResource().getCourseData() != null
+							? Arrays.asList(state.main.getPlayerResource().getCourseData().getSong()).stream()
+								.mapToInt(sd -> sd.getNotes()).sum()
+							: Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createScoreJudgeCountProperty(final int index) {
+			return (state) -> (state.getScoreDataProperty().getScoreData() != null
+					? state.getScoreDataProperty().getScoreData().getJudgeCount(index)
+					: Integer.MIN_VALUE);
+		}
+
+		private static IntegerProperty createScoreJudgeRateProperty(final int index) {
+			return (state) -> {
+				final ScoreData score = state.getScoreDataProperty().getScoreData();
+				return score != null && score.getNotes() > 0 ? score.getJudgeCount(index) * 100 / score.getNotes() : Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createJudgeCountProperty(final int index) {
+			return (state) -> (state.getJudgeCount(index, true) + state.getJudgeCount(index, false));
+		}
+
+		private static IntegerProperty createJudgeCountProperty(final int index, final boolean early) {
+			return (state) -> state.getJudgeCount(index, early);
+		}
+
+		private static IntegerProperty createRivalJudgeCountProperty(final int index) {
+			return (state) -> (state.getScoreDataProperty().getRivalScoreData() != null
+					? state.getScoreDataProperty().getRivalScoreData().getJudgeCount(index)
+					: Integer.MIN_VALUE);
+		}
+
+		private static IntegerProperty createRivalJudgeRateProperty(final int index) {
+			return (state) -> {
+				final ScoreData rival = state.getScoreDataProperty().getRivalScoreData();
+				return rival != null && rival.getNotes() > 0 ? rival.getJudgeCount(index) * 100 / rival.getNotes() : Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createSongLevelProperty() {
+			return (state) -> (state.main.getPlayerResource().getSongdata() != null
+					? state.main.getPlayerResource().getSongdata().getLevel()
+					: Integer.MIN_VALUE);
+		}
+
+		private static IntegerProperty createRateIntProperty() {
+			return (state) -> (state.getScoreDataProperty().getScoreData() != null
+					? state.getScoreDataProperty().getRateInt()
+					: Integer.MIN_VALUE);
+		}
+
+		private static IntegerProperty createRateAfterDotProperty() {
+			return (state) -> (state.getScoreDataProperty().getScoreData() != null
+					? state.getScoreDataProperty().getRateAfterDot()
+					: Integer.MIN_VALUE);
+		}
+
+		private static IntegerProperty createRivalScoreProperty() {
+			return (state) -> state.getScoreDataProperty().getRivalScore();
+		}
+
+		private static IntegerProperty createRivalRateIntProperty() {
+			return (state) -> state.getScoreDataProperty().getRivalRateInt();
+		}
+
+		private static IntegerProperty createRivalRateAfterDotProperty() {
+			return (state) -> state.getScoreDataProperty().getRivalRateAfterDot();
+		}
+
+		private static IntegerProperty createDiffHighscoreProperty() {
+			return (state) -> (state.getScoreDataProperty().getNowEXScore()
+					- state.getScoreDataProperty().getNowBestScore());
+		}
+
+		private static IntegerProperty createDiffTargetscoreProperty() {
+			return (state) -> (state.getScoreDataProperty().getNowEXScore()
+					- state.getScoreDataProperty().getNowRivalScore());
+		}
+
+		private static IntegerProperty createMaxcomboProperty() {
+			return (state) -> {
+				if (state instanceof MusicSelector) {
+					final ScoreData score = ((MusicSelector) state).getBarManager().getSelected().getScore();
+					return score != null ? score.getCombo() : Integer.MIN_VALUE;
+				}
+				if (state instanceof BMSPlayer) {
+					return ((BMSPlayer) state).getJudgeManager().getScoreData().getCombo();
+				}
+				if (state instanceof AbstractResult) {
+					final ScoreData score = ((AbstractResult) state).getNewScore();
+					return score != null ? score.getCombo() : Integer.MIN_VALUE;
+				}
+				return Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createScoreProperty() {
+			return (state) -> {
+				if (state instanceof AbstractResult) {
+					final ScoreData score = ((AbstractResult) state).getNewScore();
+					return score != null ? score.getExscore() : Integer.MIN_VALUE;
+				}
+				return state.getScoreDataProperty().getScoreData() != null
+						? state.getScoreDataProperty().getNowEXScore()
+						: Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createHighscoreProperty() {
+			return (state) -> {
+				if (state instanceof AbstractResult) {
+					return ((AbstractResult) state).getOldScore().getExscore();
+				}
+				return state.getScoreDataProperty().getBestScore();
+			};
+		}
+
+		private static IntegerProperty createMisscountProperty() {
+			return (state) -> {
+				if (state instanceof MusicSelector) {
+					final ScoreData score = ((MusicSelector) state).getBarManager().getSelected().getScore();
+					return score != null ? score.getMinbp() : Integer.MIN_VALUE;
+				}
+				if (state instanceof AbstractResult) {
+					final ScoreData score = ((AbstractResult) state).getNewScore();
+					return score != null ? score.getMinbp() : Integer.MIN_VALUE;
+				}
+				return Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createIRTotalPlayerProperty() {
+			return (state) -> {
+				if (state instanceof MusicSelector) {
+					final RankingData irc = ((MusicSelector) state).getCurrentRankingData();
+					return irc != null && irc.getState() == RankingData.FINISH ? irc.getTotalPlayer() : Integer.MIN_VALUE;
+				}
+				if (state instanceof AbstractResult) {
+					return ((AbstractResult) state).getState() != AbstractResult.STATE_OFFLINE
+							? ((AbstractResult) state).getIRTotalPlayer()
+							: Integer.MIN_VALUE;
+				}
+				return Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createLastPlayTimestampProperty() {
+			return (state) -> {
+				ScoreData score = getCurrentScoreData(state);
+				long date = score != null ? score.getDate() : 0;
+				return date > 0 && date <= Integer.MAX_VALUE ? (int) date : Integer.MIN_VALUE;
+			};
+		}
+
+		private static IntegerProperty createLastPlayDateProperty(int field) {
+			return (state) -> {
+				ScoreData score = getCurrentScoreData(state);
+				long date = score != null ? score.getDate() : 0;
+				if (date <= 0) {
+					return Integer.MIN_VALUE;
+				}
+				Calendar calendar = Calendar.getInstance();
+				calendar.setTimeInMillis(date * 1000L);
+				int value = calendar.get(field);
+				return field == Calendar.MONTH ? value + 1 : value;
+			};
+		}
+
+		private static ScoreData getCurrentScoreData(MainState state) {
+			if (state instanceof MusicSelector selector) {
+				Bar selected = selector.getBarManager().getSelected();
+				return selected != null ? selected.getScore() : null;
+			}
+			return state.getScoreDataProperty().getScoreData();
 		}
 
 		private static IntegerProperty createFolderClearCountProperty(final int clearType) {
@@ -993,6 +1038,10 @@ public class IntegerPropertyFactory {
 		}
 		
 		if (result == null) {
+			result = IntegerPropertyPattern.get(PropertyScope.IMAGE_INDEX, optionid);
+		}
+
+		if (result == null) {
 			for(IndexType t : IndexType.values()) {
 				if(t.id == optionid) {
 					result = t.property;
@@ -1006,12 +1055,128 @@ public class IntegerPropertyFactory {
 	}
 	
 	public static IntegerProperty getImageIndexProperty(String name) {
+		IntegerProperty property = IntegerPropertyPattern.get(PropertyScope.IMAGE_INDEX, name);
+		if (property != null) {
+			return property;
+		}
 		for(IndexType t : IndexType.values()) {
 			if(t.name().equals(name)) {
 				return t.property;
 			}
 		}
 		return null;
+	}
+
+	private enum PropertyScope {
+		VALUE,
+		IMAGE_INDEX,
+	}
+
+	/**
+	 * Groups numbered Integer properties by their ID range and skin-facing name pattern.
+	 */
+	private enum IntegerPropertyPattern {
+		RANKING_EXSCORE(PropertyScope.VALUE, numberedIds(380, 10), numberedNames("ranking_exscore", 10), ValueType::createRankingexscore),
+		RANKING_INDEX(PropertyScope.VALUE, numberedIds(390, 10), numberedNames("ranking_index", 10), ValueType::createRankingindex),
+		IR_CLEAR_COUNT(PropertyScope.VALUE,
+				new int[] {202, 210, 204, 206, 212, 214, 216, 208, 218, 222, 224}, irClearNames(""),
+				ValueType::createIRClearCountProperty),
+		IR_CLEAR_RATE(PropertyScope.VALUE,
+				new int[] {203, 211, 205, 207, 213, 215, 217, 209, 219, 223, 225}, irClearNames("_rate"),
+				index -> ValueType.createIRClearRateProperty(index, false)),
+		IR_CLEAR_RATE_AFTERDOT(PropertyScope.VALUE,
+				new int[] {230, 234, 231, 232, 235, 236, 237, 233, 238, 239, 240}, irClearNames("_rate_afterdot"),
+				index -> ValueType.createIRClearRateProperty(index, true)),
+		FOLDER_CLEAR_COUNT(PropertyScope.VALUE, numberedIds(320, 11),
+				new String[] {"folder_noplay", "folder_failed", "folder_assist", "folder_lightassist", "folder_easy",
+						"folder_normal", "folder_hard", "folder_exhard", "folder_fullcombo", "folder_prefect", "folder_max"},
+				ValueType::createFolderClearCountProperty),
+		RANKING_PLAYERTYPE(PropertyScope.IMAGE_INDEX, numberedIds(380, 10), numberedNames("playertype_ranking", 10),
+				IndexType::createRankingPlayertypeProperty),
+		RANKING_CLEARTYPE(PropertyScope.IMAGE_INDEX, numberedIds(390, 10), numberedNames("cleartype_ranking", 10),
+				IndexType::createRankinCleartypeProperty);
+
+		private final PropertyScope scope;
+		private final int[] ids;
+		private final String[] names;
+		private final IntegerProperty[] properties;
+
+		IntegerPropertyPattern(PropertyScope scope, int[] ids, String[] names, IntFunction<IntegerProperty> propertyFactory) {
+			this.scope = scope;
+			this.ids = ids;
+			this.names = names;
+			this.properties = new IntegerProperty[ids.length];
+			for (int index = 0; index < ids.length; index++) {
+				properties[index] = propertyFactory.apply(index);
+			}
+		}
+
+		private IntegerProperty getById(int id) {
+			for (int index = 0; index < ids.length; index++) {
+				if (ids[index] == id) {
+					return properties[index];
+				}
+			}
+			return null;
+		}
+
+		private IntegerProperty getByName(String name) {
+			if (name != null) {
+				for (int index = 0; index < names.length; index++) {
+					if (names[index].equals(name)) {
+						return properties[index];
+					}
+				}
+			}
+			return null;
+		}
+
+		private static IntegerProperty get(PropertyScope scope, int id) {
+			for (IntegerPropertyPattern pattern : values()) {
+				if (pattern.scope == scope) {
+					IntegerProperty property = pattern.getById(id);
+					if (property != null) {
+						return property;
+					}
+				}
+			}
+			return null;
+		}
+
+		private static IntegerProperty get(PropertyScope scope, String name) {
+			for (IntegerPropertyPattern pattern : values()) {
+				if (pattern.scope == scope) {
+					IntegerProperty property = pattern.getByName(name);
+					if (property != null) {
+						return property;
+					}
+				}
+			}
+			return null;
+		}
+
+		private static int[] numberedIds(int firstId, int count) {
+			int[] ids = new int[count];
+			for (int index = 0; index < count; index++) {
+				ids[index] = firstId + index;
+			}
+			return ids;
+		}
+
+		private static String[] numberedNames(String prefix, int count) {
+			String[] names = new String[count];
+			for (int index = 0; index < count; index++) {
+				names[index] = prefix + (index + 1);
+			}
+			return names;
+		}
+
+		private static String[] irClearNames(String suffix) {
+			return new String[] {"ir_player_noplay" + suffix, "ir_player_failed" + suffix,
+					"ir_player_assist" + suffix, "ir_player_lightassist" + suffix, "ir_player_easy" + suffix,
+					"ir_player_normal" + suffix, "ir_player_hard" + suffix, "ir_player_exhard" + suffix,
+					"ir_player_fullcombo" + suffix, "ir_player_perfect" + suffix, "ir_player_max" + suffix};
+		}
 	}
 
 	public enum IndexType {
@@ -1029,6 +1194,8 @@ public class IntegerPropertyFactory {
 				if (model.hasAnyLongNote() && !model.hasUndefinedLongNote()) { // #LNMODE defined
 					if (model.hasLongNote()) {
 						return 0;
+					} else if (model.hasHellLongNote()) {
+						return 3;
 					} else if (model.hasChargeNote()) {
 						return 1;
 					} else {
@@ -1043,16 +1210,15 @@ public class IntegerPropertyFactory {
 		bottomshiftablegauge(341, (state) -> (state.resource.getPlayerConfig().getBottomShiftableGauge())),
 		bga(72, (state) -> (state.resource.getConfig().getBga())),
 		
+		difficulty(10, (state) -> {
+			if (state instanceof MusicSelector) {
+				return state.main.getPlayerConfig().getDifficultyFilter();
+			}
+			return Integer.MIN_VALUE;
+		}),
 		mode(11, (state) -> {
 			if (state instanceof MusicSelector) {
-				int mode = 0;
-				for (; mode < MusicSelector.MODE.length; mode++) {
-					if (MusicSelector.MODE[mode] == state.main.getPlayerConfig().getMode()) {
-						break;
-					}
-				}
-				final int[] mode_lr2 = { 0, 2, 4, 5, 1, 3 };
-				return mode < mode_lr2.length ? mode_lr2[mode] : mode;
+				return state.main.getPlayerConfig().getModeFilter().skinValue;
 			}
 			return Integer.MIN_VALUE;
 		}),
@@ -1265,16 +1431,6 @@ public class IntegerPropertyFactory {
 			}
 			return Integer.MIN_VALUE;
 		}),
-		cleartype_ranking1(390, createRankinCleartypeProperty(0)),
-		cleartype_ranking2(391, createRankinCleartypeProperty(1)),
-		cleartype_ranking3(392, createRankinCleartypeProperty(2)),
-		cleartype_ranking4(393, createRankinCleartypeProperty(3)),
-		cleartype_ranking5(394, createRankinCleartypeProperty(4)),
-		cleartype_ranking6(395, createRankinCleartypeProperty(5)),
-		cleartype_ranking7(396, createRankinCleartypeProperty(6)),
-		cleartype_ranking8(397, createRankinCleartypeProperty(7)),
-		cleartype_ranking9(398, createRankinCleartypeProperty(8)),
-		cleartype_ranking10(399, createRankinCleartypeProperty(9)),
 
 		constant(400, (state) -> {
 			if (state instanceof MusicSelector selector) {
@@ -1326,6 +1482,22 @@ public class IntegerPropertyFactory {
 		private IndexType(int id, IntegerProperty property) {
 			this.id = id;
 			this.property = property;
+		}
+
+		private static IntegerProperty createRankingPlayertypeProperty(int index) {
+			return (state) -> {
+				RankingData irc = null;
+				int rankingOffset = 0;
+				if (state instanceof MusicSelector) {
+					irc = ((MusicSelector) state).getCurrentRankingData();
+					rankingOffset = ((MusicSelector) state).getRankingOffset();
+				}
+				if (state instanceof AbstractResult) {
+					irc = ((AbstractResult) state).getRankingData();
+					rankingOffset = ((AbstractResult) state).getRankingOffset();
+				}
+				return irc != null ? irc.getPlayerType(index + rankingOffset) : Integer.MIN_VALUE;
+			};
 		}
 
 		private static IntegerProperty createRankinCleartypeProperty(int index) {

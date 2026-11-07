@@ -23,6 +23,10 @@ public class IRScoreData {
 	 */
 	public final int lntype;
 	/**
+	 * プレイヤーID
+	 */
+	public final String id;
+	/**
 	 * プレイヤー名。自身のスコアの場合は空白
 	 */
 	public final String player;
@@ -115,6 +119,10 @@ public class IRScoreData {
 	 * 実プレイ経過時間(ミリ秒単位)
 	 */
 	public final long playDuration;
+	/**
+	 * 実演奏時間(ミリ秒単位、未計測時は-1)
+	 */
+	public final long playtime;
 
 	public IRGaugeHistory gaugeHistory;
 	
@@ -127,13 +135,68 @@ public class IRScoreData {
 	 */
 	public transient ReplayData[] replays;
 	
+	public IRScoreData(String sha256, int lntype, String id, String player, ClearType clear, long date, int epg,
+			int lpg, int egr, int lgr, int egd, int lgd, int ebd, int lbd, int epr, int lpr, int ems, int lms,
+			long avgjudge, int maxcombo, int notes, int passnotes, int minbp, int option, long seed, int assist,
+			int gauge, BMSPlayerInputDevice.Type deviceType, JudgeAlgorithm judgeAlgorithm, BMSPlayerRule rule,
+			String skin) {
+		this(sha256, lntype, id, player, clear, date, epg, lpg, egr, lgr, egd, lgd, ebd, lbd,
+				epr, lpr, ems, lms, avgjudge, maxcombo, notes, passnotes, minbp, option, seed, assist,
+				gauge, deviceType, judgeAlgorithm, rule, skin, -1);
+	}
+
+	/**
+	 * 実演奏時間付きのIRスコアデータを生成する（未計測の場合は -1）。
+	 */
+	public IRScoreData(String sha256, int lntype, String id, String player, ClearType clear, long date, int epg,
+			int lpg, int egr, int lgr, int egd, int lgd, int ebd, int lbd, int epr, int lpr, int ems, int lms,
+			long avgjudge, int maxcombo, int notes, int passnotes, int minbp, int option, long seed, int assist,
+			int gauge, BMSPlayerInputDevice.Type deviceType, JudgeAlgorithm judgeAlgorithm, BMSPlayerRule rule,
+			String skin, long playtime) {
+		this.sha256 = sha256;
+		this.lntype = lntype;
+		this.id = id;
+		this.player = player;
+		this.clear = clear;
+		this.date = date;
+		this.playtime = Math.max(-1, playtime);
+		this.playDuration = Math.max(0, playtime);
+		this.epg = epg;
+		this.lpg = lpg;
+		this.egr = egr;
+		this.lgr = lgr;
+		this.egd = egd;
+		this.lgd = lgd;
+		this.ebd = ebd;
+		this.lbd = lbd;
+		this.epr = epr;
+		this.lpr = lpr;
+		this.ems = ems;
+		this.lms = lms;
+		this.avgjudge = avgjudge;
+		this.maxcombo = maxcombo;
+		this.notes = notes;
+		this.passnotes = passnotes;
+		this.minbp = minbp;
+		this.option = option;
+		this.seed = seed;
+		this.assist = assist;
+		this.gauge = gauge;
+		this.deviceType = deviceType;
+		this.judgeAlgorithm = judgeAlgorithm;
+		this.rule = rule;
+		this.skin = skin;
+	}
+
 	public IRScoreData(ScoreData score) {
 		this.sha256 = score.getSha256();
 		this.lntype = score.getMode();
 		this.player = score.getPlayer();
 		this.clear = ClearType.getClearTypeByID(score.getClear());
 		this.date = score.getDate();
+		this.id = "";
 		this.playDuration = score.getPlayDuration();
+		this.playtime = score.getPlayDuration() > 0 ? score.getPlayDuration() : -1;
 		this.epg = score.getEpg();
 		this.lpg = score.getLpg();
 		this.egr = score.getEgr();

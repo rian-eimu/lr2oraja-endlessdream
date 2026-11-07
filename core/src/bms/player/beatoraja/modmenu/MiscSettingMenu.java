@@ -32,6 +32,7 @@ public class MiscSettingMenu {
     private static Mode CURRENT_PLAY_MODE = null;
 
     private static final ImInt NOTIFICATION_POSITION = new ImInt(0);
+    private static final ImBoolean AUTO_SCRATCH = new ImBoolean(false);
     private static final ImBoolean ENABLE_LIFT = new ImBoolean(false);
     private static final ImInt LIFT_VALUE = new ImInt(0);
     private static final ImBoolean ENABLE_HIDDEN = new ImBoolean(false);
@@ -62,6 +63,12 @@ public class MiscSettingMenu {
         if (ImGui.begin("Misc Settings", showMiscSetting, ImGuiWindowFlags.AlwaysAutoResize)) {
             if (ImGui.combo("Notification Positions", NOTIFICATION_POSITION, ImGuiNotify.NOTIFICATION_POSITIONS)) {
                 ImGuiNotify.setNotificationPosition(NOTIFICATION_POSITION.get());
+            }
+
+            // Not a per play mode setting, so it is not synced in changePlayMode() like the ones below. Pulled every frame instead.
+            AUTO_SCRATCH.set(main.getPlayerConfig().isAutoscratch());
+            if (ImGui.checkbox("Auto Scratch", AUTO_SCRATCH)) {
+                main.getPlayerConfig().setAutoscratch(AUTO_SCRATCH.get());
             }
 
             // Below settings are depending on different play mode

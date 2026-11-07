@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import bms.model.TimeLine;
 import bms.player.beatoraja.PixmapResourcePool;
+import bms.player.beatoraja.song.SongResource;
 
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
@@ -19,7 +20,7 @@ import com.badlogic.gdx.graphics.Texture;
 public class BGImageProcessor {
 	private static final Logger logger = LoggerFactory.getLogger(BGImageProcessor.class);
 	
-	public static final String[] pic_extension = { "jpg", "jpeg", "gif", "bmp", "png", "tga" };
+	public static final String[] pic_extension = { "jpg", "jpeg", "gif", "bmp", "png", "tga", "webp" };
 	/**
 	 * BGイメージ
 	 */
@@ -65,7 +66,17 @@ public class BGImageProcessor {
 	}
 
 	public void put(int id, Path path) {
-		Pixmap pixmap = cache.get(path.toString());
+		Pixmap pixmap = cache.getPixmap(path.toString());
+		put(id, pixmap);
+	}
+
+	public void put(int id, SongResource resource) {
+		Pixmap pixmap = cache.getPixmap(resource);
+		put(id, pixmap);
+	}
+
+	private void put(int id, Pixmap pixmap) {
+
 		if(id >= bgamap.length) {
 			bgamap = Arrays.copyOf(bgamap, id + 1);
 		}
@@ -126,5 +137,13 @@ public class BGImageProcessor {
 		bgacache.clear();
 
 		cache.dispose();
-	}	
+	}
+
+	int getCachedTextureCount() {
+		return bgacache.size();
+	}
+
+	PixmapResourcePool.MemoryStatistics getPixmapMemoryStatistics() {
+		return cache.getMemoryStatistics();
+	}
 }

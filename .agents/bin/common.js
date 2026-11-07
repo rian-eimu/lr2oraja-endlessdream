@@ -1,5 +1,5 @@
-const fs = require("fs");
-const path = require("path");
+import { existsSync, readdirSync, mkdirSync, readFileSync, openSync, readSync, closeSync } from "fs";
+import { join, basename, relative } from "path";
 
 // ============================================================================
 // CLI & Help Utilities
@@ -44,14 +44,14 @@ function resolveSessionId(specifiedId, rootDir = process.cwd()) {
     return isNaN(num) ? specifiedId : String(num).padStart(3, "0");
   }
 
-  const reviewDir = path.join(rootDir, "tmp", "code-reviews");
-  if (!fs.existsSync(reviewDir)) {
+  const reviewDir = join(rootDir, "tmp", "code-reviews");
+  if (!existsSync(reviewDir)) {
     return "001";
   }
 
   let maxId = 0;
   try {
-    const files = fs.readdirSync(reviewDir);
+    const files = readdirSync(reviewDir);
     for (const f of files) {
       const match = f.match(/^(\d{3})-/);
       if (match) {
@@ -69,8 +69,8 @@ function resolveSessionId(specifiedId, rootDir = process.cwd()) {
  * @param {string} dirPath - Absolute or relative directory path.
  */
 function ensureDirSync(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
+  if (!existsSync(dirPath)) {
+    mkdirSync(dirPath, { recursive: true });
   }
 }
 
@@ -130,12 +130,13 @@ function cleanJsonString(str) {
  */
 function extractFilenamesFromString(text) {
   if (!text) return [];
-  const fileRegex = /[\w\-./\\]+\.(?:cs|ts|js|jsx|tsx|py|json|md|xaml|xml|cpp|h|hpp|java|go|rs|html|css|scss|vue|svelte)/gi;
+  const fileRegex =
+    /[\w\-./\\]+\.(?:cs|ts|js|jsx|tsx|py|json|md|xaml|xml|cpp|h|hpp|java|go|rs|html|css|scss|vue|svelte)/gi;
   const matches = text.match(fileRegex) || [];
   const results = [];
 
   for (const m of matches) {
-    const base = path.basename(m.replace(/[`\*]/g, "").trim());
+    const base = basename(m.replace(/[`\*]/g, "").trim());
     if (base && !results.includes(base)) {
       results.push(base);
     }
@@ -143,7 +144,122 @@ function extractFilenamesFromString(text) {
   return results;
 }
 
-module.exports = {
+// ============================================================================
+// File Filtering Utilities
+// ============================================================================
+
+/**
+ * Checks if a file is likely binary by looking for null bytes in the first 512 bytes.
+ * @param {string} filePath 
+ * @returns {boolean}
+ */
+function isBinaryFileSync(filePath) {
+  try {
+    const fd = openSync(filePath, "r");
+    const buffer = Buffer.alloc(512);
+    const bytesRead = readSync(fd, buffer, 0, 512, 0);
+    closeSync(fd);
+    
+    for (let i = 0; i < bytesRead; i++) {
+      if (buffer[i] === 0) {
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    return false; // If we can't read it, we assume it's not a valid binary file or we'll let other logic handle it
+  }
+}
+
+/**
+ * Parses a .gitignore file and returns a function that checks if a given path is ignored.
+ * @param {string} gitignorePath 
+ * @returns {Function} (filePath: string) => boolean
+ */
+function createGitignoreFilter(gitignorePath) {
+  if (!existsSync(gitignorePath)) return () => false;
+  
+  const content = readFileSync(gitignorePath, "utf8");
+  const lines = content.split(/\r?\n/);
+  
+  const rules = [];
+  for (let line of lines) {
+    line = line.trim();
+    if (!line || line.startsWith("#")) continue;
+    
+    let isNegation = false;
+    if (line.startsWith("!")) {
+      isNegation = true;
+      line = line.substring(1);
+    }
+    
+    let regexStr = line
+      .replace(/\./g, "\\.")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")
+      .replace(/\/$/, "(?:/|$)");
+      
+    if (!line.includes("/")) {
+      regexStr = `(?:^|/)${regexStr}(?:/|$)`;
+    } else if (line.startsWith("/")) {
+      regexStr = `^${regexStr.substring(1)}`;
+    } else {
+      regexStr = `(?:^|/)${regexStr}`;
+    }
+    
+    try {
+      rules.push({
+        regex: new RegExp(regexStr),
+        isNegation
+      });
+    } catch (e) {
+      // Ignore invalid regex
+    }
+  }
+  
+  return (filePath) => {
+    const normalizedPath = filePath.replace(/\\/g, "/");
+    let ignored = false;
+    for (const rule of rules) {
+      if (rule.regex.test(normalizedPath)) {
+        ignored = !rule.isNegation;
+      }
+    }
+    return ignored;
+  };
+}
+
+/**
+ * 自動生成ファイル・スナップショット・中間成果物判定用のカテゴリ別正規表現一覧
+ */
+const AUTO_GENERATED_PATTERNS = [
+  // 1. スナップショットテスト / 承認テスト (Verify / Jest / ApprovalTests)
+  /(?:\.(?:verified|received|approved)\.[^/]+|\.snap)$|(?:^|\/)__snapshots__(?:\/|$)/i,
+
+  // 2. C# / .NET / Roslyn 系の自動生成コード & ビルド中間生成物
+  /(?:\.(?:g|g\.i|designer|generated|razor\.g)\.cs|^TemporaryGeneratedFile_[^/]+\.cs)$|(?:^|\/)(?:obj|bin\/(?:Debug|Release|net\d+|netstandard|x64|x86))(?:\/|$)/i,
+
+  // 3. Web / フロントエンド / スキーマ生成物
+  /(?:\.min\.(?:js|css)|\.(?:js|css|d\.ts)\.map|\.graphql\.ts|\.generated\.ts|bundle\.js|vendor\.js|chunk-[^/]+\.js|routeTree\.gen\.ts)$|(?:^|\/)(?:dist|build|\.next|\.nuxt)(?:\/|$)/i,
+
+  // 4. Protocol Buffers / gRPC / API 自動生成クライアント
+  /(?:\.pb\.(?:cs|go)|_pb\.js|Grpc\.cs|\.openapi\.(?:cs|ts)|\.swagger\.(?:cs|ts))$|(?:^|\/)prisma\/(?:client|generated)(?:\/|$)/i,
+
+  // 5. カバレッジ / テスト結果 / レビュー中間生成物
+  /(?:lcov\.info|cobertura\.xml|[^/]+-(?:flash-context|meta-index-.*)\.json)$|(?:^|\/)(?:TestResults|coverage|tmp\/code-reviews)(?:\/|$)/i,
+];
+
+/**
+ * 指定されたファイルパスが自動生成コード、スナップショット、または中間成果物であるかを判定する
+ * @param {string} filePath - 対象ファイルパス（相対パスまたはファイル名）
+ * @returns {boolean}
+ */
+function isAutoGeneratedFile(filePath) {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  return AUTO_GENERATED_PATTERNS.some((pattern) => pattern.test(normalizedPath));
+}
+
+export {
   HELP_FLAGS,
   checkHelp,
   resolveSessionId,
@@ -152,4 +268,24 @@ module.exports = {
   getTimestampString,
   cleanJsonString,
   extractFilenamesFromString,
+  isBinaryFileSync,
+  createGitignoreFilter,
+  AUTO_GENERATED_PATTERNS,
+  isAutoGeneratedFile,
 };
+
+export default {
+  HELP_FLAGS,
+  checkHelp,
+  resolveSessionId,
+  ensureDirSync,
+  getFormattedDate,
+  getTimestampString,
+  cleanJsonString,
+  extractFilenamesFromString,
+  isBinaryFileSync,
+  createGitignoreFilter,
+  AUTO_GENERATED_PATTERNS,
+  isAutoGeneratedFile,
+};
+

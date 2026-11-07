@@ -1,13 +1,13 @@
 package bms.player.beatoraja.skin.property;
 
 import bms.player.beatoraja.*;
+import bms.player.beatoraja.skin.SkinProperty;
 import bms.player.beatoraja.MainController.IRStatus;
 import bms.player.beatoraja.config.KeyConfiguration;
 import bms.player.beatoraja.config.SkinConfiguration;
 import bms.player.beatoraja.decide.MusicDecide;
 import bms.player.beatoraja.ir.IRScoreData;
 import bms.player.beatoraja.ir.RankingData;
-import bms.player.beatoraja.modmenu.FreqTrainerMenu;
 import bms.player.beatoraja.play.BMSPlayer;
 import bms.player.beatoraja.play.TargetProperty;
 import bms.player.beatoraja.result.AbstractResult;
@@ -18,9 +18,10 @@ import bms.player.beatoraja.song.SongData;
 import com.badlogic.gdx.utils.IntMap;
 
 import java.util.*;
+import java.util.function.IntFunction;
 
 /**
- * StringPropertyのFactoryクラス
+ * StringProperty/StringWriterのFactoryクラス
  * 
  * @author exch
  */
@@ -33,6 +34,10 @@ public class StringPropertyFactory {
 	 * @return 対応するStringProperty
 	 */
 	public static StringProperty getStringProperty(final int id) {
+		StringProperty property = StringPropertyPattern.get(id);
+		if (property != null) {
+			return property;
+		}
 		StringType type = StringType.get(id);
 		return type != null ? type.property : null;
 	}
@@ -44,12 +49,146 @@ public class StringPropertyFactory {
 	 * @return 対応するStringProperty
 	 */
 	public static StringProperty getStringProperty(final String name) {
+		StringProperty property = StringPropertyPattern.get(name);
+		if (property != null) {
+			return property;
+		}
 		for(StringType t : StringType.VALUES) {
 			if(t.name().equals(name)) {
 				return t.property;
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * property IDに対応するStringWriterを返す
+	 * 
+	 * @param id property ID
+	 * @return 対応するStringWriter
+	 */
+	public static StringWriter getStringWriter(final int id) {
+		StringType type = StringType.get(id);
+		return type != null ? type.writer : null;
+	}
+	
+	/**
+	 * property nameに対応するStringWriterを返す
+	 * 
+	 * @param name property name
+	 * @return 対応するStringWriter
+	 */
+	public static StringWriter getStringWriter(final String name) {
+		for(StringType t : StringType.VALUES) {
+			if(t.name().equals(name)) {
+				return t.writer;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Groups numbered String properties by their ID range and skin-facing name pattern.
+	 */
+	private enum StringPropertyPattern {
+		KEY(keyIds(), numberedNames("key", 54), StringType::createKeyname),
+		SKIN_CATEGORY(numberedIds(100, 10), numberedNames("skincategory", 10), StringType::createSkincategory),
+		SKIN_ITEM(numberedIds(110, 10), numberedNames("skinitem", 10), StringType::createSkinitem),
+		RANKING_NAME(numberedIds(120, 10), numberedNames("rankingname", 10), StringType::createRankingname),
+		COURSE_TITLE(numberedIds(150, 10), numberedNames("coursetitle", 10), StringType::createCoursetitle),
+		TARGET_NAME_P(numberedIds(200, 10), targetNames("targetnamep", 10, true), index -> StringType.createTargetname(index - 10)),
+		TARGET_NAME_N(numberedIds(210, 10), targetNames("targetnamen", 10, false), index -> StringType.createTargetname(index + 1)),
+		PRACTICE_ITEM(numberedIds(SkinProperty.STRING_PRACTICE_ITEM1, 16), numberedNames("practice_item", 16), StringType::createPracticeItem),
+		PRACTICE_ITEM_LABEL(numberedIds(SkinProperty.STRING_PRACTICE_ITEM_LABEL1, 16), numberedNames("practice_item_label", 16), StringType::createPracticeItemLabel),
+		PRACTICE_ITEM_VALUE(numberedIds(SkinProperty.STRING_PRACTICE_ITEM_VALUE1, 16), numberedNames("practice_item_value", 16), StringType::createPracticeItemValue);
+
+		private final int[] ids;
+		private final String[] names;
+		private final StringProperty[] properties;
+
+		StringPropertyPattern(int[] ids, String[] names, IntFunction<StringProperty> propertyFactory) {
+			this.ids = ids;
+			this.names = names;
+			this.properties = new StringProperty[ids.length];
+			for (int index = 0; index < ids.length; index++) {
+				properties[index] = propertyFactory.apply(index);
+			}
+		}
+
+		private StringProperty getById(int id) {
+			for (int index = 0; index < ids.length; index++) {
+				if (ids[index] == id) {
+					return properties[index];
+				}
+			}
+			return null;
+		}
+
+		private StringProperty getByName(String name) {
+			if (name != null) {
+				for (int index = 0; index < names.length; index++) {
+					if (names[index].equals(name)) {
+						return properties[index];
+					}
+				}
+			}
+			return null;
+		}
+
+		private static StringProperty get(int id) {
+			for (StringPropertyPattern pattern : values()) {
+				StringProperty property = pattern.getById(id);
+				if (property != null) {
+					return property;
+				}
+			}
+			return null;
+		}
+
+		private static StringProperty get(String name) {
+			for (StringPropertyPattern pattern : values()) {
+				StringProperty property = pattern.getByName(name);
+				if (property != null) {
+					return property;
+				}
+			}
+			return null;
+		}
+
+		private static int[] numberedIds(int firstId, int count) {
+			int[] ids = new int[count];
+			for (int index = 0; index < count; index++) {
+				ids[index] = firstId + index;
+			}
+			return ids;
+		}
+
+		private static int[] keyIds() {
+			int[] ids = new int[54];
+			for (int index = 0; index < 10; index++) {
+				ids[index] = 40 + index;
+			}
+			for (int index = 10; index < ids.length; index++) {
+				ids[index] = 230 + index;
+			}
+			return ids;
+		}
+
+		private static String[] numberedNames(String prefix, int count) {
+			String[] names = new String[count];
+			for (int index = 0; index < count; index++) {
+				names[index] = prefix + (index + 1);
+			}
+			return names;
+		}
+
+		private static String[] targetNames(String prefix, int count, boolean descending) {
+			String[] names = new String[count];
+			for (int index = 0; index < count; index++) {
+				names[index] = prefix + (descending ? count - index : index + 1);
+			}
+			return names;
+		}
 	}
 	
 	public enum StringType {
@@ -86,14 +225,14 @@ public class StringPropertyFactory {
 			}
 			return song != null ? song.getTitle() : "";
 		}),
-        subtitle(11, (state) -> {
+		subtitle(11, (state) -> {
 			if (state instanceof MusicSelector selector && selector.getSelectedBar() instanceof FunctionBar) {
 				return ((FunctionBar) selector.getSelectedBar()).getSubtitle();
 			}
-            final SongData song = state.resource.getSongdata();
+			final SongData song = state.resource.getSongdata();
 			return song != null ? song.getSubtitle() : "";
-        }),
-        fulltitle(12, (state) -> {
+		}),
+		fulltitle(12, (state) -> {
 			if (state instanceof MusicSelector selector && selector.getSelectedBar() instanceof DirectoryBar) {
 				return selector.getSelectedBar().getTitle();
 			} else if ((state instanceof MusicDecide || state instanceof CourseResult) && state.resource.getCoursetitle() != null) {
@@ -123,64 +262,10 @@ public class StringPropertyFactory {
 			final SongData song = state.resource.getSongdata();
 			return song != null ? song.getFullArtist() : "";
 		}),
-		key1(40, createKeyname(0)),
-		key2(41, createKeyname(1)),
-		key3(42, createKeyname(2)),
-		key4(43, createKeyname(3)),
-		key5(44, createKeyname(4)),
-		key6(45, createKeyname(5)),
-		key7(46, createKeyname(6)),
-		key8(47, createKeyname(7)),
-		key9(48, createKeyname(8)),
-		key10(49, createKeyname(9)),
 		sort(61, (state) -> state.resource.getPlayerConfig().getSortid()),
+		mode(62, (state) -> state.resource.getPlayerConfig().getModeFilter().name),
 
 		chartreplication(86, (state) -> state.resource.getPlayerConfig().getChartReplicationMode()),
-
-		key11(240, createKeyname(10)),
-		key12(241, createKeyname(11)),
-		key13(242, createKeyname(12)),
-		key14(243, createKeyname(13)),
-		key15(244, createKeyname(14)),
-		key16(245, createKeyname(15)),
-		key17(246, createKeyname(16)),
-		key18(247, createKeyname(17)),
-		key19(248, createKeyname(18)),
-		key20(249, createKeyname(19)),
-		key21(250, createKeyname(20)),
-		key22(251, createKeyname(21)),
-		key23(252, createKeyname(22)),
-		key24(253, createKeyname(23)),
-		key25(254, createKeyname(24)),
-		key26(255, createKeyname(25)),
-		key27(256, createKeyname(26)),
-		key28(257, createKeyname(27)),
-		key29(258, createKeyname(28)),
-		key30(259, createKeyname(29)),
-		key31(260, createKeyname(30)),
-		key32(261, createKeyname(31)),
-		key33(262, createKeyname(32)),
-		key34(263, createKeyname(33)),
-		key35(264, createKeyname(34)),
-		key36(265, createKeyname(35)),
-		key37(266, createKeyname(36)),
-		key38(267, createKeyname(37)),
-		key39(268, createKeyname(38)),
-		key40(269, createKeyname(39)),
-		key41(270, createKeyname(40)),
-		key42(271, createKeyname(41)),
-		key43(272, createKeyname(42)),
-		key44(273, createKeyname(43)),
-		key45(274, createKeyname(44)),
-		key46(275, createKeyname(45)),
-		key47(276, createKeyname(46)),
-		key48(277, createKeyname(47)),
-		key49(278, createKeyname(48)),
-		key50(279, createKeyname(49)),
-		key51(280, createKeyname(50)),
-		key52(281, createKeyname(51)),
-		key53(282, createKeyname(52)),
-		key54(283, createKeyname(53)),
 
 		skinname(50, (state) -> {
 			if (state instanceof SkinConfiguration skinconfig) {
@@ -198,66 +283,6 @@ public class StringPropertyFactory {
 			}
 			return "";
 		}),
-		skincategory1(100, createSkincategory(0)),
-		skincategory2(101, createSkincategory(1)),
-		skincategory3(102, createSkincategory(2)),
-		skincategory4(103, createSkincategory(3)),
-		skincategory5(104, createSkincategory(4)),
-		skincategory6(105, createSkincategory(5)),
-		skincategory7(106, createSkincategory(6)),
-		skincategory8(107, createSkincategory(7)),
-		skincategory9(108, createSkincategory(8)),
-		skincategory10(109, createSkincategory(9)),
-		skinitem1(110, createSkinitem(0)),
-		skinitem2(111, createSkinitem(1)),
-		skinitem3(112, createSkinitem(2)),
-		skinitem4(113, createSkinitem(3)),
-		skinitem5(114, createSkinitem(4)),
-		skinitem6(115, createSkinitem(5)),
-		skinitem7(116, createSkinitem(6)),
-		skinitem8(117, createSkinitem(7)),
-		skinitem9(118, createSkinitem(8)),
-		skinitem10(119, createSkinitem(9)),
-		rankingname1(120, createRankingname(0)),
-		rankingname2(121, createRankingname(1)),
-		rankingname3(122, createRankingname(2)),
-		rankingname4(123, createRankingname(3)),
-		rankingname5(124, createRankingname(4)),
-		rankingname6(125, createRankingname(5)),
-		rankingname7(126, createRankingname(6)),
-		rankingname8(127, createRankingname(7)),
-		rankingname9(128, createRankingname(8)),
-		rankingname10(129, createRankingname(9)),
-		coursetitle1(150, createCoursetitle(0)),
-		coursetitle2(151, createCoursetitle(1)),
-		coursetitle3(152, createCoursetitle(2)),
-		coursetitle4(153, createCoursetitle(3)),
-		coursetitle5(154, createCoursetitle(4)),
-		coursetitle6(155, createCoursetitle(5)),
-		coursetitle7(156, createCoursetitle(6)),
-		coursetitle8(157, createCoursetitle(7)),
-		coursetitle9(158, createCoursetitle(8)),
-		coursetitle10(159, createCoursetitle(9)),
-		targetnamep10(200, createTargetname(-10)),
-		targetnamep9(201, createTargetname(-9)),
-		targetnamep8(202, createTargetname(-8)),
-		targetnamep7(203, createTargetname(-7)),
-		targetnamep6(204, createTargetname(-6)),
-		targetnamep5(205, createTargetname(-5)),
-		targetnamep4(206, createTargetname(-4)),
-		targetnamep3(207, createTargetname(-3)),
-		targetnamep2(208, createTargetname(-2)),
-		targetnamep1(209, createTargetname(-1)),
-		targetnamen1(210, createTargetname(1)),
-		targetnamen2(211, createTargetname(2)),
-		targetnamen3(212, createTargetname(3)),
-		targetnamen4(213, createTargetname(4)),
-		targetnamen5(214, createTargetname(5)),
-		targetnamen6(215, createTargetname(6)),
-		targetnamen7(216, createTargetname(7)),
-		targetnamen8(217, createTargetname(8)),
-		targetnamen9(218, createTargetname(9)),
-		targetnamen10(219, createTargetname(10)),
 
 		directory(1000, (state) -> ((state instanceof MusicSelector selector) ? selector.getBarManager().getDirectoryString() : "")),
 		tablename(1001, (state) -> (state.resource.getTablename())),
@@ -296,6 +321,10 @@ public class StringPropertyFactory {
 		 * StringProperty
 		 */
 		private final StringProperty property;
+		/**
+		 * StringWriter
+		 */
+		private final StringWriter writer;
 
 		public static final List<StringType> VALUES = Collections.unmodifiableList(Arrays.asList(StringType.values()));
 
@@ -313,8 +342,13 @@ public class StringPropertyFactory {
 		}
 		
 		private StringType(int id, StringProperty property) {
+			this(id, property, null);
+		}
+
+		private StringType(int id, StringProperty property, StringWriter writer) {
 			this.id = id;
 			this.property = property;
+			this.writer = writer;
 		}
 		
 		private static StringProperty createSkincategory(final int index) {
@@ -340,7 +374,7 @@ public class StringPropertyFactory {
 				RankingData irc = null;
 				int rankingOffset = 0;
 				if (state instanceof MusicSelector selector) {
-					irc =selector.getCurrentRankingData();
+					irc = selector.getCurrentRankingData();
 					rankingOffset = selector.getRankingOffset();
 				}
 				if (state instanceof AbstractResult result) {
@@ -409,6 +443,31 @@ public class StringPropertyFactory {
 				}
 				return "";
 			};
-		}		
+		}
+
+		private static StringProperty createPracticeItem(final int index) {
+			return (state) -> (state instanceof BMSPlayer player)
+					? player.getPracticeConfiguration().getVisibleItemText(index)
+					: "";
+		}
+
+		private static StringProperty createPracticeItemLabel(final int index) {
+			return (state) -> {
+				if (state instanceof BMSPlayer player) {
+					return player.getPracticeConfiguration().getVisibleItemLabel(index);
+				}
+				// STRING_MODE_FILTER (1060) との後方互換維持
+				if (index == 0 && state.resource != null && state.resource.getPlayerConfig() != null) {
+					return state.resource.getPlayerConfig().getModeFilter().name;
+				}
+				return "";
+			};
+		}
+
+		private static StringProperty createPracticeItemValue(final int index) {
+			return (state) -> (state instanceof BMSPlayer player)
+					? player.getPracticeConfiguration().getVisibleItemValue(index)
+					: "";
+		}
 	}
 }

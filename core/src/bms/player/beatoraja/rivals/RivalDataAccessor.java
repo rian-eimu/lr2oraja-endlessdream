@@ -5,9 +5,11 @@ import bms.player.beatoraja.PlayerInformation;
 import bms.player.beatoraja.ScoreData;
 import bms.player.beatoraja.ScoreDatabaseAccessor;
 import bms.player.beatoraja.external.ScoreDataImporter;
+import bms.player.beatoraja.ir.IRConnection;
 import bms.player.beatoraja.ir.IRPlayerData;
 import bms.player.beatoraja.ir.IRResponse;
 import bms.player.beatoraja.ir.IRScoreData;
+import bms.player.beatoraja.ir.IRScoreDataSyncResponse;
 import bms.player.beatoraja.song.SongData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,6 +85,41 @@ public final class RivalDataAccessor {
                 return currentRival.rivalInformation;
             }
         }
+    }
+
+    /**
+     * 前のライバルに切り替え、該当する {@link PlayerInformation} を返します。現在のライバルが先頭の場合は null を返します（ライバル未選択状態）。
+     *
+     * @return 前のライバルの {@link PlayerInformation}、または未選択状態になった場合は null
+     */
+    @Nullable
+    public PlayerInformation previousRival() {
+        if (rivals.isEmpty()) {
+            return null;
+        }
+
+        if (currentRival == null) {
+            currentRival = rivals.get(rivals.size() - 1);
+            return currentRival.rivalInformation;
+        } else {
+            var index = rivals.indexOf(currentRival);
+            if (index <= 0) {
+                currentRival = null;
+                return null;
+            } else {
+                currentRival = rivals.get(index - 1);
+                return currentRival.rivalInformation;
+            }
+        }
+    }
+
+    /**
+     * テスト用：ライバルを追加する
+     *
+     * @param rivalInformation ライバル情報
+     */
+    void addRivalForTest(PlayerInformation rivalInformation) {
+        rivals.add(new Rival(rivalInformation, null, null));
     }
 
     /**
@@ -193,16 +230,9 @@ public final class RivalDataAccessor {
                         for (IRPlayerData irPlayer : response.getData()) {
                             new Thread(() -> {
                                 var rivalInformation = irPlayer.toPlayerInformation();
-                                IRResponse<IRScoreData[]> scores = main.getIRStatus()[0].connection.getPlayData(irPlayer, null);
-                                if (scores.isSucceeded()) {
-                                    rivals.stream().filter(rival -> rival.rivalInformation.equals(rivalInformation))
-                                            .findFirst()
-                                            .ifPresent(rival ->
-                                                    rival.rivalDataCache().updateAllScores(convert(scores.getData())));
-                                    logger.info("IRからのライバルスコア取得完了 : {}", rivalInformation.getName());
-                                } else {
-                                    logger.warn("IRからのライバルスコア取得失敗 : {}", scores.getMessage());
-                                }
+                                rivals.stream().filter(rival -> rival.rivalInformation.equals(rivalInformation))
+                                        .findFirst()
+                                        .ifPresent(rival -> syncRivalScores(main.getIRStatus()[0].connection, irPlayer, rival));
                             }).start();
                         }
                     }
@@ -222,6 +252,40 @@ public final class RivalDataAccessor {
         }
     }
 
+    private void syncRivalScores(IRConnection connection, IRPlayerData irPlayer, Rival rival) {
+        try {
+            long revision = rival.rivalInformation.getSyncRevision();
+            boolean hasMore;
+            do {
+                IRScoreDataSyncResponse scores = connection.getPlayDataSince(irPlayer, revision);
+                if (!scores.isSucceeded()) {
+                    logger.warn("IRからのライバルスコア取得失敗 : {}", scores.getMessage());
+                    return;
+                }
+
+                rival.rivalDataCache.updateAllScores(convert(scores.getData()));
+                long nextRevision = scores.getScoreRevision();
+                hasMore = scores.hasMore();
+                if (hasMore && nextRevision <= revision) {
+                    logger.warn("IRからのライバルスコア同期を中断 : リビジョンが進みません ({})", rival.rivalInformation.getName());
+                    return;
+                }
+
+                revision = nextRevision;
+                rival.rivalInformation.setSyncRevision(revision);
+                if (rival.scoreDb != null) {
+                    rival.scoreDb.setInformation(rival.rivalInformation);
+                }
+            } while (hasMore && !Thread.currentThread().isInterrupted());
+
+            if (!Thread.currentThread().isInterrupted()) {
+                logger.info("IRからのライバルスコア取得完了 : {}", rival.rivalInformation.getName());
+            }
+        } catch (Exception e) {
+            logger.warn("IRからのライバルスコア同期を中断 : {} : {}", rival.rivalInformation.getName(), e.getMessage());
+        }
+    }
+
     private List<Rival> createIrRivalDatabases(Path rivalsPath, IRPlayerData[] rivalsData, String irName) {
         List<Rival> irRivals = new ArrayList<>();
         for (var irPlayer : rivalsData) {
@@ -231,9 +295,13 @@ public final class RivalDataAccessor {
                         rivalsPath.toString() + File.separatorChar + irName + rivalInformation.getId() + ".db"
                 );
                 scoreDb.createTable();
+                PlayerInformation savedRival = scoreDb.getInformation();
+                if (savedRival != null) {
+                    rivalInformation.setSyncRevision(savedRival.getSyncRevision());
+                }
                 scoreDb.setInformation(rivalInformation);
                 var rivalCache = new RivalDataCache(scoreDb);
-                irRivals.add(new Rival(rivalInformation, rivalCache));
+                irRivals.add(new Rival(rivalInformation, rivalCache, scoreDb));
                 logger.info("Created rival score DB for rival from IR: {}", rivalInformation.getName());
             } catch (ClassNotFoundException e) {
                 logger.error("SQLite JDBC driver not found", e);
@@ -262,7 +330,7 @@ public final class RivalDataAccessor {
                         var rivalInformation = scoreDb.getInformation();
                         if (rivalInformation != null) {
                             var rivalCache = new RivalDataCache(scoreDb);
-                            localRivals.add(new Rival(rivalInformation, rivalCache));
+                            localRivals.add(new Rival(rivalInformation, rivalCache, scoreDb));
                             logger.info("Loaded local rival score DB: {}", rivalInformation.getName());
                         }
                     } catch (ClassNotFoundException e) {
@@ -284,7 +352,7 @@ public final class RivalDataAccessor {
         return index >= 0 && index < rivals.size() ? Optional.of(rivals.get(index)) : Optional.empty();
     }
 
-    private record Rival(PlayerInformation rivalInformation, RivalDataCache rivalDataCache) {
+    private record Rival(PlayerInformation rivalInformation, RivalDataCache rivalDataCache, ScoreDatabaseAccessor scoreDb) {
 
         private ScoreData getScore(SongData song, int lnMode) {
             return rivalDataCache.readScoreData(song, lnMode);

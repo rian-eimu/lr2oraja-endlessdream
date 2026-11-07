@@ -4,6 +4,8 @@ import static bms.player.beatoraja.Resolution.*;
 import static bms.player.beatoraja.obs.ObsWsClient.ObsRecordingMode;
 
 import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.ParseException;
@@ -13,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import bms.player.beatoraja.system.RobustFile;
 import bms.player.beatoraja.obs.ObsControlCommand;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -30,6 +34,18 @@ import com.badlogic.gdx.utils.SerializationException;
  * @author exch
  */
 public class Config implements Validatable {
+	public static final int MAX_FPS_MIN = 0;
+	public static final int MAX_FPS_MAX = 50000;
+	public static final int SCROLL_DURATION_LOW_MIN = 2;
+	public static final int SCROLL_DURATION_LOW_MAX = 1000;
+	public static final int ANALOG_TICKS_PER_SCROLL_MIN = 1;
+	public static final int ANALOG_TICKS_PER_SCROLL_MAX = 1000;
+
+	private static final long MAX_CONFIG_FILE_SIZE = 1024 * 1024;
+	private static final int MAX_CONFIG_PATH_LENGTH = 4096;
+	private static final int MAX_CONFIG_LIST_ENTRIES = 1024;
+	private static final int MAX_URL_LENGTH = 2048;
+	private static final String DEFAULT_IPFS_URL = "https://gateway.ipfs.io/";
 	private static final Logger logger = LoggerFactory.getLogger(Config.class);
 	
 	/**
@@ -175,6 +191,16 @@ public class Config implements Validatable {
 
 	private boolean updatesong = false;
 
+	/**
+	 * 楽曲更新時にzip/rarアーカイブも探索するか
+	 */
+	private boolean scanSongArchives = false;
+
+	/**
+	 * 楽曲アーカイブの展開モード
+	 */
+	private SongArchiveExtractMode songArchiveExtractMode = SongArchiveExtractMode.NO_TEMPORARY_FILES;
+
 	private int skinPixmapGen = 4;
 	private int stagefilePixmapGen = 2;
 	private int bannerPixmapGen = 2;
@@ -195,6 +221,11 @@ public class Config implements Validatable {
 
 	private boolean useDiscordRPC = false;
 	private boolean setClipboardScreenshot = false;
+	/**
+	 * すべての定義音を鳴らし終わってからリザルト画面に移行するかどうか
+	 */
+	private boolean waitAllNotesResult = false;
+
 	private String monitorName = "";
     private int webhookOption = 0; // 0 - Off, 1 - Image, 2 - Rich
     private String webhookName = "";
@@ -608,12 +639,37 @@ public class Config implements Validatable {
 		this.setClipboardScreenshot = setClipboardScreenshot;
 	}
 
+	public boolean isWaitAllNotesResult() {
+		return waitAllNotesResult;
+	}
+
+	public void setWaitAllNotesResult(boolean waitAllNotesResult) {
+		this.waitAllNotesResult = waitAllNotesResult;
+	}
+
+
 	public boolean isUpdatesong() {
 		return updatesong;
 	}
 
 	public void setUpdatesong(boolean updatesong) {
 		this.updatesong = updatesong;
+	}
+
+	public boolean isScanSongArchives() {
+		return scanSongArchives;
+	}
+
+	public void setScanSongArchives(boolean scanSongArchives) {
+		this.scanSongArchives = scanSongArchives;
+	}
+
+	public SongArchiveExtractMode getSongArchiveExtractMode() {
+		return songArchiveExtractMode;
+	}
+
+	public void setSongArchiveExtractMode(SongArchiveExtractMode songArchiveExtractMode) {
+		this.songArchiveExtractMode = songArchiveExtractMode;
 	}
 
 	public DisplayMode getDisplaymode() {
@@ -856,6 +912,7 @@ public class Config implements Validatable {
 	}
 
     public boolean validate() {
+		playername = PlayerConfig.isValidPlayerId(playername) ? playername : null;
 		displaymode = (displaymode != null) ? displaymode : DisplayMode.WINDOW;
 		resolution = (resolution != null) ? resolution : Resolution.HD;
 
@@ -866,29 +923,113 @@ public class Config implements Validatable {
 			audio = new AudioConfig();
 		}
 		audio.validate();
-		maxFramePerSecond = MathUtils.clamp(maxFramePerSecond, 0, 50000);
+		maxFramePerSecond = MathUtils.clamp(maxFramePerSecond, MAX_FPS_MIN, MAX_FPS_MAX);
 		prepareFramePerSecond = MathUtils.clamp(prepareFramePerSecond, 0, 100000);
         maxSearchBarCount = MathUtils.clamp(maxSearchBarCount, 1, 100);
         songPreview = (songPreview != null) ? songPreview : SongPreview.LOOP;
 
-		scrolldurationlow = MathUtils.clamp(scrolldurationlow, 2, 1000);
+		scrolldurationlow = MathUtils.clamp(scrolldurationlow, SCROLL_DURATION_LOW_MIN, SCROLL_DURATION_LOW_MAX);
 		scrolldurationhigh = MathUtils.clamp(scrolldurationhigh, 1, 1000);
+		analogTicksPerScroll = MathUtils.clamp(analogTicksPerScroll, ANALOG_TICKS_PER_SCROLL_MIN, ANALOG_TICKS_PER_SCROLL_MAX);
 		irSendCount = MathUtils.clamp(irSendCount, 1, 100);
+		frameskip = MathUtils.clamp(frameskip, 0, 10);
 
 		skinPixmapGen = MathUtils.clamp(skinPixmapGen, 0, 100);
 		stagefilePixmapGen = MathUtils.clamp(stagefilePixmapGen, 0, 100);
 		bannerPixmapGen = MathUtils.clamp(bannerPixmapGen, 0, 100);
 		songResourceGen = MathUtils.clamp(songResourceGen, 0, 100);
 
-		bmsroot = Validatable.removeInvalidElements(bmsroot);
+		bmsroot = sanitizePaths(bmsroot);
 
 		if(tableURL == null) {
 			tableURL = DEFAULT_TABLEURL;
 		}
-		tableURL = Validatable.removeInvalidElements(tableURL);
+		tableURL = sanitizeUrls(tableURL);
+		if (songArchiveExtractMode == null) {
+			songArchiveExtractMode = SongArchiveExtractMode.NO_TEMPORARY_FILES;
+		}
 
 		bga = MathUtils.clamp(bga, 0, 2);
 		bgaExpand = MathUtils.clamp(bgaExpand, 0, 2);
+		ipfsurl = sanitizeOptionalUrl(ipfsurl, DEFAULT_IPFS_URL);
+		songpath = sanitizePathOrDefault(songpath, SONGPATH_DEFAULT);
+		songinfopath = sanitizePathOrDefault(songinfopath, SONGINFOPATH_DEFAULT);
+		tablepath = sanitizePathOrDefault(tablepath, TABLEPATH_DEFAULT);
+		playerpath = sanitizePathOrDefault(playerpath, PLAYERPATH_DEFAULT);
+		skinpath = sanitizePathOrDefault(skinpath, SKINPATH_DEFAULT);
+		bgmpath = sanitizeOptionalPath(bgmpath);
+		soundpath = sanitizeOptionalPath(soundpath);
+		systemfontpath = sanitizeOptionalPath(systemfontpath);
+		messagefontpath = sanitizeOptionalPath(messagefontpath);
+		downloadDirectory = sanitizePathOrDefault(downloadDirectory, DEFAULT_DOWNLOAD_DIRECTORY);
+		return true;
+	}
+
+	static boolean isUsablePath(String path) {
+		if (path == null || path.isBlank() || path.length() > MAX_CONFIG_PATH_LENGTH
+				|| path.codePoints().anyMatch(Character::isISOControl)) {
+			return false;
+		}
+		try {
+			Paths.get(path);
+			return true;
+		} catch (InvalidPathException e) {
+			return false;
+		}
+	}
+
+	private static String sanitizePathOrDefault(String path, String defaultPath) {
+		return isUsablePath(path) ? path : defaultPath;
+	}
+
+	private static String sanitizeOptionalPath(String path) {
+		if (path == null || path.isEmpty()) {
+			return "";
+		}
+		return isUsablePath(path) ? path : "";
+	}
+
+	private static String[] sanitizePaths(String[] paths) {
+		if (paths == null) {
+			return new String[0];
+		}
+		return Arrays.stream(paths)
+				.limit(MAX_CONFIG_LIST_ENTRIES)
+				.filter(Config::isUsablePath)
+				.toArray(String[]::new);
+	}
+
+	private static boolean isUsableUrl(String value) {
+		if (value == null || value.isBlank() || value.length() > MAX_URL_LENGTH
+				|| value.codePoints().anyMatch(Character::isISOControl)) {
+			return false;
+		}
+		try {
+			URI uri = new URI(value);
+			String scheme = uri.getScheme();
+			return scheme != null && (scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))
+					&& uri.getHost() != null && !uri.getHost().isBlank();
+		} catch (URISyntaxException e) {
+			return false;
+		}
+	}
+
+	private static String sanitizeOptionalUrl(String value, String defaultValue) {
+		return isUsableUrl(value) ? value : defaultValue;
+	}
+
+	private static String[] sanitizeUrls(String[] urls) {
+		if (urls == null) {
+			return new String[0];
+		}
+		return Arrays.stream(urls)
+				.limit(MAX_CONFIG_LIST_ENTRIES)
+				.filter(Config::isUsableUrl)
+				.toArray(String[]::new);
+	}
+
+	@SuppressWarnings("unused")
+	private boolean unusedOldValidateBlock() {
 		if (ipfsurl == null) {
 			ipfsurl = "https://gateway.ipfs.io/";
 		}
@@ -922,6 +1063,9 @@ public class Config implements Validatable {
         Config config = null;
 		if (Files.exists(configpath)) {
             try {
+                if (!Files.isRegularFile(configpath) || Files.size(configpath) > MAX_CONFIG_FILE_SIZE) {
+                    throw new IOException("file is not regular or exceeds " + MAX_CONFIG_FILE_SIZE + " bytes");
+                }
                 config = RobustFile.load(configpath, parser);
             }
             catch (IOException e) {
@@ -998,6 +1142,12 @@ public class Config implements Validatable {
 
     public enum DisplayMode {
 		FULLSCREEN,BORDERLESS,WINDOW;
+	}
+
+	public enum SongArchiveExtractMode {
+		NO_TEMPORARY_FILES,
+		TEMPORARY,
+		SONG_DIRECTORY
 	}
 
 	public enum SongPreview {

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.JOptionPane;
 
 import bms.player.beatoraja.exceptions.PlayerConfigException;
+import bms.player.beatoraja.song.SongResources;
 import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Graphics;
@@ -37,7 +38,9 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 
 import bms.player.beatoraja.AudioConfig.DriverType;
+import bms.player.beatoraja.ir.IRConnection;
 import bms.player.beatoraja.ir.IRConnectionManager;
+import bms.player.beatoraja.ir.IRResponse;
 import bms.player.beatoraja.ir.IRPluginUpdater;
 import bms.player.beatoraja.launcher.PlayConfigurationView;
 import bms.player.beatoraja.song.SQLiteSongDatabaseAccessor;
@@ -65,6 +68,7 @@ public class MainLoader extends Application {
 	private static VersionChecker version;
 
 	public static void main(String[] args) {
+		bms.player.beatoraja.ir.IRProcessSupport.ensureParentClasspath(MainLoader.class.getName(), args);
 
 		if(!ALLOWS_32BIT_JAVA && !System.getProperty( "os.arch" ).contains( "64")) {
 			JOptionPane.showMessageDialog(null, "This Application needs 64bit-Java.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -139,7 +143,16 @@ public class MainLoader extends Application {
             }
         }
 
-        for (SongData song : getScoreDatabaseAccessor().getSongDatas(SongUtils.illegalsongs)) {
+
+        if (player == null && config != null) {
+            try {
+                player = PlayerConfig.readPlayerConfig(config.getPlayerpath(), config.getPlayername());
+            } catch (PlayerConfigException e) {
+                logger.error(e.getLocalizedMessage());
+            }
+        }
+        detectIllegalSongs(getScoreDatabaseAccessor(), player);
+        for (SongData song : new SongData[0]) {
             MainLoader.putIllegalSong(song.getSha256());
         }
 
@@ -294,7 +307,8 @@ public class MainLoader extends Application {
 			try {
 				Config config = Config.read();
 				Class.forName("org.sqlite.JDBC");
-				songdb = new SQLiteSongDatabaseAccessor(config.getSongpath(), config.getBmsroot());
+				songdb = new SQLiteSongDatabaseAccessor(config.getSongpath(), config.getBmsroot(),
+						config.isScanSongArchives(), config.getSongArchiveExtractMode());
 			} catch (ClassNotFoundException | PlayerConfigException e) {
 				logger.error("Failed to access score database: {}", e.getLocalizedMessage());
 			}
@@ -325,6 +339,65 @@ public class MainLoader extends Application {
 
 	public static String[] getIllegalSongs() {
 		return illegalSongs.toArray(new String[illegalSongs.size()]);
+	}
+
+	private static void detectIllegalSongs(SongDatabaseAccessor songdb, PlayerConfig player) {
+		illegalSongs.clear();
+		if (songdb == null) {
+			return;
+		}
+		Set<String> hashes = new LinkedHashSet<>();
+		addIllegalSongHashes(hashes, SongUtils.illegalsongs);
+		if (player != null && player.getIrconfig() != null) {
+			for (IRConfig irconfig : player.getIrconfig()) {
+				if (irconfig == null || irconfig.getIrname() == null || irconfig.getIrname().length() == 0) {
+					continue;
+				}
+				IRConnection ir = IRConnectionManager.getIRConnection(irconfig.getIrname());
+				if (ir == null) {
+					continue;
+				}
+				try {
+					IRResponse<String[]> response = ir.getIllegalSongs();
+					if (response.isSucceeded()) {
+						addIllegalSongHashes(hashes, response.getData());
+					} else if (response.getMessage() != null && response.getMessage().length() > 0
+							&& !"Not supported".equals(response.getMessage())) {
+						logger.warn("IR illegal song list取得失敗 - {} : {}", irconfig.getIrname(), response.getMessage());
+					}
+				} finally {
+					closeIRConnection(ir);
+				}
+			}
+		}
+		if (hashes.isEmpty()) {
+			return;
+		}
+		for (SongData song : songdb.getSongDatas(hashes.toArray(String[]::new))) {
+			if (song != null && song.getSha256() != null && song.getSha256().length() > 0) {
+				MainLoader.putIllegalSong(song.getSha256());
+			}
+		}
+	}
+
+	private static void addIllegalSongHashes(Set<String> hashes, String[] candidates) {
+		if (candidates == null) {
+			return;
+		}
+		for (String candidate : candidates) {
+			if (candidate != null && candidate.length() == 64) {
+				hashes.add(candidate);
+			}
+		}
+	}
+
+	private static void closeIRConnection(IRConnection ir) {
+		if (ir instanceof AutoCloseable closeable) {
+			try {
+				closeable.close();
+			} catch (Exception e) {
+			}
+		}
 	}
 
 	public static int getIllegalSongCount() {

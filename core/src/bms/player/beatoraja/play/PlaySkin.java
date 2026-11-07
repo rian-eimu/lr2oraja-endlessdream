@@ -1,5 +1,12 @@
 package bms.player.beatoraja.play;
 
+import static bms.player.beatoraja.skin.SkinProperty.OFFSET_LIFT;
+import static bms.player.beatoraja.skin.SkinProperty.OFFSET_LIFT_OBSOLETE;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import bms.player.beatoraja.MainState;
 import bms.player.beatoraja.Resolution;
 import bms.player.beatoraja.skin.*;
 
@@ -51,7 +58,64 @@ public class PlaySkin extends Skin {
 
 	public SkinSlider laneCover;
 
+	private SkinPractice practice;
+
 	public final PomyuCharaProcessor pomyu = new PomyuCharaProcessor();
+
+	private final List<SkinObject> judgeLines = new ArrayList<>();
+
+	public void addJudgeLine(SkinObject jl) {
+		if (jl != null) {
+			judgeLines.add(jl);
+		}
+	}
+
+	@Override
+	public void prepare(MainState state) {
+		final SkinObject[] allObjects = getAllSkinObjects();
+		for (int i = 0; i < allObjects.length; i++) {
+			if (allObjects[i] instanceof SkinNote skinNote) {
+				final SkinNote.SkinFreeZone freeZone = skinNote.getFreeZoneObject();
+				freeZone.setOffsetID(skinNote.getOffsetID());
+				boolean alreadyAdded = false;
+				for (SkinObject existing : allObjects) {
+					if (existing == freeZone) {
+						alreadyAdded = true;
+						break;
+					}
+				}
+				if (!alreadyAdded) {
+					SkinObject target = null;
+					for (int j = 0; j < i; j++) {
+						final SkinObject candidate = allObjects[j];
+						final String name = candidate.getName();
+						if (judgeLines.contains(candidate)
+								|| "15".equals(name)
+								|| (name != null && name.toLowerCase().contains("judgeline"))) {
+							target = candidate;
+							break;
+						}
+					}
+					if (target == null) {
+						for (int j = 0; j < i; j++) {
+							final SkinObject candidate = allObjects[j];
+							for (int off : candidate.getOffsetID()) {
+								if (off == OFFSET_LIFT || off == OFFSET_LIFT_OBSOLETE) {
+									target = candidate;
+									break;
+								}
+							}
+							if (target != null) {
+								break;
+							}
+						}
+					}
+					insertObjectBefore(target != null ? target : skinNote, freeZone);
+				}
+			}
+		}
+		super.prepare(state);
+	}
 	
 	public PlaySkin(SkinHeader header) {
 		super(header);
@@ -169,4 +233,15 @@ public class PlaySkin extends Skin {
 		this.noteExpansionRate = rate;
 	}
 
+	public SkinPractice getPractice() {
+		return practice;
+	}
+
+	public boolean hasPractice() {
+		return practice != null;
+	}
+
+	public void setPractice(SkinPractice practice) {
+		this.practice = practice;
+	}
 }
