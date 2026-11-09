@@ -44,6 +44,7 @@ public class JsonSkin {
 		public HiddenCover[] hiddenCover = new HiddenCover[0];
 		public LiftCover[] liftCover = new LiftCover[0];
 		public BGA bga;
+		public SkinPreview skinpreview;
 		public Practice practice;
 		public Judge[] judge = new Judge[0];
 		public SongList songlist;
@@ -411,6 +412,10 @@ public class JsonSkin {
 		public String id;
 	}
 
+	public static class SkinPreview {
+		public String id;
+	}
+
 	/**
 	 * Practice mode configuration area in a play skin.
 	 *
@@ -454,6 +459,8 @@ public class JsonSkin {
 		public int loop;
 		public int center;
 		public int offset;
+		/** Offset-size anchor (1-9: keypad positions, 0: legacy behavior), independent of rotation center. */
+		public int offsetcenter;
 		public int[] offsets = new int[0];
 		public int stretch = -1;
 		public DestinationOption[] op = new DestinationOption[0];

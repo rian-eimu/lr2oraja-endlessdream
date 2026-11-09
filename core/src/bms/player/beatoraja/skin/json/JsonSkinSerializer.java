@@ -53,6 +53,7 @@ public class JsonSkinSerializer {
 				JsonSkin.NoteSet.class,
 				JsonSkin.Gauge.class,
 				JsonSkin.BGA.class,
+				JsonSkin.SkinPreview.class,
 				JsonSkin.Practice.class,
 				JsonSkin.Judge.class,
 				JsonSkin.SongList.class,
@@ -107,7 +108,8 @@ public class JsonSkinSerializer {
 				StringPropertyFactory::getStringProperty, StringPropertyFactory::getStringProperty));
 		json.setSerializer(TimerProperty.class, new LuaScriptSerializer<>(SkinLuaAccessor::loadTimerProperty, TimerPropertyFactory::getTimerProperty));
 		json.setSerializer(FloatWriter.class, new LuaScriptSerializer<>(SkinLuaAccessor::loadFloatWriter, FloatPropertyFactory::getRateWriter));
-		json.setSerializer(StringWriter.class, new LuaScriptSerializer<>(SkinLuaAccessor::loadStringWriter, null));
+		json.setSerializer(StringWriter.class, new LuaScriptSerializer<>(SkinLuaAccessor::loadStringWriter,
+				StringPropertyFactory::getStringWriter, StringPropertyFactory::getStringWriter));
 		json.setSerializer(Event.class, new LuaScriptSerializer<>(SkinLuaAccessor::loadEvent, EventFactory::getEvent));
 	}
 

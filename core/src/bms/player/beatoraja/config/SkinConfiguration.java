@@ -55,6 +55,11 @@ public class SkinConfiguration extends MainState {
 		changeSkinType(SkinType.getSkinTypeById(skin.getDefaultSkinType()));
 	}
 
+	@Override
+	public void shutdown() {
+		setSelectedSkin(null);
+	}
+
 	public void render() {
 
 		if (main.getInputProcessor().isControlKeyPressed(ControlKeys.ESCAPE)) {
@@ -102,6 +107,10 @@ public class SkinConfiguration extends MainState {
 	
 	public SkinHeader getSelectedSkinHeader() {
 		return selectedSkinHeader;
+	}
+
+	public Skin getSelectedSkin() {
+		return selectedSkin;
 	}
 
 	public void executeEvent(int id, int arg1, int arg2) {
@@ -208,9 +217,11 @@ public class SkinConfiguration extends MainState {
 			updateCustomFiles();
 			updateCustomOffsets();
 			customOptionOffsetMax = Math.max(0, customOptions.size() - skin.getCustomPropertyCount());
+			loadSelectedSkinPreview();
 		} else {
 			selectedSkinHeader = null;
 			customOptions = null;
+			setSelectedSkin(null);
 		}
 	}
 
@@ -442,6 +453,41 @@ public class SkinConfiguration extends MainState {
 		}
 	}
 
+	private void loadSelectedSkinPreview() {
+		if (selectedSkinHeader == null || config == null || type == SkinType.SKIN_SELECT
+				|| type == SkinType.RESULT || type == SkinType.COURSE_RESULT) {
+			setSelectedSkin(null);
+			return;
+		}
+
+		SkinConfig previewConfig = new SkinConfig(config.getPath());
+		previewConfig.setProperties(config.getProperties());
+		previewConfig.validate();
+		Skin preview = null;
+		try {
+			preview = SkinLoader.load(this, type, previewConfig);
+			if (preview != null) {
+				preview.prepare(this);
+			}
+		} catch (Throwable e) {
+			preview = null;
+		}
+		setSelectedSkin(preview);
+	}
+
+	private void reloadSelectedSkinPreview() {
+		if (selectedSkinHeader != null) {
+			loadSelectedSkinPreview();
+		}
+	}
+
+	private void setSelectedSkin(Skin skin) {
+		if (selectedSkin != null) {
+			selectedSkin.dispose();
+		}
+		selectedSkin = skin;
+	}
+
 	private void loadAllSkins() {
 		allSkins = new ArrayList<SkinHeader>();
 		List<Path> skinPaths = new ArrayList<>();
@@ -567,6 +613,7 @@ public class SkinConfiguration extends MainState {
 			value = i;
 			displayValue = values[value];
 			setCustomOption(categoryName, options[value]);
+			reloadSelectedSkinPreview();
 		}
 	}
 
@@ -598,6 +645,7 @@ public class SkinConfiguration extends MainState {
 			value = i;
 			displayValue = displayValues.get(value);
 			setFilePath(categoryName, actualValues.get(value));
+			reloadSelectedSkinPreview();
 		}
 	}
 
@@ -617,6 +665,7 @@ public class SkinConfiguration extends MainState {
 			value = i;
 			displayValue = String.valueOf(value);
 			setCustomOffset(offsetName, kind, value);
+			reloadSelectedSkinPreview();
 		}
 	}
 }
