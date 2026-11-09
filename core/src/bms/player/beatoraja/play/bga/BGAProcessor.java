@@ -432,13 +432,17 @@ public class BGAProcessor {
 	 * リソースを開放する
 	 */
 	public void dispose() {
-		if (cache != null) {
-			cache.dispose();
-		}
-		mpgresource.dispose();
-		if (blanktex != null) {
-			blanktex.dispose();
-			blanktex = null;
+		try {
+			if (cache != null) cache.dispose();
+		} finally {
+			try {
+				mpgresource.dispose();
+			} finally {
+				if (blanktex != null) {
+					try { blanktex.dispose(); }
+					finally { blanktex = null; }
+				}
+			}
 		}
 	}
 

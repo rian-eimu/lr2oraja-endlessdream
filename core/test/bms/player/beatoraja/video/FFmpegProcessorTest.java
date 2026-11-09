@@ -103,12 +103,14 @@ public final class FFmpegProcessorTest {
         worker.exec(FFmpegProcessor.Command.HALT);
         Field haltField = worker.getClass().getDeclaredField("haltRequested");
         haltField.setAccessible(true);
-        check(haltField.getBoolean(worker) && queue.isEmpty(), "HALT must bypass and clear the full command queue");
+        check(haltField.getBoolean(worker) && queue.size() == 1 && queue.peekFirst() == FFmpegProcessor.Command.HALT,
+                "HALT must replace the full command queue with a wake signal");
         worker.exec(FFmpegProcessor.Command.PLAY);
-        check(queue.isEmpty(), "Stopped workers must reject new playback commands");
+        check(queue.size() == 1 && queue.peekFirst() == FFmpegProcessor.Command.HALT,
+                "Stopped workers must reject new playback commands");
         worker.start();
         worker.join(5000);
-        check(!worker.isAlive(), "A halted worker must exit without opening the movie");
+        check(!worker.isAlive() && queue.isEmpty(), "A halted worker must exit without opening the movie");
         Field converter = worker.getClass().getDeclaredField("converter");
         converter.setAccessible(true);
         check(converter.get(worker) == null, "Converter is released even when halted before open");
