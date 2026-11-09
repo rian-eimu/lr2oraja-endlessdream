@@ -184,12 +184,14 @@ public class SongInformation implements Validatable {
 
 		final int d = Math.min(5, data.length - borderpos - 1);
 		enddensity = 0;
-		for(int i = borderpos;i < data.length - d;i++) {
-			int notes = 0;
-			for(int j = 0;j < d;j++) {
-				notes += data[i + j][0] + data[i + j][1] + data[i + j][2] + data[i + j][3] + data[i + j][4] + data[i + j][5];
+		if (d > 0) {
+			for(int i = borderpos;i < data.length - d;i++) {
+				int notes = 0;
+				for(int j = 0;j < d;j++) {
+					notes += data[i + j][0] + data[i + j][1] + data[i + j][2] + data[i + j][3] + data[i + j][4] + data[i + j][5];
+				}
+				enddensity = Math.max(enddensity, ((double)notes) / d);
 			}
-			enddensity = Math.max(enddensity, ((double)notes) / d);
 		}
 		setDistributionValues(data);
 		

@@ -180,7 +180,7 @@ public class SkinGauge extends SkinObject {
 
 		final int exgauge = (type >= CLASS ? type - 3 : type) * 6;
 		final int notes = value > 0 ? Math.max(1 , (int) (value * parts / max)) : 0;
-		sprite.setColor(color);
+		sprite.setColor(color.r, color.g, color.b, color.a);
 		sprite.setBlend(getBlend());
 		sprite.setType(SkinObjectRenderer.TYPE_NORMAL);
 		
@@ -206,14 +206,14 @@ public class SkinGauge extends SkinObject {
 						region.x + region.width * (i - 1) / parts, region.y, region.width / parts, region.height);
 
 				if(i == notes) {
-					final Color orgColor = sprite.getColor();
-					flickerColor.set(orgColor.r, orgColor.g, orgColor.b, orgColor.a * (animation < duration / 2 ? animation / ((float) duration / 2 - 1) : ((duration - 1) - animation) / ((float) duration / 2 - 1)));
-					sprite.setColor(flickerColor);
-//					System.out.println(animation + "  " + duration + "  " + flickerColor.toString());
+					// レンダラー内部の Color 参照は退避せず、ゲージの元の RGBA 値から発光色を設定する。
+					final float alpha = animation < duration / 2 ? animation / ((float) duration / 2 - 1) : ((duration - 1) - animation) / ((float) duration / 2 - 1);
+					sprite.setColor(color.r, color.g, color.b, color.a * alpha);
 					sprite.draw(
 							images[exgauge + 4 + (border < this.border ? 1 : 0)],
 							region.x + region.width * (i - 1) / parts, region.y, region.width / parts, region.height);
-					sprite.setColor(orgColor);
+					// 後続の非点灯粒へ発光の透明度が残らないよう、元の値へ戻す。
+					sprite.setColor(color.r, color.g, color.b, color.a);
 				}
 			}		
 			break;

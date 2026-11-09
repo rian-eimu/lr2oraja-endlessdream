@@ -116,6 +116,7 @@ public final class SkinTimingVisualizer extends SkinObject {
 				shape.drawLine(x, 0, x, 1);
 			}
 
+			Optional.ofNullable(backtex).ifPresent(t -> t.getTexture().dispose());
 			backtex = new TextureRegion(new Texture(shape));
 			shape.dispose();
 

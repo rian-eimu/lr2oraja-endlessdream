@@ -530,6 +530,7 @@ public class Skin {
 		private int blend;
 		
 		private int type;
+		private int textureWidth, textureHeight;
 		
 		public static final int TYPE_NORMAL = 0;
 		public static final int TYPE_LINEAR = 1;
@@ -666,6 +667,8 @@ public class Skin {
 		}
 
 		private void setFilter(Texture image) {
+			textureWidth = image.getWidth();
+			textureHeight = image.getHeight();
 			if(type == TYPE_LINEAR || type == TYPE_FFMPEG || type == TYPE_DISTANCE_FIELD) {
 				image.setFilter(TextureFilter.Linear, TextureFilter.Linear);
 			}
@@ -679,6 +682,12 @@ public class Skin {
 			if(shaders[current] != shaders[type]) {
 				sprite.setShader(shaders[type]);
 				current = type;
+			}
+
+			if (type == TYPE_BILINEAR && shaders[type] != null) {
+				// GLSL 1.20にはtextureSize()がないため、テクスチャ毎のuniformを変更する前にフラッシュする
+				sprite.flush();
+				shaders[type].setUniformf("u_textureSize", textureWidth, textureHeight);
 			}
 
 			if (shaders[type] != null && shaderVariableSetter != null) {
