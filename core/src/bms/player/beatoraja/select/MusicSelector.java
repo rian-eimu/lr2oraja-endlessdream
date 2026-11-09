@@ -203,6 +203,7 @@ public final class MusicSelector extends MainState {
 	}
 
 	public void render() {
+		manager.updateIRTables();
 		final Bar current = manager.getSelected();
         if(timer.getNowTime() > getSkin().getInput()){
         	timer.switchTimer(TIMER_STARTINPUT, true);
@@ -330,6 +331,18 @@ public final class MusicSelector extends MainState {
 		}
 		banners.disposeOld();
 		stagefiles.disposeOld();
+	}
+
+	public void search(String text) {
+		if (text == null || text.isBlank()) {
+			return;
+		}
+		SearchWordBar swb = new SearchWordBar(this, text);
+		if (swb.getChildren().length > 0) {
+			manager.addSearch(swb);
+			manager.updateBar(null);
+			manager.setSelected(swb);
+		}
 	}
 	
 	public void select(Bar current) {
@@ -563,6 +576,7 @@ public final class MusicSelector extends MainState {
 	}
 
 	public void dispose() {
+		manager.dispose();
 		super.dispose();
 		bar.dispose();
 		banners.dispose();

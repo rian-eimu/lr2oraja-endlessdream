@@ -195,6 +195,8 @@ public class PlayConfigurationView implements Initializable {
 	@FXML
 	private Spinner<Integer> sjudgegd;
 	@FXML
+	private Spinner<Integer> longnotemargin;
+	@FXML
 	private ComboBox<Integer> minemode;
 	@FXML
 	private ComboBox<Integer> scrollmode;
@@ -311,6 +313,8 @@ public class PlayConfigurationView implements Initializable {
 
 	private MainLoader loader;
 
+	private SongDatabaseAccessorResolver songDatabaseAccessorResolver;
+
 	private boolean songUpdated = false;
 
 	private RequestToken requestToken = null;
@@ -319,6 +323,8 @@ public class PlayConfigurationView implements Initializable {
 	public CheckBox clipboardScreenshot;
 	@FXML
 	private ComboBox<ScreenShotFormat> screenshotFormat;
+
+	private String dbUpdateCheckDialogMessage;
 
 	static void initComboBox(ComboBox<Integer> combo, final String[] values) {
 		combo.setCellFactory((param) -> new OptionListCell(values));
@@ -369,6 +375,8 @@ public class PlayConfigurationView implements Initializable {
 		discordController.init(this);
 		obsController.init(this);
 		screenshotFormat.getItems().setAll(ScreenShotFormat.values());
+
+		dbUpdateCheckDialogMessage = arg1.getString("UPDATE_DATABASE_MESSAGE");
 
 		checkNewVersion();
 		logger.info("初期化時間(ms) : " + (System.currentTimeMillis() - t));
@@ -449,6 +457,16 @@ public class PlayConfigurationView implements Initializable {
 		this.loader = loader;
 	}
 
+	public void setSongDatabaseAccessorResolver(SongDatabaseAccessorResolver songDatabaseAccessorResolver) {
+		this.songDatabaseAccessorResolver = songDatabaseAccessorResolver;
+	}
+
+	private SongDatabaseAccessor getSongDatabaseAccessor() throws ClassNotFoundException {
+		return songDatabaseAccessorResolver != null
+				? songDatabaseAccessorResolver.get(config, players.getValue())
+				: MainLoader.getScoreDatabaseAccessor(config, players.getValue());
+	}
+
 	/**
 	 * ダイアログの項目を更新する
 	 */
@@ -501,8 +519,7 @@ public class PlayConfigurationView implements Initializable {
 		updatePlayer();
 
 		try {
-			Class.forName("org.sqlite.JDBC");
-			tableController.init(MainLoader.getScoreDatabaseAccessor());
+			tableController.init(getSongDatabaseAccessor());
 			tableController.update(Paths.get(config.getTablepath() + "/" + "default.json"));
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
@@ -512,6 +529,11 @@ public class PlayConfigurationView implements Initializable {
 	public void changePlayer() {
 		commitPlayer();
 		updatePlayer();
+		try {
+			tableController.init(getSongDatabaseAccessor());
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public void addPlayer() {
@@ -573,6 +595,7 @@ public class PlayConfigurationView implements Initializable {
 		sjudgepg.getValueFactory().setValue(player.getScratchJudgeWindowRatePerfectGreat());
 		sjudgegr.getValueFactory().setValue(player.getScratchJudgeWindowRateGreat());
 		sjudgegd.getValueFactory().setValue(player.getScratchJudgeWindowRateGood());
+		longnotemargin.getValueFactory().setValue(player.getLongnoteMarginRate());
 		minemode.getSelectionModel().select(player.getMineMode());
 		scrollmode.getSelectionModel().select(player.getScrollMode());
 		longnotemode.getSelectionModel().select(player.getLongnoteMode());
@@ -694,6 +717,7 @@ public class PlayConfigurationView implements Initializable {
 		player.setScratchJudgeWindowRatePerfectGreat(getValue(sjudgepg));
 		player.setScratchJudgeWindowRateGreat(getValue(sjudgegr));
 		player.setScratchJudgeWindowRateGood(getValue(sjudgegd));
+		player.setLongnoteMarginRate(getValue(longnotemargin));
 		player.setMineMode(minemode.getValue());
 		player.setScrollMode(scrollmode.getValue());
 		player.setLongnoteMode(longnotemode.getValue());
@@ -848,18 +872,28 @@ public class PlayConfigurationView implements Initializable {
     @FXML
 	public void loadAllBMS() {
 		commit();
-		loadBMS(null, true);
+		if (checkIfLoadBMS()) {
+			loadBMS(null, true);
+		}
 	}
 
     @FXML
 	public void loadDiffBMS() {
 		commit();
-		loadBMS(null, false);
+		if (checkIfLoadBMS()) {
+			loadBMS(null, false);
+		}
 	}
 
 	public void loadBMSPath(String updatepath){
 		commit();
     	loadBMS(updatepath, false);
+	}
+
+	private boolean checkIfLoadBMS() {
+		Alert confirmAlert = new Alert(Alert.AlertType.NONE, dbUpdateCheckDialogMessage, ButtonType.OK, ButtonType.CANCEL);
+		ButtonType confirmResult = confirmAlert.showAndWait().orElse(ButtonType.CANCEL);
+		return confirmResult == ButtonType.OK;
 	}
 
 	/**
@@ -929,7 +963,7 @@ public class PlayConfigurationView implements Initializable {
         Runnable loadBMSRunnable = () -> {
             boolean updated = false;
             try {
-                SongDatabaseAccessor songdb = MainLoader.getScoreDatabaseAccessor();
+                SongDatabaseAccessor songdb = getSongDatabaseAccessor();
                 if (songdb instanceof SQLiteSongDatabaseAccessor sqliteSongDb) {
                     sqliteSongDb.setArchiveConfig(config.isScanSongArchives(), config.getSongArchiveExtractMode());
                 }
@@ -967,9 +1001,10 @@ public class PlayConfigurationView implements Initializable {
 		}
 
 		try {
-			Class.forName("org.sqlite.JDBC");
-			SongDatabaseAccessor songdb = MainLoader.getScoreDatabaseAccessor();
 			String player = players.getValue();
+			SongDatabaseAccessor songdb = songDatabaseAccessorResolver != null
+					? songDatabaseAccessorResolver.get(config, player)
+					: MainLoader.getScoreDatabaseAccessor(config, player);
 			ScoreDatabaseAccessor scoredb = new ScoreDatabaseAccessor(config.getPlayerpath() + File.separatorChar + player + File.separatorChar + "score.db");
 			scoredb.createTable();
 
@@ -1030,6 +1065,11 @@ public class PlayConfigurationView implements Initializable {
 		commit();
 		Platform.exit();
 		System.exit(0);
+	}
+
+	@FunctionalInterface
+	public interface SongDatabaseAccessorResolver {
+		public SongDatabaseAccessor get(Config config, String playername) throws ClassNotFoundException;
 	}
 
 	static class OptionListCell extends ListCell<Integer> {

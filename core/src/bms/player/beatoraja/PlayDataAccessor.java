@@ -1,5 +1,7 @@
 package bms.player.beatoraja;
 
+import java.nio.charset.StandardCharsets;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -170,6 +172,10 @@ public final class PlayDataAccessor {
 	 */
 	public ScoreData readScoreData(String hash, boolean ln, int lnmode) {
 		return scoredb.getScoreData(hash, ln ? lnmode : 0);
+	}
+
+	int getLastPlayedLnMode(String sha256, int fallback) {
+		return scoredb != null ? scoredb.getLastPlayedLnMode(sha256, fallback) : fallback;
 	}
 
 	/**
@@ -490,6 +496,12 @@ public final class PlayDataAccessor {
 			log.setSha256(hash);
 			log.setMinbp(newscore.getMinbp());
 		}
+		log.setOldavgjudge(score.getAvgjudge());
+		log.setAvgjudge(score.getAvgjudge());
+		if (score.getAvgjudge() > newscore.getAvgjudge() && updateScore) {
+			log.setSha256(hash);
+			log.setAvgjudge(newscore.getAvgjudge());
+		}
 		log.setOldcombo(score.getCombo());
 		log.setCombo(score.getCombo());
 		if (score.getCombo() < newscore.getCombo() && updateScore) {
@@ -647,7 +659,7 @@ public final class PlayDataAccessor {
 	 * @param lnmode
 	 *            LNモード
 	 */
-	public void wrireReplayData(ReplayData rd, BMSModel model, int lnmode, int index) {
+	public boolean wrireReplayData(ReplayData rd, BMSModel model, int lnmode, int index) {
 		File replaydir = new File(this.getReplayDataFolder());
 		if (!replaydir.exists()) {
 			replaydir.mkdirs();
@@ -657,13 +669,14 @@ public final class PlayDataAccessor {
 		try {
 			String path = this.getReplayDataFilePath(model, lnmode, index) + ".brd";
 			rd.shrink();
-			OutputStreamWriter fw = new OutputStreamWriter(
-					new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream(path))), "UTF-8");
-			fw.write(json.prettyPrint(rd));
-			fw.flush();
-			fw.close();
+			try (var writer = new OutputStreamWriter(
+					new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream(path))), StandardCharsets.UTF_8)) {
+				writer.write(json.prettyPrint(rd));
+			}
+			return true;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return false;
 		}
 
 	}
@@ -706,7 +719,7 @@ public final class PlayDataAccessor {
 		return null;
 	}
 
-	public void wrireReplayData(ReplayData[] rd, BMSModel[] models, int lnmode, int index,
+	public boolean wrireReplayData(ReplayData[] rd, BMSModel[] models, int lnmode, int index,
 			CourseData.CourseDataConstraint[] constraint) {
 		String[] hashes = new String[models.length];
 		boolean ln = false;
@@ -714,7 +727,7 @@ public final class PlayDataAccessor {
 			hashes[i] = models[i].getSHA256();
 			ln |= models[i].containsUndefinedLongNote();
 		}
-		this.wrireReplayData(rd, hashes, ln, lnmode, index, constraint);
+		return this.wrireReplayData(rd, hashes, ln, lnmode, index, constraint);
 
 	}
 
@@ -728,21 +741,22 @@ public final class PlayDataAccessor {
 	 * @param lnmode
 	 *            LNモード
 	 */
-	public void wrireReplayData(ReplayData[] rd, String[] hash, boolean ln, int lnmode, int index,
+	public boolean wrireReplayData(ReplayData[] rd, String[] hash, boolean ln, int lnmode, int index,
 			CourseData.CourseDataConstraint[] constraint) {
 		Json json = new Json();
 		json.setOutputType(OutputType.json);
 		try {
 			String path = this.getReplayDataFilePath(hash, ln, lnmode, index, constraint) + ".brd";
 			Stream.of(rd).forEach(ReplayData::shrink);
-			OutputStreamWriter fw = new OutputStreamWriter(
-					new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream(path))), "UTF-8");
-			fw.write(json.prettyPrint(rd));
-			fw.flush();
-			fw.close();
+			try (var writer = new OutputStreamWriter(
+					new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream(path))), StandardCharsets.UTF_8)) {
+				writer.write(json.prettyPrint(rd));
+			}
 			logger.info("コースリプレイを保存:{}", path);
+			return true;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return false;
 		}
 	}
 

@@ -12,11 +12,14 @@ import bms.player.beatoraja.play.BMSPlayer;
 import bms.player.beatoraja.play.TargetProperty;
 import bms.player.beatoraja.result.AbstractResult;
 import bms.player.beatoraja.result.CourseResult;
+import bms.player.beatoraja.result.MusicResult;
 import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.select.bar.*;
 import bms.player.beatoraja.song.SongData;
+import bms.player.beatoraja.song.SongDatabaseAccessor;
 import com.badlogic.gdx.utils.IntMap;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.IntFunction;
 
@@ -87,6 +90,56 @@ public class StringPropertyFactory {
 		return null;
 	}
 
+	private static SongData selectedReviewChart(MainState state) {
+		if (state instanceof MusicResult result) {
+			var review = result.getEditableLevelReview();
+			return review != null ? review.song() : null;
+		}
+		return state instanceof MusicSelector selector && selector.getSelectedBar() instanceof SongBar bar
+				&& bar.existsSong() && !bar.getSongData().getSha256().isEmpty() ? bar.getSongData() : null;
+	}
+
+	private static void writeReviewLevel(MainController main, SongDatabaseAccessor database, SongData song, int lnmode, String input) {
+		if (input == null) return;
+		String value = input.strip();
+		if (value.length() > 1024) return;
+		try {
+			BigDecimal decimal = value.isEmpty() ? BigDecimal.ZERO : new BigDecimal(value);
+			double level = decimal.doubleValue();
+			if (decimal.signum() >= 0 && Double.isFinite(level) && (level != 0 || decimal.signum() == 0)
+					&& level != song.getSongReview().getLevelreview()
+					&& database.setSongReviewLevel(song, level) && main != null) {
+				main.syncReviewLevel(song.getSha256(), level, lnmode);
+			}
+		} catch (NumberFormatException ignored) {
+		}
+	}
+
+	private static final class ReviewLevelWriter implements StringWriter {
+		@Override
+		public void set(MainState state, String value) {
+			StringWriter bound = bind(state);
+			if (bound != null) bound.set(state, value);
+		}
+
+		@Override
+		public StringWriter bind(MainState state) {
+			if (state instanceof MusicResult result) {
+				var target = result.getEditableLevelReview();
+				if (target == null) return null;
+				MainController main = result.main;
+				return (owner, value) -> writeReviewLevel(main, main.getSongDatabase(), target.song(), target.lnmode(), value);
+			}
+			SongData song = selectedReviewChart(state);
+			if (song == null) return null;
+			SongDatabaseAccessor database = ((MusicSelector) state).getSongDatabase();
+			if (database == null) return null;
+			MainController main = state.main;
+			int lnmode = main != null ? main.getReviewLnMode(song) : 0;
+			return (owner, value) -> writeReviewLevel(main, database, song, lnmode, value);
+		}
+	}
+
 	/**
 	 * Groups numbered String properties by their ID range and skin-facing name pattern.
 	 */
@@ -129,6 +182,23 @@ public class StringPropertyFactory {
 				for (int index = 0; index < names.length; index++) {
 					if (names[index].equals(name)) {
 						return properties[index];
+					}
+				}
+				if (this == PRACTICE_ITEM_LABEL && name.startsWith("practice_item") && name.endsWith("_label")) {
+					try {
+						int idx = Integer.parseInt(name.substring("practice_item".length(), name.length() - "_label".length())) - 1;
+						if (idx >= 0 && idx < properties.length) {
+							return properties[idx];
+						}
+					} catch (NumberFormatException ignored) {
+					}
+				} else if (this == PRACTICE_ITEM_VALUE && name.startsWith("practice_item") && name.endsWith("_value")) {
+					try {
+						int idx = Integer.parseInt(name.substring("practice_item".length(), name.length() - "_value".length())) - 1;
+						if (idx >= 0 && idx < properties.length) {
+							return properties[idx];
+						}
+					} catch (NumberFormatException ignored) {
 					}
 				}
 			}
@@ -261,6 +331,15 @@ public class StringPropertyFactory {
 		fullartist(16, (state) -> {
 			final SongData song = state.resource.getSongdata();
 			return song != null ? song.getFullArtist() : "";
+		}),
+		levelreview(SkinProperty.STRING_LEVELREVIEW, state -> {
+			SongData song = selectedReviewChart(state);
+			return song != null ? song.getSongReview().getLevelreviewText() : "";
+		}, new ReviewLevelWriter()),
+		searchword(30, (state) -> "", (state, value) -> {
+			if (state instanceof MusicSelector selector) {
+				selector.search(value);
+			}
 		}),
 		sort(61, (state) -> state.resource.getPlayerConfig().getSortid()),
 		mode(62, (state) -> state.resource.getPlayerConfig().getModeFilter().name),

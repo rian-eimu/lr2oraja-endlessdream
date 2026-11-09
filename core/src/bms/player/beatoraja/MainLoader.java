@@ -59,13 +59,13 @@ public class MainLoader extends Application {
 
 	private static final boolean ALLOWS_32BIT_JAVA = false;
 
-	private static SongDatabaseAccessor songdb;
-
 	private static final Set<String> illegalSongs = new HashSet<String>();
 
 	private static Path bmsPath;
 
 	private static VersionChecker version;
+
+	private static final SongDatabaseAccessorProvider songDatabaseAccessorProvider = new SongDatabaseAccessorProvider();
 
 	public static void main(String[] args) {
 		bms.player.beatoraja.ir.IRProcessSupport.ensureParentClasspath(MainLoader.class.getName(), args);
@@ -151,9 +151,15 @@ public class MainLoader extends Application {
                 logger.error(e.getLocalizedMessage());
             }
         }
-        detectIllegalSongs(getScoreDatabaseAccessor(), player);
-        for (SongData song : new SongData[0]) {
-            MainLoader.putIllegalSong(song.getSha256());
+        SongDatabaseAccessor songdb;
+        try {
+            songdb = songDatabaseAccessorProvider.get(config,
+                    player != null ? player.getId() : config.getPlayername());
+            detectIllegalSongs(songdb, player);
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            logger.error("楽曲データベース初期化中の例外:{}", e.getMessage());
+            return;
         }
 
 		if(illegalSongs.size() > 0) {
@@ -162,7 +168,7 @@ public class MainLoader extends Application {
 		}
 
 		try {
-			MainController main = new MainController(bmsPath, config, player, playerMode, songUpdated);
+			MainController main = new MainController(bmsPath, config, player, playerMode, songUpdated, songdb);
 
 			Lwjgl3ApplicationConfiguration gdxConfig = new Lwjgl3ApplicationConfiguration();
             // This line is provided for macos-fix, the original issue is mac dropped the OpenGL full support,
@@ -252,7 +258,10 @@ public class MainLoader extends Application {
 				// PortAudio使用時はOpenAL(WASAPI)とのデバイス競合を防ぐためlibGDXのオーディオ初期化を無効化する
 				gdxConfig.disableAudio(true);
 			} else {
-				gdxConfig.setAudioConfig(config.getAudioConfig().getDeviceSimultaneousSources(), config.getAudioConfig().getDeviceBufferSize(), 1);
+				int audioDeviceBufferSize = config.getAudioConfig().getDriver() == DriverType.AudioDevice
+						? Math.max(config.getAudioConfig().getDeviceBufferSize() * 2 * 2, 4096)
+						: config.getAudioConfig().getDeviceBufferSize();
+				gdxConfig.setAudioConfig(config.getAudioConfig().getDeviceSimultaneousSources(), audioDeviceBufferSize, 1);
 			}
 
 			Config.DisplayMode displaymode = config.getDisplaymode();
@@ -308,17 +317,22 @@ public class MainLoader extends Application {
 	}
 
 	public static SongDatabaseAccessor getScoreDatabaseAccessor() {
-		if(songdb == null) {
-			try {
-				Config config = Config.read();
-				Class.forName("org.sqlite.JDBC");
-				songdb = new SQLiteSongDatabaseAccessor(config.getSongpath(), config.getBmsroot(),
-						config.isScanSongArchives(), config.getSongArchiveExtractMode());
-			} catch (ClassNotFoundException | PlayerConfigException e) {
-				logger.error("Failed to access score database: {}", e.getLocalizedMessage());
-			}
-        }
-		return songdb;
+		try {
+			Config config = Config.read();
+			return songDatabaseAccessorProvider.get(config);
+		} catch (ClassNotFoundException | PlayerConfigException e) {
+			logger.error("Failed to access score database: {}", e.getLocalizedMessage());
+			return null;
+		}
+	}
+
+	public static SongDatabaseAccessor getScoreDatabaseAccessor(Config config, String playername) {
+		try {
+			return songDatabaseAccessorProvider.get(config, playername);
+		} catch (ClassNotFoundException e) {
+			logger.error("Failed to access score database: {}", e.getLocalizedMessage());
+			return null;
+		}
 	}
 
 	public static VersionChecker getVersionChecker() {
@@ -431,6 +445,7 @@ public class MainLoader extends Application {
 			VBox stackPane = (VBox) loader.load();
 			PlayConfigurationView bmsinfo = (PlayConfigurationView) loader.getController();
 			bmsinfo.setBMSInformationLoader(this);
+			bmsinfo.setSongDatabaseAccessorResolver(songDatabaseAccessorProvider::get);
 			bmsinfo.update(config);
 			Scene scene = new Scene(stackPane, stackPane.getPrefWidth(), stackPane.getPrefHeight());
 			primaryStage.setScene(scene);
@@ -444,6 +459,36 @@ public class MainLoader extends Application {
 		} catch (IOException e) {
 			logger.error(e.getMessage());
 			e.printStackTrace();
+		}
+	}
+
+	private static class SongDatabaseAccessorProvider {
+
+		private SongDatabaseAccessor songdb;
+
+		private String songpath;
+
+		private String reviewpath;
+
+		public synchronized SongDatabaseAccessor get(Config config) throws ClassNotFoundException {
+			return get(config, config.getPlayername());
+		}
+
+		public synchronized SongDatabaseAccessor get(Config config, String playername) throws ClassNotFoundException {
+			String nextSongpath = config.getSongpath();
+			String nextReviewpath = getSongReviewPath(config, playername);
+			if (songdb == null || !nextSongpath.equals(songpath) || !nextReviewpath.equals(reviewpath)) {
+				Class.forName("org.sqlite.JDBC");
+				songdb = new SQLiteSongDatabaseAccessor(nextSongpath, config.getBmsroot(),
+						config.isScanSongArchives(), config.getSongArchiveExtractMode(), nextReviewpath);
+				songpath = nextSongpath;
+				reviewpath = nextReviewpath;
+			}
+			return songdb;
+		}
+
+		private String getSongReviewPath(Config config, String playername) {
+			return config.getPlayerpath() + File.separatorChar + playername + File.separatorChar + "songreview.db";
 		}
 	}
 

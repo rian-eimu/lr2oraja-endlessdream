@@ -413,7 +413,9 @@ public class BooleanPropertyFactory {
 	}
 	
 	public enum BooleanType {
-		
+
+		result_level_review_editable(OPTION_RESULT_LEVEL_REVIEW_EDITABLE, new DrawProperty(DrawProperty.TYPE_NO_STATIC,
+				state -> state instanceof MusicResult result && result.getEditableLevelReview() != null)),
 		bgaoff(40, new DrawProperty(DrawProperty.TYPE_STATIC_WITHOUT_MUSICSELECT, (state) -> (!state.resource.getBMSResource().isBGAOn()))),
 		bgaon(41, new DrawProperty(DrawProperty.TYPE_STATIC_WITHOUT_MUSICSELECT, (state) -> (state.resource.getBMSResource().isBGAOn()))),
 		gauge_groove(42, new DrawProperty(DrawProperty.TYPE_NO_STATIC, (state) -> {

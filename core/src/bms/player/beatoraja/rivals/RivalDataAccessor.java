@@ -21,19 +21,31 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 /**
  * Single source of truth about all rival data. All operations such as setting and retrieving rivals, as well as their
  * scores should go through this accessor.
  */
-public final class RivalDataAccessor {
+public final class RivalDataAccessor implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(RivalDataAccessor.class);
+
+    private final ExecutorService syncExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "rival-score-sync");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicBoolean syncScheduled = new AtomicBoolean();
 
     /**
      * ライバル情報とスコアデータキャッシュ
      */
-    private final List<Rival> rivals = new ArrayList<>();
+    private final List<Rival> rivals = new CopyOnWriteArrayList<>();
 
     /**
      * Currently selected rival.
@@ -233,13 +245,28 @@ public final class RivalDataAccessor {
                 var localRivalDatabases = loadRemainingLocalDatabases(rivalsPath, existingRivalIds, irName);
                 rivals.addAll(localRivalDatabases);
 
-                for (IRPlayerData irPlayer : irRivalsData) {
-                    new Thread(() -> {
-                        var rivalInformation = irPlayer.toPlayerInformation();
-                        rivals.stream().filter(rival -> rival.rivalInformation.equals(rivalInformation))
-                                .findFirst()
-                                .ifPresent(rival -> syncRivalScores(main.getIRStatus()[0].connection, irPlayer, rival));
-                    }).start();
+                final IRPlayerData[] syncTargets = irRivalsData;
+                final IRConnection connection = main.getIRStatus()[0].connection;
+                if (syncTargets.length > 0 && syncScheduled.compareAndSet(false, true)) {
+                    try {
+                        syncExecutor.execute(() -> {
+                            try {
+                                for (IRPlayerData irPlayer : syncTargets) {
+                                    if (Thread.currentThread().isInterrupted()) {
+                                        return;
+                                    }
+                                    var rivalInformation = irPlayer.toPlayerInformation();
+                                    rivals.stream().filter(rival -> rival.rivalInformation.equals(rivalInformation))
+                                            .findFirst()
+                                            .ifPresent(rival -> syncRivalScores(connection, irPlayer, rival));
+                                }
+                            } finally {
+                                syncScheduled.set(false);
+                            }
+                        });
+                    } catch (RejectedExecutionException exception) {
+                        syncScheduled.set(false);
+                    }
                 }
 
 //					Array<String> targets = new Array<String>(TargetProperty.getTargets());
@@ -344,6 +371,11 @@ public final class RivalDataAccessor {
             logger.error("IO error while loading local rival scores", e);
         }
         return localRivals;
+    }
+
+    @Override
+    public void close() {
+        syncExecutor.shutdownNow();
     }
 
     private ScoreData[] convert(IRScoreData[] irscores) {

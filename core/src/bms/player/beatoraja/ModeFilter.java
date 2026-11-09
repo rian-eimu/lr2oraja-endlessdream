@@ -21,6 +21,8 @@ public enum ModeFilter {
 	BEAT_5K_10K("5KEY & 10KEY", Mode.BEAT_5K, new Mode[] { Mode.BEAT_5K, Mode.BEAT_10K }, 11),
 	BEAT_KEYBOARD_ALL("5KEY & 7KEY & 10KEY & 14KEY", Mode.BEAT_7K, new Mode[] { Mode.BEAT_5K, Mode.BEAT_7K, Mode.BEAT_10K, Mode.BEAT_14K }, 12);
 
+	private static final ModeFilter[] DEFAULT_FILTERS = values();
+
 	/**
 	 * モードフィルター表示名
 	 */
@@ -64,6 +66,27 @@ public enum ModeFilter {
 			}
 		}
 		return false;
+	}
+
+	public boolean isEnabled(PlayerConfig config) {
+		return config.isModeFilterEnabled(this);
+	}
+
+	public static ModeFilter nextEnabled(ModeFilter current, PlayerConfig config, int direction) {
+		ModeFilter[] filters = values();
+		int index = current != null ? current.ordinal() : ALL.ordinal();
+		int step = direction >= 0 ? 1 : filters.length - 1;
+		for (int count = 1; count <= filters.length; count++) {
+			ModeFilter filter = filters[(index + step * count) % filters.length];
+			if (filter.isEnabled(config)) {
+				return filter;
+			}
+		}
+		return ALL;
+	}
+
+	public static ModeFilter[] defaultFilters() {
+		return DEFAULT_FILTERS.clone();
 	}
 
 	/**

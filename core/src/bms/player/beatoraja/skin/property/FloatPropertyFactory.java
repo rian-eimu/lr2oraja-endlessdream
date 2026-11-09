@@ -37,6 +37,9 @@ public class FloatPropertyFactory {
 	 * @return 対応するFloatProperty
 	 */
 	public static FloatProperty getRateProperty(int optionid) {
+		if (optionid == 9) {
+			return RateType.practice_position.property;
+		}
 		for(RateType t : RateTypeValues) {
 			if(t.id == optionid) {
 				return t.property;
@@ -67,6 +70,9 @@ public class FloatPropertyFactory {
 	 * @return 対応するFloatWriter
 	 */
 	public static FloatWriter getRateWriter(int id) {
+		if (id == 9) {
+			return RateType.practice_position.writer;
+		}
 		for(RateType t : RateTypeValues) {
 			if(t.id == id) {
 				return t.writer;
@@ -102,6 +108,9 @@ public class FloatPropertyFactory {
 			if(t.id == optionid) {
 				return t.property;
 			}
+		}
+		if (optionid == 9) {
+			return RateType.practice_position.property;
 		}
 		for(RateType r : RateTypeValues) {
 			if(r.id == optionid) {
@@ -207,7 +216,7 @@ public class FloatPropertyFactory {
 						((AbstractResult) state).setRankingPosition(value);
 					}
 				}),
-		practice_position(9,
+		practice_position(20,
 				(state) -> (state instanceof BMSPlayer player ? player.getPracticeConfiguration().getItemScrollPosition() : 0),
 				(state, value) -> {
 					if (state instanceof BMSPlayer player) {

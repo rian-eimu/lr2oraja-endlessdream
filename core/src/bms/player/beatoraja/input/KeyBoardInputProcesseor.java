@@ -35,6 +35,7 @@ public class KeyBoardInputProcesseor extends BMSPlayerInputDevice implements Inp
 	private int lastPressedKey = -1;
 
 	private boolean textmode = false;
+	private final boolean[] suppressedTextControlKeys = new boolean[256];
 
 	/**
 	 * 画面の解像度。マウスの入力イベント処理で使用
@@ -93,6 +94,7 @@ public class KeyBoardInputProcesseor extends BMSPlayerInputDevice implements Inp
 	public void clear() {
 		// Arrays.fill(keystate, false);
 		Arrays.fill(keytime, Long.MIN_VALUE);
+		Arrays.fill(suppressedTextControlKeys, false);
 		lastPressedKey = -1;
 		mouseScratchInput.clear();
 	}
@@ -129,6 +131,14 @@ public class KeyBoardInputProcesseor extends BMSPlayerInputDevice implements Inp
 		
 		for (ControlKeys key : ControlKeys.values()) {
 			final boolean pressed = Gdx.input.isKeyPressed(key.keycode);
+			if (suppressedTextControlKeys[key.keycode]) {
+				if (!pressed) {
+					suppressedTextControlKeys[key.keycode] = false;
+					keystate[key.keycode] = false;
+					keytime[key.keycode] = Long.MIN_VALUE;
+				}
+				continue;
+			}
 			if (!(textmode && key.text) && pressed != keystate[key.keycode] && acceptInput) {
 				keystate[key.keycode] = pressed;
 				keytime[key.keycode] = microtime;
@@ -236,6 +246,15 @@ public class KeyBoardInputProcesseor extends BMSPlayerInputDevice implements Inp
 	}
 
 	public void setTextInputMode(boolean textmode) {
+		if (this.textmode && !textmode) {
+			for (ControlKeys key : ControlKeys.values()) {
+				if (key.text && Gdx.input.isKeyPressed(key.keycode)) {
+					suppressedTextControlKeys[key.keycode] = true;
+					keystate[key.keycode] = true;
+					keytime[key.keycode] = Long.MIN_VALUE;
+				}
+			}
+		}
 		this.textmode = textmode;
 	}
 	
@@ -273,7 +292,7 @@ public class KeyBoardInputProcesseor extends BMSPlayerInputDevice implements Inp
 		LEFT(24, Keys.LEFT, false),
 		RIGHT(25, Keys.RIGHT, false),
 		
-		ENTER(26, Keys.ENTER, false),
+		ENTER(26, Keys.ENTER, true),
 		INSERT(27, Keys.INSERT, false),
 		DEL(28, Keys.FORWARD_DEL, false),
 		ESCAPE(29, Keys.ESCAPE, false),

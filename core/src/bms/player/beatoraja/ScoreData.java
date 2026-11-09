@@ -24,6 +24,8 @@ public class ScoreData implements Validatable {
 	 * 譜面のハッシュ値
 	 */
 	private String sha256 = "";
+
+	private String id = "";
 	/**
 	 * プレイヤー名。自身のスコアの場合は空白
 	 */
@@ -408,6 +410,14 @@ public class ScoreData implements Validatable {
 
 	public void setSha256(String sha256) {
 		this.sha256 = sha256;
+	}
+
+	public String getID() {
+		return id;
+	}
+
+	public void setID(String id) {
+		this.id = id != null ? id : "";
 	}
 	
 	public String getPlayer() {

@@ -35,6 +35,10 @@ public class RankingData {
 	 * 選択されている楽曲のローカルスコアでの想定IR順位
 	 */	
 	private int localrank;
+	/**
+	 * 自分のスコア。ない場合はnull
+	 */
+	private IRScoreData playerscore;
 
 	/**
 	 * IR総プレイ数
@@ -134,13 +138,16 @@ public class RankingData {
         Arrays.fill(lamps, 0);
         irrank = 0;
         localrank = 0;
+        playerscore = null;
         for(int i = 0;i < scores.length;i++) {
 			playertypes[i] = rivalid.contains(scores[i].id) ? PLAYER_RIVAL : PLAYER_NONE;
         	if(player != null && Objects.equals(player.id, scores[i].id)) {
             	irrank = scorerankings[i];
+            	playerscore = scores[i];
     			playertypes[i] = PLAYER_YOU;
         	} else if(irrank == 0 && scores[i].player.length() == 0) {
             	irrank = scorerankings[i];
+            	playerscore = scores[i];
     			playertypes[i] = PLAYER_YOU;
             }
             if(localscore != null && localrank == 0 && scores[i].getExscore() <=  localscore.getExscore()) {
@@ -203,6 +210,10 @@ public class RankingData {
 			return scores[index];			
 		}
 		return null;
+	}
+
+	public IRScoreData getPlayerScore() {
+		return playerscore;
 	}
 	
 	/**

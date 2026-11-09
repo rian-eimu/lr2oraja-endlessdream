@@ -181,7 +181,7 @@ public class SkinProperty {
 	public static final int SLIDER_MUSIC_PROGRESS = 6;
 
 	public static final int SLIDER_SKINSELECT_POSITION = 7;
-	public static final int SLIDER_PRACTICE_POSITION = 9;
+	public static final int SLIDER_PRACTICE_POSITION = 20;
 
 	public static final int SLIDER_MASTER_VOLUME = 17;
 	public static final int SLIDER_KEY_VOLUME = 18;
@@ -220,6 +220,7 @@ public class SkinProperty {
 	public static final int STRING_ARTIST = 14;
 	public static final int STRING_SUBARTIST = 15;
 	public static final int STRING_FULLARTIST = 16;
+	public static final int STRING_LEVELREVIEW = 29;
 	public static final int STRING_SEARCHWORD = 30;
 	public static final int STRING_SKIN_NAME = 50;
 	public static final int STRING_SKIN_AUTHOR = 51;
@@ -985,6 +986,7 @@ public class SkinProperty {
 	public static final int OPTION_PRACTICE_ITEM16 = 3015;
 	public static final int OPTION_PRACTICE_ITEM1_SELECTED = 3020;
 	public static final int OPTION_PRACTICE_ITEM16_SELECTED = 3035;
+	public static final int OPTION_RESULT_LEVEL_REVIEW_EDITABLE = 3040;
 
 	// オフセットのユーザー定義は40番以降を使用して下さい
 

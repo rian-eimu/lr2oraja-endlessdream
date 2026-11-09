@@ -44,6 +44,19 @@ public interface SongDatabaseAccessor {
 
 	public void setSongDatas(SongData[] songs);
 
+	public default void setSongReviews(SongData[] songs) {
+		setSongDatas(songs);
+	}
+
+	/** Updates the current player's review level without modifying song metadata. */
+	default boolean setSongReviewLevel(SongData song, double level) {
+		return false;
+	}
+
+	default SongReview getSongReview(String sha256) {
+		return null;
+	}
+
 	public SongData[] getSongDatasByText(String text);
 
 	/**

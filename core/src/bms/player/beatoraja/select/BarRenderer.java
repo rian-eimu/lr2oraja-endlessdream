@@ -476,7 +476,7 @@ public final class BarRenderer {
 			float skinwidth) {
 		final SongData song = ba.sd instanceof SongBar ? ((SongBar) ba.sd).getSongData() : null;
 		if (bar != null && song != null
-				&& (song.getFavorite() & (SongData.FAVORITE_SONG | SongData.FAVORITE_CHART)) != 0) {
+				&& (song.getSongReview().getFavorite() & (SongData.FAVORITE_SONG | SongData.FAVORITE_CHART)) != 0) {
 			final int orgalign = text.getAlign();
 			// バー本体もタイトル枠も画面外まで伸びる値を設定するスキンがあるため、
 			// バーの右端と画面の右端のうち手前を採る

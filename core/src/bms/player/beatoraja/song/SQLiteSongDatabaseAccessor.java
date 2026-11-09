@@ -51,6 +51,14 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 	private final ResultSetHandler<List<FolderData>> folderhandler = new BeanListHandler<FolderData>(FolderData.class);
 
 	private final QueryRunner qr;
+
+	private final SongReviewAccessor reviewdb;
+
+	private final String reviewpath;
+
+	private Map<String, SongReview> songReviewCache = Collections.emptyMap();
+
+	private boolean songReviewCacheLoaded;
 	
 	private List<SongDatabaseAccessorPlugin> plugins = new ArrayList();
 	/**
@@ -63,11 +71,20 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 	private SongArchiveExtractMode songArchiveExtractMode = SongArchiveExtractMode.NO_TEMPORARY_FILES;
 	
 	public SQLiteSongDatabaseAccessor(String filepath, String[] bmsroot) throws ClassNotFoundException {
-		this(filepath, bmsroot, false, SongArchiveExtractMode.NO_TEMPORARY_FILES);
+		this(filepath, bmsroot, false, SongArchiveExtractMode.NO_TEMPORARY_FILES, null);
+	}
+
+	public SQLiteSongDatabaseAccessor(String filepath, String[] bmsroot, String reviewpath) throws ClassNotFoundException {
+		this(filepath, bmsroot, false, SongArchiveExtractMode.NO_TEMPORARY_FILES, reviewpath);
 	}
 
 	public SQLiteSongDatabaseAccessor(String filepath, String[] bmsroot, boolean scanSongArchives,
 			SongArchiveExtractMode songArchiveExtractMode) throws ClassNotFoundException {
+		this(filepath, bmsroot, scanSongArchives, songArchiveExtractMode, null);
+	}
+
+	public SQLiteSongDatabaseAccessor(String filepath, String[] bmsroot, boolean scanSongArchives,
+			SongArchiveExtractMode songArchiveExtractMode, String reviewpath) throws ClassNotFoundException {
 		super(new Table("folder", 
 				new Column("title", "TEXT"),
 				new Column("subtitle", "TEXT"),
@@ -120,8 +137,11 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		ds = new SQLiteDataSource(conf);
 		ds.setUrl("jdbc:sqlite:" + filepath);
 		qr = new QueryRunner(ds);
+		this.reviewpath = reviewpath;
+		reviewdb = reviewpath != null && reviewpath.length() > 0 ? new SongReviewAccessor(reviewpath) : null;
 		root = Paths.get(".");
 		createTable();
+		migrateLegacySongReviews();
 		setArchiveConfig(scanSongArchives, songArchiveExtractMode);
 	}
 
@@ -154,9 +174,96 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 						+ "FROM old_song GROUP BY path HAVING MAX(adddate)");
 				qr.update("DROP TABLE old_song");
 			}
+			createIndexes();
 		} catch (SQLException e) {
 			logger.error("楽曲データベース初期化中の例外:{}", e.getMessage());
 		}
+	}
+
+	private void createIndexes() throws SQLException {
+		qr.update("CREATE INDEX IF NOT EXISTS idx_song_folder ON song(folder)");
+		qr.update("CREATE INDEX IF NOT EXISTS idx_song_sha256 ON song(sha256)");
+		qr.update("CREATE INDEX IF NOT EXISTS idx_folder_parent ON folder(parent)");
+	}
+
+	private void migrateLegacySongReviews() {
+		if (reviewdb == null) {
+			return;
+		}
+		try {
+			List<SongData> legacyReviews = qr.query(
+					"SELECT sha256, tag, favorite FROM song WHERE (tag IS NOT NULL AND tag != '') OR favorite > 0",
+					songhandler);
+			Map<String, SongReview> existingReviews = reviewdb.getSongReviews();
+			List<SongData> migrationTargets = new ArrayList<>();
+			for (SongData legacyReview : legacyReviews) {
+				SongReview existingReview = existingReviews.get(legacyReview.getSha256());
+				SongReview review = existingReview != null ? existingReview : new SongReview();
+				review.setSha256(legacyReview.getSha256());
+				boolean migrate = false;
+				if ((review.getTag() == null || review.getTag().length() == 0)
+						&& legacyReview.getTag() != null && legacyReview.getTag().length() > 0) {
+					review.setTag(legacyReview.getTag());
+					migrate = true;
+				}
+				if (review.getFavorite() == 0 && legacyReview.getFavorite() > 0) {
+					review.setFavorite(legacyReview.getFavorite());
+					migrate = true;
+				}
+				if (migrate) {
+					legacyReview.setSongReview(review);
+					migrationTargets.add(legacyReview);
+				}
+			}
+			reviewdb.setSongReviews(migrationTargets.toArray(new SongData[0]));
+			qr.update("UPDATE song SET favorite = 0 WHERE favorite > 0");
+			songReviewCacheLoaded = false;
+		} catch (SQLException e) {
+			logger.error("楽曲評価データ移行中の例外:{}", e.getMessage());
+		}
+	}
+
+	private SongData[] toSongDataArray(List<SongData> songs) {
+		List<SongData> validSongs = Validatable.removeInvalidElements(songs);
+		applySongReviews(validSongs);
+		return validSongs.toArray(new SongData[validSongs.size()]);
+	}
+
+	private void applySongReviews(List<SongData> songs) {
+		if (songs == null || songs.size() == 0) {
+			return;
+		}
+		Map<String, SongReview> reviews = reviewdb != null ? getSongReviews() : Collections.emptyMap();
+		for (SongData song : songs) {
+			SongReview review = reviews.get(song.getSha256());
+			if (review == null) {
+				review = new SongReview();
+				review.setSha256(song.getSha256());
+			}
+			song.setSongReview(review);
+		}
+	}
+
+	private Map<String, SongReview> getSongReviews() {
+		if (reviewdb == null) {
+			return Collections.emptyMap();
+		}
+		if (!songReviewCacheLoaded) {
+			songReviewCache = reviewdb.getSongReviews();
+			songReviewCacheLoaded = true;
+		}
+		return songReviewCache;
+	}
+
+	private String getReviewedSongSource() {
+		if (reviewpath == null || reviewpath.length() == 0) {
+			return "song";
+		}
+		return "(SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,"
+				+ "COALESCE(review.tag, '') AS tag, path, folder, stagefile, banner, backbmp, preview, parent,"
+				+ "level, difficulty, maxbpm, minbpm, length, mode, judge, feature, content, song.date AS date,"
+				+ "COALESCE(review.favorite, 0) AS favorite, adddate, notes, charthash"
+				+ " FROM song LEFT OUTER JOIN reviewdb.review AS review ON song.sha256 = review.sha256)";
 	}
 
 	
@@ -172,7 +279,7 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 	public SongData[] getSongDatas(String key, String value) {
 		try {
 			final List<SongData> m = qr.query("SELECT * FROM song WHERE " + key + " = ?", songhandler, value);
-			return Validatable.removeInvalidElements(m).toArray(new SongData[0]);
+			return toSongDataArray(m);
 		} catch (Exception e) {
 			e.printStackTrace();
 			logger.error("song.db更新時の例外:{}", e.getMessage());
@@ -221,8 +328,7 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 			    return bIndex - aIndex;
             }).collect(Collectors.toList());
 
-			SongData[] validated = Validatable.removeInvalidElements(sorted).toArray(new SongData[0]);
-			return validated;
+			return toSongDataArray(sorted);
 		} catch (Exception e) {
 			e.printStackTrace();
 			logger.error("song.db更新時の例外:{}", e.getMessage());
@@ -255,28 +361,35 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("ATTACH DATABASE '" + score + "' as scoredb");
                 stmt.execute("ATTACH DATABASE '" + scorelog + "' as scorelogdb");
+                if (reviewpath != null && reviewpath.length() > 0) {
+                    stmt.execute("ATTACH DATABASE '" + reviewpath + "' as reviewdb");
+                }
                 List<SongData> m = new ArrayList<>();
+                String songSource = getReviewedSongSource();
 
                 if(info != null) {
                     stmt.execute("ATTACH DATABASE '" + info + "' as infodb");
-                    String s = "SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,level,difficulty,"
+                    String s = "SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,song.level AS level,difficulty,"
                             + "maxbpm,minbpm,song.mode AS mode, judge, feature, content, song.date AS date, favorite, song.notes AS notes, adddate, preview, length, charthash"
-                            + " FROM song INNER JOIN (information LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON information.sha256 = score.sha256) "
+                            + " FROM " + songSource + " AS song INNER JOIN (information LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON information.sha256 = score.sha256) "
                             + "ON song.sha256 = information.sha256 WHERE " + insertGroupBy(sql);
                     ResultSet rs = stmt.executeQuery(s);
                     m = songhandler.handle(rs);
     				// System.out.println(s + " -> result : " + m.size());
                     stmt.execute("DETACH DATABASE infodb");
                 } else {
-                    String s = "SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,level,difficulty,"
+                    String s = "SELECT md5, song.sha256 AS sha256, title, subtitle, genre, artist, subartist,path,folder,stagefile,banner,backbmp,parent,song.level AS level,difficulty,"
                             + "maxbpm,minbpm,song.mode AS mode, judge, feature, content, song.date AS date, favorite, song.notes AS notes, adddate, preview, length, charthash"
-                            + " FROM song LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON song.sha256 = score.sha256 WHERE " + insertGroupBy(sql);
+                            + " FROM " + songSource + " AS song LEFT OUTER JOIN (score LEFT OUTER JOIN scorelog ON score.sha256 = scorelog.sha256) ON song.sha256 = score.sha256 WHERE " + insertGroupBy(sql);
                     ResultSet rs = stmt.executeQuery(s);
                     m = songhandler.handle(rs);
                 }
+                if (reviewpath != null && reviewpath.length() > 0) {
+                    stmt.execute("DETACH DATABASE reviewdb");
+                }
                 stmt.execute("DETACH DATABASE scorelogdb");
                 stmt.execute("DETACH DATABASE scoredb");
-                return Validatable.removeInvalidElements(m).toArray(new SongData[0]);
+                return toSongDataArray(m);
             } catch(Throwable e) {
                 e.printStackTrace();
             }
@@ -293,7 +406,7 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 			List<SongData> m = qr.query(
 					"SELECT * FROM song WHERE rtrim(title||' '||subtitle||' '||artist||' '||subartist||' '||genre) LIKE ?"
 							+ " GROUP BY sha256",songhandler, "%" + text + "%");
-			return Validatable.removeInvalidElements(m).toArray(new SongData[0]);
+			return toSongDataArray(m);
 		} catch (Exception e) {
 			logger.error("song.db更新時の例外:{}", e.getMessage());
 		}
@@ -327,6 +440,10 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 	 * @param songs 更新する楽曲
 	 */
 	public void setSongDatas(SongData[] songs) {
+		if (reviewdb != null) {
+			reviewdb.setSongReviews(songs);
+			songReviewCacheLoaded = false;
+		}
 		try (Connection conn = qr.getDataSource().getConnection()){
 			conn.setAutoCommit(false);
 
@@ -338,6 +455,41 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		} catch (Exception e) {
 			logger.error("song.db更新時の例外:{}", e.getMessage());
 		}
+	}
+
+	public void setSongReviews(SongData[] songs) {
+		if (reviewdb != null) {
+			reviewdb.setSongReviews(songs);
+			songReviewCacheLoaded = false;
+		} else {
+			for (SongData song : songs) {
+				if (song != null) {
+					song.setFavorite(song.getSongReview().getFavorite());
+				}
+			}
+			setSongDatas(songs);
+		}
+	}
+
+	@Override
+	public SongReview getSongReview(String sha256) {
+		return reviewdb != null ? reviewdb.getSongReview(sha256) : null;
+	}
+
+	@Override
+	public boolean setSongReviewLevel(SongData song, double level) {
+		if (reviewdb == null || song == null || !reviewdb.setLevelReview(song.getSha256(), level)) {
+			return false;
+		}
+		SongReview review = song.getSongReview();
+		review.setLevelreview(level);
+		SongReview cached = songReviewCache.get(song.getSha256());
+		if (cached == null) {
+			songReviewCacheLoaded = false;
+		} else if (cached != review) {
+			cached.setLevelreview(level);
+		}
+		return true;
 	}
 
 	/**
@@ -420,12 +572,21 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 				property.conn = conn;
 				conn.setAutoCommit(false);
 				// 楽曲のタグ,FAVORITEの保持
-				for (SongData record : qr.query(conn, "SELECT sha256, tag, favorite FROM song", songhandler)) {
-					if (record.getTag().length() > 0) {
-						property.tags.put(record.getSha256(), record.getTag());
+				if (reviewdb != null) {
+					for (Map.Entry<String, SongReview> entry : getSongReviews().entrySet()) {
+						SongReview review = entry.getValue();
+						if (review.getTag() != null && review.getTag().length() > 0) {
+							property.tags.put(entry.getKey(), review.getTag());
+						}
 					}
-					if (record.getFavorite() > 0) {
-						property.favorites.put(record.getSha256(), record.getFavorite());
+				} else {
+					for (SongData record : qr.query(conn, "SELECT sha256, tag, favorite FROM song", songhandler)) {
+						if (record.getTag() != null && record.getTag().length() > 0) {
+							property.tags.put(record.getSha256(), record.getTag());
+						}
+						if (record.getFavorite() > 0) {
+							property.favorites.put(record.getSha256(), record.getFavorite());
+						}
 					}
 				}
 				if(updateAll) {
@@ -605,10 +766,10 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		private void processDirectory(SongDatabaseUpdaterProperty property)
 				throws IOException, SQLException, ReflectiveOperationException, IllegalArgumentException, InvocationTargetException, IntrospectionException {
 			final List<SongData> records = SongArchives.archivePath(path) != null
-					? qr.query(property.conn, "SELECT path,date FROM song WHERE path >= ? AND path < ?", songhandler,
+					? qr.query(property.conn, "SELECT path, date, preview FROM song WHERE path >= ? AND path < ?", songhandler,
 							(SongArchives.archivePath(path).startsWith(root) ? root.relativize(SongArchives.archivePath(path)).toString() : SongArchives.archivePath(path).toString()) + "!",
 							(SongArchives.archivePath(path).startsWith(root) ? root.relativize(SongArchives.archivePath(path)).toString() : SongArchives.archivePath(path).toString()) + "\"")
-					: qr.query(property.conn, "SELECT path,date FROM song WHERE folder = ?", songhandler,
+					: qr.query(property.conn, "SELECT path, date, preview FROM song WHERE folder = ?", songhandler,
 					SongUtils.crc32(path.toString(), bmsroot, root.toString()));
 			final List<FolderData> folders = qr.query(property.conn, "SELECT path,date FROM folder WHERE parent = ?",
 					folderhandler, SongUtils.crc32(path.toString(), bmsroot, root.toString()));
@@ -774,6 +935,16 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 						records.set(i, null);
 						if (record.getDate() == lastModifiedTime) {
 							update = false;
+
+							String oldpp = record.getPreview() == null ? "" : record.getPreview();
+							String newpp = previewpath == null ? "" : previewpath;
+							if (!oldpp.equals(newpp)) {
+								try {
+									qr.update(property.conn, "UPDATE song SET preview=? WHERE path=?", newpp, pathname);
+								} catch (SQLException e) {
+									logger.warn("Error while updating preview at {}: {}", pathname, e.getMessage());
+								}
+							}
 						}
 						break;
 					}

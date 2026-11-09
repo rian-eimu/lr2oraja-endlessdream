@@ -37,6 +37,9 @@ public class MusicResult extends AbstractResult {
 	private static final Logger logger = LoggerFactory.getLogger(MusicResult.class);
 
 	private ResultKeyProperty property;
+	private LevelReviewTarget levelReviewTarget;
+
+	public record LevelReviewTarget(SongData song, int lnmode) {}
 
 	// 【追加】 元のモードを保存する変数
 	private Mode originalMode;
@@ -108,9 +111,33 @@ public class MusicResult extends AbstractResult {
 		
 		gaugeType = resource.getGrooveGauge().getType();
 
+		prepareLevelReview();
 		loadSkin(SkinType.RESULT);
 		
 		isModeRestored = false;
+	}
+
+	void prepareLevelReview() {
+		levelReviewTarget = null;
+		if (resource.getPlayMode() == null || resource.getPlayMode().mode != BMSPlayerMode.Mode.PLAY
+				|| resource.getCourseBMSModels() != null || resource.getScoreData() == null) {
+			return;
+		}
+		var song = resource.getSongdata();
+		var model = resource.getBMSModel();
+		var database = main.getSongDatabase();
+		if (song == null || model == null || database == null || song.getSha256().isEmpty()
+				|| !song.getSha256().equals(model.getSHA256())) {
+			return;
+		}
+		int lnmode = song.hasUndefinedLongNote() ? model.getLntype() : 0;
+		if (lnmode < 0 || lnmode > 3) return;
+		song.setSongReview(database.getSongReview(song.getSha256()));
+		levelReviewTarget = new LevelReviewTarget(song, lnmode);
+	}
+
+	public LevelReviewTarget getEditableLevelReview() {
+		return state != STATE_IR_PROCESSING && !main.isTimerOn(TIMER_FADEOUT) ? levelReviewTarget : null;
 	}
 	
 	public void prepare() {
@@ -190,7 +217,7 @@ public class MusicResult extends AbstractResult {
                         if (response.isSucceeded()) {
                             var lnMode = main.getPlayerResource().getPlayerConfig().getLnmode();
                             main.getRivalDataAccessor().updateAllRivalsScores(response.getData(), songData, lnMode);
-							ranking.updateScore(response.getData(), newscore.getExscore() > oldscore.getExscore() ? newscore : oldscore);
+							ranking.updateScore(ir[0].player, main.getRivalDataAccessor(), response.getData(), newscore.getExscore() > oldscore.getExscore() ? newscore : oldscore);
 							rankingOffset = ranking.getRank() > 10 ? ranking.getRank() - 5 : 0;
 							logger.info("IRからのスコア取得成功 : {}", response.getMessage());
 						} else {
@@ -392,10 +419,11 @@ public class MusicResult extends AbstractResult {
 				&& resource.getScoreData() != null) {
 			if (saveReplay[index] != ReplayStatus.SAVED && resource.isUpdateScore()) {
 				ReplayData rd = resource.getReplayData();
-				main.getPlayDataAccessor().wrireReplayData(rd, resource.getBMSModel(),
-						resource.getPlayerConfig().getLnmode(), index);
-				saveReplay[index] = ReplayStatus.SAVED;
-				main.saveLastRecording("ON_REPLAY");
+				if (main.getPlayDataAccessor().wrireReplayData(rd, resource.getBMSModel(),
+						resource.getPlayerConfig().getLnmode(), index)) {
+					saveReplay[index] = ReplayStatus.SAVED;
+					main.saveLastRecording("ON_REPLAY");
+				}
 			}
 		}
 	}
@@ -479,6 +507,7 @@ public class MusicResult extends AbstractResult {
 			cscore.setLms(cscore.getLms() + newscore.getLms());
 			cscore.setMinbp(cscore.getMinbp() + newscore.getMinbp());
 			cscore.setTotalDuration(cscore.getTotalDuration() + newscore.getTotalDuration());
+			cscore.setPlayDuration(cscore.getPlayDuration() + newscore.getPlayDuration());
 			if (resource.getGauge()[resource.getGrooveGauge().getType()].get(resource.getGauge()[resource.getGrooveGauge().getType()].size - 1) > 0) {
 				if (resource.getAssist() > 0) {
 					if(resource.getAssist() == 1 && cscore.getClear() != ClearType.AssistEasy.id) cscore.setClear(ClearType.LightAssistEasy.id);
@@ -534,24 +563,8 @@ public class MusicResult extends AbstractResult {
 	}
 
 	public int getJudgeCount(int judge, boolean fast) {
-		ScoreData score = resource.getScoreData();
-		if (score != null) {
-			switch (judge) {
-			case 0:
-				return fast ? score.getEpg() : score.getLpg();
-			case 1:
-				return fast ? score.getEgr() : score.getLgr();
-			case 2:
-				return fast ? score.getEgd() : score.getLgd();
-			case 3:
-				return fast ? score.getEbd() : score.getLbd();
-			case 4:
-				return fast ? score.getEpr() : score.getLpr();
-			case 5:
-				return fast ? score.getEms() : score.getLms();
-			}
-		}
-		return 0;
+		final ScoreData score = resource.getScoreData();
+		return score != null ? score.getJudgeCount(judge, fast) : 0;
 	}
 
 	@Override

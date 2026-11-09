@@ -162,14 +162,14 @@ public class ContextMenuBar extends DirectoryBar {
 
         addMetaEntries(options);
 
-        boolean isFavChart = ((song.getFavorite() & SongData.FAVORITE_CHART) != 0);
+        boolean isFavChart = ((song.getSongReview().getFavorite() & SongData.FAVORITE_CHART) != 0);
         var favChart = new FunctionBar(
             (selector, self)
                 -> {
-                song.setFavorite(song.getFavorite() ^ SongData.FAVORITE_CHART);
-                selector.main.getSongDatabase().setSongDatas(new SongData[] {song});
+                song.setFavorite(song.getSongReview().getFavorite() ^ SongData.FAVORITE_CHART);
+                selector.main.getSongDatabase().setSongReviews(new SongData[] {song});
                 selector.play(OPTION_CHANGE);
-                boolean isFav = 0 != (song.getFavorite() & SongData.FAVORITE_CHART);
+                boolean isFav = 0 != (song.getSongReview().getFavorite() & SongData.FAVORITE_CHART);
                 self.setDisplayBarType(isFav ? STYLE_COURSE : STYLE_MISSING);
                 self.setDisplayTextType(isFav ? STYLE_TEXT_PLAIN : STYLE_TEXT_MISSING);
             },
@@ -178,14 +178,14 @@ public class ContextMenuBar extends DirectoryBar {
         favChart.setSongData(song);
         options.add(favChart);
 
-        boolean isFavSong = ((song.getFavorite() & SongData.FAVORITE_SONG) != 0);
+        boolean isFavSong = ((song.getSongReview().getFavorite() & SongData.FAVORITE_SONG) != 0);
         var favSong = new FunctionBar(
             (selector, self)
                 -> {
-                song.setFavorite(song.getFavorite() ^ SongData.FAVORITE_SONG);
-                selector.main.getSongDatabase().setSongDatas(new SongData[] {song});
+                song.setFavorite(song.getSongReview().getFavorite() ^ SongData.FAVORITE_SONG);
+                selector.main.getSongDatabase().setSongReviews(new SongData[] {song});
                 selector.play(OPTION_CHANGE);
-                boolean isFav = 0 != (song.getFavorite() & SongData.FAVORITE_SONG);
+                boolean isFav = 0 != (song.getSongReview().getFavorite() & SongData.FAVORITE_SONG);
                 self.setDisplayBarType(isFav ? STYLE_COURSE : STYLE_MISSING);
                 self.setDisplayTextType(isFav ? STYLE_TEXT_PLAIN : STYLE_TEXT_MISSING);
             },

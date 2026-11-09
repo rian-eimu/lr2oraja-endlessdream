@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.ResultSetHandler;
 import org.apache.commons.dbutils.handlers.BeanListHandler;
+import org.apache.commons.dbutils.handlers.ScalarHandler;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
 
@@ -147,6 +148,20 @@ public class ScoreDatabaseAccessor extends SQLiteDatabaseAccessor {
 			logger.error("スコア取得時の例外:{}", e.getMessage());
 		}
 		return result;
+	}
+
+	int getLastPlayedLnMode(String sha256, int fallback) {
+		try {
+			Number mode = qr.query("""
+					SELECT mode FROM score
+					WHERE sha256 = ? AND mode BETWEEN 0 AND 3 AND playcount > 0 AND date > 0
+					ORDER BY date DESC, (mode = ?) DESC, mode LIMIT 1
+					""", new ScalarHandler<>(), sha256, fallback);
+			return mode != null ? mode.intValue() : fallback;
+		} catch (SQLException e) {
+			logger.warn("Failed to read the last played LN mode: {}", e.getMessage());
+			return fallback;
+		}
 	}
 
 	/**

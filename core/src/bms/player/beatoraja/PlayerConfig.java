@@ -119,6 +119,10 @@ public final class PlayerConfig {
 	 */
 	private ModeFilter modeFilter = ModeFilter.ALL;
 	/**
+	 * 選曲時に切り替え可能なMODEフィルター
+	 */
+	private ModeFilter[] enabledModeFilters = ModeFilter.defaultFilters();
+	/**
 	 * 指定がない場合のミスレイヤー表示時間(ms)
 	 */
 	private int misslayerDuration = 500;
@@ -159,6 +163,7 @@ public final class PlayerConfig {
 	private int scratchJudgeWindowRatePerfectGreat = 400;
 	private int scratchJudgeWindowRateGreat = 400;
 	private int scratchJudgeWindowRateGood = 100;
+	private int longnoteMarginRate = 100;
 
 	/**
 	 * 地雷モード
@@ -285,6 +290,11 @@ public final class PlayerConfig {
 	 * 選択中の選曲時ソート
 	 */
 	private String sortid;
+
+	/**
+	 * Sort choices in cycling order. Numeric skin IDs remain unchanged.
+	 */
+	private BarSorter[] enabledBarSorters = BarSorter.defaultSorter.clone();
 
 	/**
 	 * 選曲時でのキー入力方式
@@ -523,6 +533,9 @@ public final class PlayerConfig {
 	}
 
 	public PlayModeConfig getMode5() {
+		if (mode5 == null) {
+			mode5 = new PlayModeConfig(Mode.BEAT_5K);
+		}
 		return mode5;
 	}
 
@@ -531,6 +544,9 @@ public final class PlayerConfig {
 	}
 
 	public PlayModeConfig getMode7() {
+		if (mode7 == null) {
+			mode7 = new PlayModeConfig(Mode.BEAT_7K);
+		}
 		return mode7;
 	}
 
@@ -539,7 +555,7 @@ public final class PlayerConfig {
 	}
 
 	public PlayModeConfig getMode10() {
-		if(mode10 == null || mode10.getController().length < 2) {
+		if(mode10 == null || mode10.getController() == null || mode10.getController().length < 2) {
 			mode10 = new PlayModeConfig(Mode.BEAT_10K);
 			logger.warn("mode10のPlayConfigを再構成");
 		}
@@ -551,7 +567,7 @@ public final class PlayerConfig {
 	}
 
 	public PlayModeConfig getMode14() {
-		if(mode14 == null || mode14.getController().length < 2) {
+		if(mode14 == null || mode14.getController() == null || mode14.getController().length < 2) {
 			mode14 = new PlayModeConfig(Mode.BEAT_14K);
 			logger.warn("mode14のPlayConfigを再構成");
 		}
@@ -565,10 +581,10 @@ public final class PlayerConfig {
 	public PlayModeConfig getMode9() {
 		if (mode9 == null) {
 			mode9 = new PlayModeConfig(Mode.POPN_9K);
-		} else if (mode9.getController().length < 2) {
+		} else if (mode9.getController() == null || mode9.getController().length < 2) {
 			ControllerConfig[] oldControllers = mode9.getController();
 			ControllerConfig[] newControllers = new ControllerConfig[2];
-			newControllers[0] = oldControllers.length > 0 ? oldControllers[0] : new ControllerConfig(Mode.POPN_9K, 0, false);
+			newControllers[0] = (oldControllers != null && oldControllers.length > 0) ? oldControllers[0] : new ControllerConfig(Mode.POPN_9K, 0, false);
 			newControllers[1] = new ControllerConfig(Mode.POPN_9K, 1, false);
 			mode9.setController(newControllers);
 			logger.warn("mode9のControllerを拡張");
@@ -581,6 +597,9 @@ public final class PlayerConfig {
 	}
 
 	public PlayModeConfig getMode24() {
+		if (mode24 == null) {
+			mode24 = new PlayModeConfig(Mode.KEYBOARD_24K);
+		}
 		return mode24;
 	}
 
@@ -589,7 +608,7 @@ public final class PlayerConfig {
 	}
 
 	public PlayModeConfig getMode24double() {
-		if(mode24double == null || mode24double.getController().length < 2) {
+		if(mode24double == null || mode24double.getController() == null || mode24double.getController().length < 2) {
 			mode24double = new PlayModeConfig(Mode.KEYBOARD_24K_DOUBLE);
 			logger.warn("mode24doubleのPlayConfigを再構成");
 		}
@@ -623,6 +642,23 @@ public final class PlayerConfig {
 		this.modeFilter = modeFilter != null ? modeFilter : ModeFilter.ALL;
 		this.mode = this.modeFilter.defaultMode;
 	}
+
+	public ModeFilter[] getEnabledModeFilters() {
+		return enabledModeFilters.clone();
+	}
+
+	public void setEnabledModeFilters(ModeFilter[] enabledModeFilters) {
+		this.enabledModeFilters = sanitizeModeFilters(enabledModeFilters);
+	}
+
+	public boolean isModeFilterEnabled(ModeFilter filter) {
+		for (ModeFilter enabledFilter : enabledModeFilters) {
+			if (enabledFilter == filter) {
+				return true;
+			}
+		}
+		return false;
+	}
 	
 	public int getSort() {
 		return this.sort ;
@@ -638,6 +674,35 @@ public final class PlayerConfig {
 
 	public void setSortid(String sortid) {
 		this.sortid = sortid;
+	}
+
+	public BarSorter[] getEnabledBarSorters() {
+		return enabledBarSorters.clone();
+	}
+
+	public void setEnabledBarSorters(BarSorter[] sorters) {
+		enabledBarSorters = sanitizeBarSorters(sorters);
+	}
+
+	public void cycleBarSorter(int direction) {
+		int index = -1;
+		for (int i = 0; i < enabledBarSorters.length; i++) {
+			if (enabledBarSorters[i].name().equals(sortid)) {
+				index = i;
+				break;
+			}
+		}
+		int next = index < 0 ? (direction >= 0 ? 0 : enabledBarSorters.length - 1)
+				: Math.floorMod(index + (direction >= 0 ? 1 : -1), enabledBarSorters.length);
+		BarSorter selected = enabledBarSorters[next];
+		sortid = selected.name();
+		// Keep the legacy eight-choice numeric property independent of array order.
+		for (int i = 0; i < BarSorter.defaultSorter.length; i++) {
+			if (BarSorter.defaultSorter[i] == selected) {
+				sort = i;
+				break;
+			}
+		}
 	}
 
 	public int getDifficultyFilter() {
@@ -658,8 +723,17 @@ public final class PlayerConfig {
 	}
 
 	public SkinConfig[] getSkin() {
-		if(skin.length <= SkinType.getMaxSkinTypeID()) {
-			skin = Arrays.copyOf(skin, SkinType.getMaxSkinTypeID() + 1);
+		if(skin == null || skin.length != SkinType.getMaxSkinTypeID() + 1) {
+			if (skin == null) {
+				skin = new SkinConfig[SkinType.getMaxSkinTypeID() + 1];
+			} else {
+				skin = Arrays.copyOf(skin, SkinType.getMaxSkinTypeID() + 1);
+			}
+			for (int i = 0; i < skin.length; i++) {
+				if (skin[i] == null || !skin[i].validate()) {
+					skin[i] = getDefaultSkinConfig(i);
+				}
+			}
 			logger.warn("skinを再構成");
 		}
 		return skin;
@@ -774,6 +848,14 @@ public final class PlayerConfig {
 
 	public void setScratchJudgeWindowRateGood(int judgeWindowRateGood) {
 		this.scratchJudgeWindowRateGood = judgeWindowRateGood;
+	}
+
+	public int getLongnoteMarginRate() {
+		return longnoteMarginRate;
+	}
+
+	public void setLongnoteMarginRate(int longnoteMarginRate) {
+		this.longnoteMarginRate = longnoteMarginRate;
 	}
 
 	public int getHranThresholdBPM() {
@@ -996,9 +1078,16 @@ public final class PlayerConfig {
 		mode24double.validate(Mode.KEYBOARD_24K_DOUBLE);
 
 		sort = MathUtils.clamp(sort, 0 , BarSorter.defaultSorter.length - 1);
+		enabledBarSorters = sanitizeBarSorters(enabledBarSorters);
 		if(!isKnownBarSorter(sortid)) {
 			sortid = BarSorter.defaultSorter[sort].name();
 		}
+		if (modeFilter == null) {
+			setMode(mode);
+		} else {
+			setModeFilter(modeFilter);
+		}
+		enabledModeFilters = sanitizeModeFilters(enabledModeFilters);
 
 		gauge = MathUtils.clamp(gauge, 0, 5);
 		gaugeAutoShift = MathUtils.clamp(gaugeAutoShift, GAUGEAUTOSHIFT_NONE, GAUGEAUTOSHIFT_SELECT_TO_UNDER);
@@ -1020,6 +1109,7 @@ public final class PlayerConfig {
 		scratchJudgeWindowRatePerfectGreat = MathUtils.clamp(scratchJudgeWindowRatePerfectGreat, 25, 400);
 		scratchJudgeWindowRateGreat = MathUtils.clamp(scratchJudgeWindowRateGreat, 0, 400);
 		scratchJudgeWindowRateGood = MathUtils.clamp(scratchJudgeWindowRateGood, 0, 400);
+		longnoteMarginRate = MathUtils.clamp(longnoteMarginRate, 0, 400);
 		hranThresholdBPM = MathUtils.clamp(hranThresholdBPM, HRAN_THRESHOLD_BPM_MIN, HRAN_THRESHOLD_BPM_MAX);
 		
 		if(autosavereplay == null) {
@@ -1063,6 +1153,32 @@ public final class PlayerConfig {
 
 		// --Stream
 		maxRequestCount = MathUtils.clamp(maxRequestCount, MAX_REQUEST_COUNT_MIN, MAX_REQUEST_COUNT_MAX);
+	}
+
+	private static BarSorter[] sanitizeBarSorters(BarSorter[] sorters) {
+		if (sorters == null || sorters.length == 0) {
+			return BarSorter.defaultSorter.clone();
+		}
+		Set<BarSorter> uniqueSorters = new LinkedHashSet<>();
+		for (BarSorter sorter : sorters) {
+			if (sorter != null) {
+				uniqueSorters.add(sorter);
+			}
+		}
+		return uniqueSorters.isEmpty() ? BarSorter.defaultSorter.clone() : uniqueSorters.toArray(BarSorter[]::new);
+	}
+
+	private static ModeFilter[] sanitizeModeFilters(ModeFilter[] filters) {
+		if (filters == null || filters.length == 0) {
+			return ModeFilter.defaultFilters();
+		}
+		EnumSet<ModeFilter> uniqueFilters = EnumSet.noneOf(ModeFilter.class);
+		for (ModeFilter filter : filters) {
+			if (filter != null) {
+				uniqueFilters.add(filter);
+			}
+		}
+		return uniqueFilters.isEmpty() ? ModeFilter.defaultFilters() : uniqueFilters.toArray(ModeFilter[]::new);
 	}
 
 	private static boolean isKnownBarSorter(String sorterName) {

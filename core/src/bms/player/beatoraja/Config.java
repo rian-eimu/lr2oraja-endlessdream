@@ -206,6 +206,9 @@ public class Config implements Validatable {
 	private int bannerPixmapGen = 2;
 	private int songResourceGen = 1;
 
+	/** メインステート遷移時に低頻度のリソースサマリ出力を有効化する */
+	private boolean memoryDiagnostics = false;
+
 	private boolean enableIpfs = true;
 	private String ipfsurl = "https://gateway.ipfs.io/";
 
@@ -280,8 +283,10 @@ public class Config implements Validatable {
 			// normal 1/2 insane 1/2
 			"https://darksabun.club/table/archive/normal1/",
 			"https://darksabun.club/table/archive/insane1/",
-			"http://rattoto10.jounin.jp/table.html",
-			"http://rattoto10.jounin.jp/table_insane.html",
+			"https://rattoto10.jounin.jp/table.html",
+			"https://rattoto10.jounin.jp/table_insane.html",
+			"https://miraiscarlet.github.io/bms/table/genocide_normal/normal_bms.html",
+			"https://miraiscarlet.github.io/bms/table/genocide_insane/insane_bms.html",
 			// overjoy
 			"https://rattoto10.jounin.jp/table_overjoy.html",
 			//
@@ -364,8 +369,10 @@ public class Config implements Validatable {
 			// normal 1/2 insane 1/2
 			"https://darksabun.club/table/archive/normal1/",
 			"https://darksabun.club/table/archive/insane1/",
-			"http://rattoto10.jounin.jp/table.html",
-			"http://rattoto10.jounin.jp/table_insane.html",
+			"https://rattoto10.jounin.jp/table.html",
+			"https://rattoto10.jounin.jp/table_insane.html",
+			"https://miraiscarlet.github.io/bms/table/genocide_normal/normal_bms.html",
+			"https://miraiscarlet.github.io/bms/table/genocide_insane/insane_bms.html",
 			// overjoy
 			"https://rattoto10.jounin.jp/table_overjoy.html"
 	};
@@ -586,6 +593,14 @@ public class Config implements Validatable {
 
 	public void setCacheSkinImage(boolean cacheSkinImage) {
 		this.cacheSkinImage = cacheSkinImage;
+	}
+
+	public boolean isMemoryDiagnostics() {
+		return memoryDiagnostics;
+	}
+
+	public void setMemoryDiagnostics(boolean memoryDiagnostics) {
+		this.memoryDiagnostics = memoryDiagnostics;
 	}
 
 	public boolean isUseDiscordRPC() {
@@ -994,7 +1009,6 @@ public class Config implements Validatable {
 			return new String[0];
 		}
 		return Arrays.stream(paths)
-				.limit(MAX_CONFIG_LIST_ENTRIES)
 				.filter(Config::isUsablePath)
 				.toArray(String[]::new);
 	}

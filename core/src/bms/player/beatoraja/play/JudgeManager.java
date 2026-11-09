@@ -206,7 +206,7 @@ public class JudgeManager {
         
         nmjudge = rule.getJudge(NoteType.NOTE, judgerank, keyJudgeWindowRate);
         cnendmjudge = rule.getJudge(NoteType.LONGNOTE_END, judgerank, keyJudgeWindowRate);
-        nreleasemargin = rule.longnoteMargin;
+        nreleasemargin = (config.isCustomJudge() && !config.isDxMode()) ? rule.longnoteMargin * config.getLongnoteMarginRate() / 100L : rule.longnoteMargin;
         smjudge = rule.getJudge(NoteType.SCRATCH, judgerank, scratchJudgeWindowRate);
         scnendmjudge = rule.getJudge(NoteType.LONGSCRATCH_END, judgerank, scratchJudgeWindowRate);
         sreleasemargin = rule.longscratchMargin;

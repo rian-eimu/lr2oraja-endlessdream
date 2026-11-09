@@ -92,9 +92,12 @@ public class MainController {
 	private BMSPlayerMode auto;
 	private boolean songUpdated;
 
+	private SongDatabaseAccessor songdb;
+
 	private SongInformationAccessor infodb;
 
 	private IRStatus[] ir;
+	private IRReviewSync reviewSync;
 
 	private RivalDataAccessor rivals = new RivalDataAccessor();
 
@@ -125,6 +128,8 @@ public class MainController {
 
 	private StreamController streamController;
 
+	private final MemoryDiagnostics memoryDiagnostics = new MemoryDiagnostics();
+
 	private ObsListener obsListener;
 	private ObsWsClient obsClient;
 
@@ -141,6 +146,11 @@ public class MainController {
 	public List<IRSendStatus> irSendStatus = new ArrayList<IRSendStatus>();
 
 	public MainController(Path f, Config config, PlayerConfig player, BMSPlayerMode auto, boolean songUpdated) {
+		this(f, config, player, auto, songUpdated, null);
+	}
+
+	public MainController(Path f, Config config, PlayerConfig player, BMSPlayerMode auto, boolean songUpdated,
+			SongDatabaseAccessor songdb) {
 		this.auto = auto;
 		this.config = config;
 		this.songUpdated = songUpdated;
@@ -157,6 +167,8 @@ public class MainController {
             }
         }
 		this.player = player;
+		this.songdb = songdb != null ? songdb
+				: MainLoader.getScoreDatabaseAccessor(config, this.player != null ? this.player.getId() : config.getPlayername());
 
 		this.bmsfile = f;
 
@@ -220,6 +232,10 @@ public class MainController {
 	}
 
 	private void closeIRConnections() {
+		if (reviewSync != null) {
+			reviewSync.close();
+			reviewSync = null;
+		}
 		if (ir != null) {
 			for (IRStatus status : ir) {
 				if (status != null && status.connection instanceof AutoCloseable closeable) {
@@ -266,6 +282,7 @@ public class MainController {
 
 		}
 		ir = irarray.toArray(IRStatus.class);
+		reviewSync = IRReviewSync.forPrimary(player.getIrconfig(), ir);
 		
 		rivals.update(this);
 	}
@@ -289,7 +306,7 @@ public class MainController {
 	}
 
 	public SongDatabaseAccessor getSongDatabase() {
-		return MainLoader.getScoreDatabaseAccessor();
+		return songdb;
 	}
 
 	public SongInformationAccessor getInfoDatabase() {
@@ -376,12 +393,14 @@ public class MainController {
 		current = newState;
 		timer.setMainState(newState);
 		current.prepare();
+		memoryDiagnostics.capture(this, getStateType(current) != null ? getStateType(current).name() : current.getClass().getSimpleName());
 		updateMainStateListener(0);
 	}
 
 	public void loadNewProfile(PlayerConfig pc) {
 		config.setPlayername(pc.getId());
 		player = pc;
+		songdb = MainLoader.getScoreDatabaseAccessor(config, pc.getId());
 
 		playdata = new PlayDataAccessor(config);
 
@@ -462,9 +481,9 @@ public class MainController {
 		case OpenAL:
 			audio = new GdxSoundDriver(config);
 			break;
-//		case AudioDevice:
-//			audio = new GdxAudioDeviceDriver(config);
-//			break;
+		case AudioDevice:
+			audio = new GdxAudioDeviceDriver(config);
+			break;
 		}
 		loudnessAnalyzer = new BMSLoudnessAnalyzer(config);
     	initializeStates();
@@ -871,6 +890,7 @@ public class MainController {
 		}
 
 		saveConfig();
+		rivals.close();
 		closeIRConnections();
 
 		if (selector != null) {
@@ -976,12 +996,30 @@ public class MainController {
 		return ir;
 	}
 
+	public void syncReviewLevel(String sha256, double level, int lnmode) {
+		if (reviewSync != null) reviewSync.offerLevel(sha256, level, lnmode);
+	}
+
+	public int getReviewLnMode(SongData song) {
+		if (!song.hasUndefinedLongNote() || reviewSync == null) return 0;
+		int fallback = player.getLnmode();
+		return playdata != null ? playdata.getLastPlayedLnMode(song.getSha256(), fallback) : fallback;
+	}
+
 	public SystemSoundManager getSoundManager() {
 		return sound;
 	}
 
 	public MusicDownloadProcessor getMusicDownloadProcessor(){
 		return download;
+	}
+
+	public MusicSelector getMusicSelector() {
+		return selector;
+	}
+
+	public MemoryDiagnostics getMemoryDiagnostics() {
+		return memoryDiagnostics;
 	}
 
 	public ImGuiRenderer getImGui() {

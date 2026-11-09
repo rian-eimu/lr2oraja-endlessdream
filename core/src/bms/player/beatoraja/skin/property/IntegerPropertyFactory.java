@@ -1316,9 +1316,9 @@ public class IntegerPropertyFactory {
 			final SongData sd = state.resource.getSongdata();
 			if(sd != null) {
 				int type = 1;
-				if((sd.getFavorite() & (SongData.FAVORITE_SONG | SongData.INVISIBLE_SONG)) == 0) {
+				if((sd.getSongReview().getFavorite() & (SongData.FAVORITE_SONG | SongData.INVISIBLE_SONG)) == 0) {
 					type = 0;
-				} else if((sd.getFavorite() & SongData.INVISIBLE_SONG) != 0) {
+				} else if((sd.getSongReview().getFavorite() & SongData.INVISIBLE_SONG) != 0) {
 					type = 2;
 				}
 				return type;
@@ -1329,9 +1329,9 @@ public class IntegerPropertyFactory {
 			final SongData sd = state.resource.getSongdata();
 			if(sd != null) {
 				int type = 1;
-				if((sd.getFavorite() & (SongData.FAVORITE_CHART | SongData.INVISIBLE_CHART)) == 0) {
+				if((sd.getSongReview().getFavorite() & (SongData.FAVORITE_CHART | SongData.INVISIBLE_CHART)) == 0) {
 					type = 0;
-				} else if((sd.getFavorite() & SongData.INVISIBLE_CHART) != 0) {
+				} else if((sd.getSongReview().getFavorite() & SongData.INVISIBLE_CHART) != 0) {
 					type = 2;
 				}
 				return type;

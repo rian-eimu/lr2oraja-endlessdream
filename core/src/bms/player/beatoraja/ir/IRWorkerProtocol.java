@@ -29,6 +29,7 @@ final class IRWorkerProtocol {
 	static final String METHOD_GET_PLAY_DATA = "getPlayData";
 	static final String METHOD_GET_COURSE_PLAY_DATA = "getCoursePlayData";
 	static final String METHOD_SEND_PLAY_DATA = "sendPlayData";
+	static final String METHOD_SET_REVIEW = "setReview";
 	static final String METHOD_SEND_COURSE_PLAY_DATA = "sendCoursePlayData";
 	static final String METHOD_GET_SONG_URL = "getSongURL";
 	static final String METHOD_GET_COURSE_URL = "getCourseURL";
@@ -59,6 +60,7 @@ final class IRWorkerProtocol {
 		public Chart chart;
 		public Course course;
 		public Score score;
+		public Review review;
 		public String currentVersion;
 		public long scoreRevision = -1;
 	}
@@ -68,6 +70,7 @@ final class IRWorkerProtocol {
 	 */
 	static class Response {
 		public boolean succeeded;
+		public boolean reviewUnsupported;
 		public String message;
 		public Player player;
 		public Player[] players;
@@ -87,6 +90,28 @@ final class IRWorkerProtocol {
 			response.succeeded = false;
 			response.message = message;
 			return response;
+		}
+	}
+
+	static class Review {
+		public String sha256;
+		public Double level;
+		public String comment;
+		public Boolean favorite;
+		public Integer lnmode;
+
+		static Review from(IRReview review) {
+			Review dto = new Review();
+			dto.sha256 = review.sha256();
+			dto.level = review.level();
+			dto.comment = review.comment();
+			dto.favorite = review.favorite();
+			dto.lnmode = review.lnmode();
+			return dto;
+		}
+
+		IRReview toIRReview() {
+			return new IRReview(sha256, level, comment, favorite, lnmode);
 		}
 	}
 
@@ -252,7 +277,7 @@ final class IRWorkerProtocol {
 		IRChartData toIRChartData() {
 			return new IRChartData(md5, sha256, title, subtitle, genre, artist, subartist, url, appendurl, level, total,
 					mode, lntype, judge, minbpm, maxbpm, notes, hasUndefinedLN, hasLN, hasCN, hasHCN, hasHLN, hasMine, hasRandom,
-					hasStop, hasConditional, hasFreeZone, length, normalNotes, scratchNotes, longNotes, longScratchNotes,
+					hasConditional, hasStop, hasFreeZone, length, normalNotes, scratchNotes, longNotes, longScratchNotes,
 					hasScroll, hasSpeed, hasBga, hasChartInfo, values);
 		}
 	}

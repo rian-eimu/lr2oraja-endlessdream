@@ -191,10 +191,10 @@ public class IRScoreData {
 	public IRScoreData(ScoreData score) {
 		this.sha256 = score.getSha256();
 		this.lntype = score.getMode();
+		this.id = score.getID();
 		this.player = score.getPlayer();
 		this.clear = ClearType.getClearTypeByID(score.getClear());
 		this.date = score.getDate();
-		this.id = "";
 		this.playDuration = score.getPlayDuration();
 		this.playtime = score.getPlayDuration() > 0 ? score.getPlayDuration() : -1;
 		this.epg = score.getEpg();
@@ -233,6 +233,7 @@ public class IRScoreData {
 		ScoreData score = new ScoreData();
 		score.setSha256(this.sha256);
 		score.setMode(this.lntype);
+		score.setID(this.id);
 		score.setPlayer(this.player);
 		score.setClear(this.clear.id);
 		score.setDate(this.date);
