@@ -709,6 +709,7 @@ public abstract class JsonSkinObjectLoader<S extends Skin> {
 	}
 
 	protected void setDestination(Skin skin, SkinObject obj, JsonSkin.Destination dst) {
+		obj.setOffsetCenter(loader.resolveOffsetCenter(obj, dst));
 		JsonSkin.Animation prev = null;
 		for (JsonSkin.Animation a : dst.dst) {
 			if (prev == null) {

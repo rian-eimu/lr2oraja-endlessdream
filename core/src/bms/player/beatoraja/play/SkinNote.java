@@ -120,7 +120,7 @@ public class SkinNote extends SkinObject {
 	}
 
 	public void draw(SkinObjectRenderer sprite) {
-		renderer.drawLane(sprite, time, lanes, this.getOffsets());
+		renderer.drawLane(sprite, time, lanes, this.getOffsets(), getOffsetCenter());
 	}
 	
 	@Override
