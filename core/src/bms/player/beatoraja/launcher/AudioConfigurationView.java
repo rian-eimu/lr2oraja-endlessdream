@@ -67,10 +67,10 @@ public class AudioConfigurationView implements Initializable {
 
 	@Override
 	public void initialize(URL arg0, ResourceBundle arg1) {
-		audio.getItems().setAll(DriverType.OpenAL , DriverType.PortAudio);
+		audio.getItems().setAll(DriverType.OpenAL, DriverType.AudioDevice, DriverType.PortAudio);
 		audiosamplerate.getItems().setAll(null, 44100, 48000);
 
-		audioFreqOption.getItems().setAll(FrequencyType.UNPROCESSED , FrequencyType.FREQUENCY);
+		audioFreqOption.getItems().setAll(FrequencyType.UNPROCESSED , FrequencyType.FREQUENCY, FrequencyType.SPEED);
 		audioFastForward.getItems().setAll(FrequencyType.UNPROCESSED , FrequencyType.FREQUENCY);
 
 		bindSliderToSpinner(systemVolumeSlider, systemVolumeSpinner);
@@ -129,6 +129,7 @@ public class AudioConfigurationView implements Initializable {
 	public void updateAudioDriver() {
 		switch(audio.getValue()) {
 		case OpenAL:
+		case AudioDevice:
 			audioname.setDisable(true);
 			audioname.getItems().clear();
 			audiobuffer.setDisable(false);

@@ -166,6 +166,7 @@ dependencies {
     // non-gradle managed file dependencies. jportaudio not on maven. "custom" scares me.
     implementation(":jportaudio")
     implementation(":luaj-jse:3.0.2-custom")
+    implementation(":tarsosdsp:latest")
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

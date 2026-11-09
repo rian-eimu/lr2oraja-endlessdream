@@ -29,7 +29,7 @@ public class AudioConfig implements Validatable {
 	/**
 	 * オーディオ同時発音数
 	 */
-	private int deviceSimultaneousSources = 128;
+	private int deviceSimultaneousSources = 256;
 	/**
 	 * オーディオサンプリングレート(0:指定なし)
 	 */
@@ -223,9 +223,9 @@ public class AudioConfig implements Validatable {
 		 */
 		PortAudio,
 		/**
-		 * AudioDevice (libGDX AudioDevice, 未実装)
+		 * AudioDevice (libGDX AudioDevice)
 		 */
-//		AudioDevice,
+		AudioDevice,
 	}
 	
 	public enum FrequencyType {
@@ -239,8 +239,8 @@ public class AudioConfig implements Validatable {
 		 */
 		FREQUENCY,
 		/**
-		 * オーディオ再生速度変化の処理:ピッチ変化なしに速度を変更(未実装)
+		 * オーディオ再生速度変化の処理:ピッチ変化なしに速度を変更(Practiceのみ)
 		 */
-//		SPEED
+		SPEED
 	}
 }

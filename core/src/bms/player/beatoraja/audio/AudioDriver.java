@@ -82,12 +82,29 @@ public interface AudioDriver extends Disposable {
 	 * 
 	 * @param model
 	 *            BMSモデル
+	 * @param stretchRate
+	 *            タイムストレッチ倍率(0.5 - 2.0, 1.0で無効)
 	 */
-	public void setModel(BMSModel model);
+	public void setModel(BMSModel model, float stretchRate);
+
+	/**
+	 * BMSの音源データを読み込む(タイムストレッチなし)
+	 * 
+	 * @param model
+	 *            BMSモデル
+	 */
+	default void setModel(BMSModel model) {
+		setModel(model, 1f);
+	}
 
 	/** 元の楽曲リソースのコンテキストを使用してBMSモデルを読み込む。 */
 	default void setModel(BMSModel model, SongResource resource) {
-		setModel(model);
+		setModel(model, resource, 1f);
+	}
+
+	/** 元の楽曲リソースのコンテキストとタイムストレッチ倍率を使用してBMSモデルを読み込む。 */
+	default void setModel(BMSModel model, SongResource resource, float stretchRate) {
+		setModel(model, stretchRate);
 	}
 	
 	/**

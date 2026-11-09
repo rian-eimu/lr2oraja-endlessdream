@@ -1077,7 +1077,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 				}
 			} finally {
 				if (diagnostics != null) diagnostics.stream(started, writeStarted, System.nanoTime(), frames,
-						outcome, gpitch, 1.0f);
+						outcome, gpitch, getTimeStretchRate());
 			}
 			
 		}
