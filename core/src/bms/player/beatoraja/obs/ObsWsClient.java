@@ -4,6 +4,9 @@ import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -47,6 +50,8 @@ public class ObsWsClient {
 	private final String password;
 	private final AtomicLong requestIdCounter = new AtomicLong(0);
 	private final URI serverUri;
+	private final boolean isLocalHost;
+	private volatile Path recordDirectory;
 
 	private Runnable onCloseHandler;
 	private Consumer<Exception> onErrorHandler;
@@ -106,7 +111,10 @@ public class ObsWsClient {
 	public static final String ACTION_SET_SCENE = "SetScene";
 
 	public ObsWsClient(Config config) throws URISyntaxException {
-		this.serverUri = new URI("ws://" + config.getObsWsHost() + ":" + config.getObsWsPort());
+		String host = config.getObsWsHost();
+		this.isLocalHost = host != null && (host.equalsIgnoreCase("localhost")
+				|| host.equals("127.0.0.1") || host.equals("::1") || host.equals("[::1]"));
+		this.serverUri = new URI("ws://" + host + ":" + config.getObsWsPort());
 		this.password = config.getObsWsPass();
 		this.recordingMode = ObsRecordingMode.fromValue(config.getObsWsRecMode());
 		createWebSocketClient();
@@ -146,6 +154,9 @@ public class ObsWsClient {
 							sendRequest("GetVersion");
 							sendRequest("GetSceneList");
 							sendRequest("GetRecordStatus");
+							if (isLocalHost) {
+								sendRequest("GetRecordDirectory");
+							}
 							break;
 						case 5: // Event
 							handleEvent(json);
@@ -226,12 +237,7 @@ public class ObsWsClient {
 										restartRecording = false;
 										if (recordingMode != ObsRecordingMode.KEEP_ALL) {
 											final String pathToDelete = outputPath;
-											scheduler.execute(() -> {
-												File file = new File(pathToDelete);
-												if (file.exists() && file.isFile()) {
-													file.delete();
-												}
-											});
+											scheduler.execute(() -> deleteRecordingIfSafe(pathToDelete));
 										}
 										scheduler.schedule(this::requestStartRecord, 500, TimeUnit.MILLISECONDS);
 									}
@@ -248,12 +254,7 @@ public class ObsWsClient {
 									} else {
 										if (lastOutputPath != null && !lastOutputPath.isBlank()) {
 											final String pathToDelete = lastOutputPath;
-											scheduler.execute(() -> {
-												File file = new File(pathToDelete);
-												if (file.exists() && file.isFile()) {
-													file.delete();
-												}
-											});
+											scheduler.execute(() -> deleteRecordingIfSafe(pathToDelete));
 											notifyMessage += ", last recording deleted";
 										}
 									}
@@ -367,6 +368,18 @@ public class ObsWsClient {
 						isRecording = responseData.get("outputActive").asBoolean();
 					}
 					break;
+				case "GetRecordDirectory":
+					if (responseData.has("recordDirectory")) {
+						try {
+							Path root = Path.of(responseData.get("recordDirectory").asText());
+							if (root.isAbsolute()) {
+								recordDirectory = root.toRealPath();
+							}
+						} catch (Exception e) {
+							recordDirectory = null;
+						}
+					}
+					break;
 			}
 		} catch (Exception e) {
 			logger.warn("Error handling request response: {}", e.getMessage());
@@ -470,9 +483,37 @@ public class ObsWsClient {
 		return isConnected && isIdentified && !isReconnecting;
 	}
 
+	private void deleteRecordingIfSafe(String pathToDelete) {
+		if (!isLocalHost || pathToDelete == null || pathToDelete.isBlank()) {
+			return;
+		}
+		try {
+			Path file = Path.of(pathToDelete);
+			if (!file.isAbsolute()) {
+				return;
+			}
+			file = file.normalize();
+			Path expectedDir = recordDirectory;
+			if (expectedDir == null || file.getParent() == null || !file.getParent().toRealPath().equals(expectedDir)) {
+				logger.warn("OBS: retaining recording; output directory could not be verified: {}", pathToDelete);
+				return;
+			}
+			Path target = expectedDir.resolve(file.getFileName());
+			if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
+				return;
+			}
+			Files.delete(target);
+		} catch (Exception e) {
+			logger.warn("OBS: retaining recording; deletion could not be verified: {}", e.getMessage());
+		}
+	}
+
 	public void requestStartRecord() {
 		if (!canSendRequest() || isRecording) {
 			return;
+		}
+		if (isLocalHost && recordingMode != ObsRecordingMode.KEEP_ALL) {
+			sendRequest("GetRecordDirectory");
 		}
 		sendRequest("StartRecord");
 	}
