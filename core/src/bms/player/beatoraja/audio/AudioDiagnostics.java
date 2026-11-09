@@ -43,7 +43,8 @@ final class AudioDiagnostics implements AutoCloseable {
                 return;
             }
             long device = org.lwjgl.openal.ALC10.alcGetContextsDevice(context);
-            Logger.getGlobal().info("Audio diagnostics OpenAL : backend=" + com.badlogic.gdx.Gdx.audio.getClass().getName()
+            String backend = com.badlogic.gdx.Gdx.audio != null ? com.badlogic.gdx.Gdx.audio.getClass().getName() : "disabled";
+            Logger.getGlobal().info("Audio diagnostics OpenAL : backend=" + backend
                     + ", vendor=" + org.lwjgl.openal.AL10.alGetString(org.lwjgl.openal.AL10.AL_VENDOR)
                     + ", renderer=" + org.lwjgl.openal.AL10.alGetString(org.lwjgl.openal.AL10.AL_RENDERER)
                     + ", version=" + org.lwjgl.openal.AL10.alGetString(org.lwjgl.openal.AL10.AL_VERSION)

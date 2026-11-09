@@ -154,19 +154,90 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 	}
 
 	static int adjustAsioBufferSize(int deviceId, int requestedFrames, PortAudioAsioDiagnostics.BufferSizes sizes) {
-		if (sizes != null && sizes.minimum() > requestedFrames) {
-			Logger.getGlobal().info("PortAudio ASIO buffer size adjusted : device=" + deviceId
-					+ ", requestedFrames=" + requestedFrames + ", effectiveFrames=" + sizes.minimum()
-					+ ", reason=below ASIO minimum");
-			return sizes.minimum();
+		if (sizes == null) {
+			return requestedFrames;
 		}
-		return requestedFrames;
+		int min = sizes.minimum();
+		int max = sizes.maximum();
+		int preferred = sizes.preferred();
+		int granularity = sizes.granularity();
+
+		int adjusted = requestedFrames;
+		String reason = null;
+
+		if (adjusted <= 0) {
+			if (preferred > 0) {
+				adjusted = preferred;
+				reason = "non-positive requestedFrames; using ASIO preferred";
+			} else if (min > 0) {
+				adjusted = min;
+				reason = "non-positive requestedFrames; using ASIO minimum";
+			}
+		}
+		if (min > 0 && adjusted < min) {
+			adjusted = min;
+			reason = "below ASIO minimum";
+		} else if (max > 0 && max >= min && adjusted > max) {
+			adjusted = max;
+			reason = "above ASIO maximum";
+		}
+
+		if (min > 0 && max == min) {
+			if (adjusted != min) {
+				adjusted = min;
+				reason = "fixed ASIO buffer size";
+			}
+		} else if (granularity == 0 && preferred > 0) {
+			if (adjusted != preferred) {
+				adjusted = preferred;
+				reason = "granularity=0; using ASIO preferred";
+			}
+		} else if (granularity > 0 && min > 0) {
+			int offset = adjusted - min;
+			int remainder = offset % granularity;
+			if (remainder != 0) {
+				int lower = adjusted - remainder;
+				int upper = lower + granularity;
+				if (max > 0 && max >= min && upper > max) {
+					adjusted = lower;
+				} else if (preferred > 0 && (preferred == lower || preferred == upper)) {
+					adjusted = preferred;
+				} else {
+					adjusted = (remainder * 2 >= granularity) ? upper : lower;
+				}
+				reason = "aligned to ASIO granularity (" + granularity + ")";
+			}
+		} else if (granularity == -1 && adjusted > 0) {
+			int pow2 = Integer.highestOneBit(adjusted);
+			if (pow2 != adjusted) {
+				int upper = pow2 << 1;
+				int candidate;
+				if (preferred > 0 && (preferred == pow2 || preferred == upper)) {
+					candidate = preferred;
+				} else {
+					candidate = (upper > 0 && (adjusted - pow2 >= upper - adjusted)) ? upper : pow2;
+				}
+				if (min > 0 && candidate < min) {
+					candidate = min;
+				}
+				if (max > 0 && max >= min && candidate > max) {
+					candidate = pow2 >= min ? pow2 : max;
+				}
+				adjusted = candidate;
+				reason = "aligned to ASIO power-of-two granularity";
+			}
+		}
+
+		if (adjusted != requestedFrames) {
+			Logger.getGlobal().info("PortAudio ASIO buffer size adjusted : device=" + deviceId
+					+ ", requestedFrames=" + requestedFrames + ", effectiveFrames=" + adjusted
+					+ ", reason=" + reason);
+		}
+		return adjusted;
 	}
 
 	/** Owns one native stream and releases PortAudio only after that stream is closed. */
 	static final class StreamLifecycle {
-		private static final long STARTUP_WAIT_NANOS = TimeUnit.MILLISECONDS.toNanos(500);
-		private static final long POLL_NANOS = TimeUnit.MICROSECONDS.toNanos(100);
 		private final BlockingStream nativeStream;
 		private final Runnable release;
 		private volatile boolean closed;
@@ -206,49 +277,24 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 
 		private boolean writeOpenStream(float[] buffer, int frames) {
 			long attempt = ++writeAttempts;
-			int availableBefore = -1;
-			int available = -1;
 			boolean completed = false;
 			boolean cancelled = false;
 			boolean transitioned = false;
 			long started = System.nanoTime();
 			boolean startup = !outputProgressObserved;
 			long nativeStarted = 0;
-			long waitNanos = 0;
 			try {
-				boolean waited = false;
-				// Only startup polls for space. Steady-state timing belongs to PortAudio.
-				while (startup) {
-					if (abortAttempted || closed || Thread.currentThread().isInterrupted()) {
-						writesCancelled++;
-						cancelled = true;
-						return false;
-					}
-					available = nativeStream.getWriteAvailable();
-					if (availableBefore < 0) availableBefore = available;
-					if (available < 0) {
-						throw new IllegalStateException("PortAudio getWriteAvailable failed : result=" + available);
-					}
-					if (available >= frames) break;
-					long remaining = STARTUP_WAIT_NANOS - (System.nanoTime() - started);
-					if (remaining <= 0) {
-						throw new IllegalStateException("PortAudio write availability timed out : frames=" + frames
-								+ ", available=" + available + ", startup=" + startup);
-					}
-					waited = true;
-					LockSupport.parkNanos(Math.min(POLL_NANOS, remaining));
-				}
-				if (abortAttempted || closed || Thread.currentThread().isInterrupted()) {
+				// Pa_WriteStream のブロッキング機構にそのまま委譲する
+				if (abortAttempted || closed || closeRequested || Thread.currentThread().isInterrupted()) {
 					writesCancelled++;
 					cancelled = true;
 					return false;
 				}
 				nativeStarted = System.nanoTime();
-				waitNanos = startup ? nativeStarted - started : 0;
 				try {
 					nativeStream.write(buffer, frames);
 				} catch (RuntimeException | Error e) {
-					if (abortAttempted || closed) {
+					if (abortAttempted || closed || closeRequested) {
 						writesCancelled++;
 						cancelled = true;
 						return false;
@@ -265,22 +311,24 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 			} finally {
 				long ended = System.nanoTime();
 				lastWriteNanos = ended - started;
-				if (nativeStarted == 0 && startup) waitNanos = lastWriteNanos;
 				totalWriteNanos += lastWriteNanos;
 				maxWriteNanos = Math.max(maxWriteNanos, lastWriteNanos);
 				if (transitioned) {
 					Logger.getGlobal().info("PortAudio startup complete : switching to native blocking writes");
 				}
-				if (attempt <= 4 || !completed) {
+				long failedCount = writeAttempts - writesCompleted - writesCancelled;
+				if (attempt <= 4 || (!completed && failedCount <= 4)) {
 					Logger.getGlobal().info("PortAudio write : attempt=" + attempt + ", frames=" + frames
 							+ ", mode=" + (startup ? "STARTUP" : "NATIVE_BLOCKING")
-							+ ", availableBefore=" + availableBefore + ", availableAtWrite=" + available
-							+ ", waitMs=" + waitNanos / 1_000_000.0
 							+ ", nativeWriteMs=" + (nativeStarted == 0 ? 0 : ended - nativeStarted) / 1_000_000.0
 							+ ", durationMs=" + lastWriteNanos / 1_000_000.0
 							+ ", completed=" + completed + ", cancelled=" + cancelled);
 				}
 			}
+		}
+
+		synchronized boolean isClosing() {
+			return closed || closeRequested || abortAttempted;
 		}
 
 		record WriteStatistics(long attempts, long completed, long failed, long cancelled, long totalNanos, long maxNanos, long lastNanos) {
@@ -466,13 +514,29 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		RuntimeException lastError = null;
 		for(int deviceId : getOutputDeviceCandidates(preferredDeviceId, devices)) {
 			DeviceInfo deviceInfo = devices[deviceId];
-			int effectiveFrames = adjustAsioBufferSize(deviceId, framesPerBuffer, getAsioBufferSizes(deviceId, deviceInfo));
+			boolean asioDevice = getHostApiType(deviceInfo) == PortAudio.HOST_API_TYPE_ASIO;
+			boolean asioSizesQueried = false;
+			PortAudioAsioDiagnostics.BufferSizes asioSizes = null;
+			int effectiveFrames = framesPerBuffer;
+			if(asioDevice && effectiveFrames <= 0) {
+				asioSizes = getAsioBufferSizes(deviceId, deviceInfo);
+				asioSizesQueried = true;
+				effectiveFrames = adjustAsioBufferSize(deviceId, framesPerBuffer, asioSizes);
+			}
 			for(int sampleRate : getSampleRateCandidates(audioConfig, deviceInfo)) {
 				setSampleRate(sampleRate);
 				logSelectedDevice(deviceId, deviceInfo);
-				StreamParameters streamParameters = createOutputStreamParameters(deviceId, deviceInfo, effectiveFrames);
 				try {
-					BlockingStream openedStream = openStream(streamParameters, deviceInfo, effectiveFrames, flags);
+					StreamOpenResult result;
+					if(asioDevice) {
+						result = openAsioStream(deviceId, deviceInfo, framesPerBuffer, effectiveFrames, flags, asioSizesQueried, asioSizes);
+						asioSizesQueried = true;
+						effectiveFrames = result.framesPerBuffer();
+					} else {
+						StreamParameters streamParameters = createOutputStreamParameters(deviceId, deviceInfo, effectiveFrames);
+						BlockingStream openedStream = openStream(streamParameters, deviceInfo, effectiveFrames, flags);
+						result = new StreamOpenResult(openedStream, deviceId, deviceInfo, sampleRate, effectiveFrames);
+					}
 					if(deviceId != preferredDeviceId) {
 						Logger.getGlobal().info("PortAudio fallback output device selected"
 								+ " : requestedDevice=" + preferredDeviceId
@@ -480,8 +544,13 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 								+ ", fallbackName=" + deviceInfo.name
 								+ ", sampleRate=" + sampleRate);
 					}
-					return new StreamOpenResult(openedStream, deviceId, deviceInfo, sampleRate, effectiveFrames);
+					return result;
 				} catch(RuntimeException e) {
+					if(asioDevice && !asioSizesQueried) {
+						asioSizes = getAsioBufferSizes(deviceId, deviceInfo);
+						asioSizesQueried = true;
+						effectiveFrames = adjustAsioBufferSize(deviceId, framesPerBuffer, asioSizes);
+					}
 					lastError = e;
 					Logger.getGlobal().warning("PortAudio output device open failed"
 							+ " : device=" + deviceId
@@ -492,6 +561,29 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 			}
 		}
 		throw lastError != null ? lastError : new RuntimeException("PortAudio output device is not available");
+	}
+
+	private StreamOpenResult openAsioStream(int deviceId, DeviceInfo deviceInfo, int requestedFrames, int effectiveFrames, int flags,
+			boolean asioSizesQueried, PortAudioAsioDiagnostics.BufferSizes cachedSizes) {
+		StreamParameters primaryParameters = createOutputStreamParameters(deviceId, deviceInfo, effectiveFrames);
+		logStreamOpen(primaryParameters, effectiveFrames, flags, "primary");
+		try {
+			BlockingStream openedStream = PortAudio.openStream(null, primaryParameters, getSampleRate(), effectiveFrames, flags);
+			return new StreamOpenResult(openedStream, deviceId, deviceInfo, getSampleRate(), effectiveFrames);
+		} catch(RuntimeException primaryError) {
+			Logger.getGlobal().warning("PortAudio primary openStream failed : " + primaryError.getMessage());
+			if(!asioSizesQueried) {
+				PortAudioAsioDiagnostics.BufferSizes sizes = cachedSizes != null ? cachedSizes : getAsioBufferSizes(deviceId, deviceInfo);
+				int adjustedFrames = adjustAsioBufferSize(deviceId, requestedFrames, sizes);
+				if(adjustedFrames != effectiveFrames && adjustedFrames > 0) {
+					StreamParameters adjustedParameters = createOutputStreamParameters(deviceId, deviceInfo, adjustedFrames);
+					logStreamOpen(adjustedParameters, adjustedFrames, flags, "asio-adjusted-buffer fallback");
+					BlockingStream openedStream = PortAudio.openStream(null, adjustedParameters, getSampleRate(), adjustedFrames, flags);
+					return new StreamOpenResult(openedStream, deviceId, deviceInfo, getSampleRate(), adjustedFrames);
+				}
+			}
+			throw primaryError;
+		}
 	}
 
 	private StreamParameters createOutputStreamParameters(int deviceId, DeviceInfo deviceInfo, int framesPerBuffer) {
@@ -536,17 +628,14 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		if(deviceInfo.defaultSampleRate > 0) {
 			sampleRates.add((int)deviceInfo.defaultSampleRate);
 		}
-		if(isLinux()) {
-			sampleRates.add(48000);
-			sampleRates.add(44100);
-		}
+		sampleRates.add(48000);
+		sampleRates.add(44100);
 		return sampleRates.stream().mapToInt(Integer::intValue).toArray();
 	}
 
 	private BlockingStream openStream(StreamParameters streamParameters, DeviceInfo deviceInfo, int framesPerBuffer, int flags) {
 		logStreamOpen(streamParameters, framesPerBuffer, flags, "primary");
 		try {
-			logFormatSupport(streamParameters, framesPerBuffer);
 			return PortAudio.openStream( null, streamParameters, getSampleRate(), framesPerBuffer, flags );
 		} catch(RuntimeException e) {
 			Logger.getGlobal().warning("PortAudio primary openStream failed : " + e.getMessage());
@@ -558,7 +647,6 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 				: Math.max(streamParameters.suggestedLatency, 0.05);
 		logStreamOpen(highLatencyParameters, framesPerBuffer, flags, "high-latency fallback");
 		try {
-			logFormatSupport(highLatencyParameters, framesPerBuffer);
 			return PortAudio.openStream(null, highLatencyParameters, getSampleRate(), framesPerBuffer, flags);
 		} catch(RuntimeException e) {
 			Logger.getGlobal().warning("PortAudio high-latency fallback openStream failed : " + e.getMessage());
@@ -567,7 +655,6 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		StreamParameters unspecifiedBufferParameters = copyParameters(highLatencyParameters);
 		int unspecifiedFramesPerBuffer = 0;
 		logStreamOpen(unspecifiedBufferParameters, unspecifiedFramesPerBuffer, flags, "unspecified-buffer fallback");
-		logFormatSupport(unspecifiedBufferParameters, unspecifiedFramesPerBuffer);
 		return PortAudio.openStream(null, unspecifiedBufferParameters, getSampleRate(), unspecifiedFramesPerBuffer, flags);
 	}
 
@@ -586,21 +673,6 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		copy.sampleFormat = source.sampleFormat;
 		copy.suggestedLatency = source.suggestedLatency;
 		return copy;
-	}
-
-	private void logFormatSupport(StreamParameters streamParameters, int framesPerBuffer) {
-		try {
-			int result = PortAudio.isFormatSupported(null, streamParameters, getSampleRate());
-			Logger.getGlobal().info("PortAudio format support"
-					+ " : result=" + result
-					+ ", device=" + streamParameters.device
-					+ ", channels=" + streamParameters.channelCount
-					+ ", sampleRate=" + getSampleRate()
-					+ ", framesPerBuffer=" + framesPerBuffer
-					+ ", suggestedLatency=" + streamParameters.suggestedLatency);
-		} catch(Throwable e) {
-			Logger.getGlobal().warning("PortAudio format support check failed : " + e.getMessage());
-		}
 	}
 
 	private void logStreamOpen(StreamParameters streamParameters, int framesPerBuffer, int flags, String label) {
@@ -920,6 +992,12 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 	}
 
 	private void runMixer() {
+		final int frames = buffer.length / 2;
+		final int rate = getSampleRate();
+		final long bufferDurationNanos = rate > 0
+				? (frames * TimeUnit.SECONDS.toNanos(1)) / rate
+				: TimeUnit.MILLISECONDS.toNanos(10);
+		int consecutiveWriteFailures = 0;
 		while(!stop) {
 			long started = diagnostics != null ? System.nanoTime() : 0;
 			final float gpitch = getGlobalPitch();
@@ -962,7 +1040,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 				}						
 			}
 			
-			long writeStarted = diagnostics != null ? System.nanoTime() : 0;
+			long writeStarted = System.nanoTime();
 			int outcome = AudioDiagnostics.FAILED;
 			try {
 				StreamLifecycle currentStream = stream;
@@ -971,20 +1049,34 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 					stop = true;
 					break;
 				}
-				if (!currentStream.write(buffer, buffer.length / 2)) {
+				if (!currentStream.write(buffer, frames)) {
 					outcome = AudioDiagnostics.CANCELLED;
 					stop = true;
 					break;
 				}
 				outcome = AudioDiagnostics.RETURNED;
-			} catch(Throwable e) {
-				if(!stop) {
-					Logger.getGlobal().log(java.util.logging.Level.WARNING, "PortAudio stream write failed : " + e.getMessage(), e);
+				if (consecutiveWriteFailures > 0) {
+					Logger.getGlobal().info("PortAudio stream write recovered after " + consecutiveWriteFailures + " failure(s)");
+					consecutiveWriteFailures = 0;
 				}
-				stop = true;
-				break;
+			} catch(Throwable e) {
+				StreamLifecycle currentStream = stream;
+				if (stop || currentStream == null || currentStream.isClosing()) {
+					stop = true;
+					break;
+				}
+				// ASIO4ALL等での一時的なタイムアウト(Wait timed out)時にストリームを破棄せず継続する
+				consecutiveWriteFailures++;
+				if (consecutiveWriteFailures <= 3 || consecutiveWriteFailures % 100 == 0) {
+					Logger.getGlobal().log(java.util.logging.Level.WARNING,
+							"PortAudio stream write failed (consecutive=" + consecutiveWriteFailures + ") : " + e.getMessage(), e);
+				}
+				long elapsed = System.nanoTime() - writeStarted;
+				if (elapsed < bufferDurationNanos) {
+					LockSupport.parkNanos(bufferDurationNanos - elapsed);
+				}
 			} finally {
-				if (diagnostics != null) diagnostics.stream(started, writeStarted, System.nanoTime(), buffer.length / 2,
+				if (diagnostics != null) diagnostics.stream(started, writeStarted, System.nanoTime(), frames,
 						outcome, gpitch, 1.0f);
 			}
 			

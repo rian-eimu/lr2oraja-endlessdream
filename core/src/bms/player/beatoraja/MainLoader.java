@@ -248,7 +248,12 @@ public class MainLoader extends Application {
             gdxConfig.setForegroundFPS(config.getMaxFramePerSecond());
             gdxConfig.setTitle(MainController.getVersion());
 
-			gdxConfig.setAudioConfig(config.getAudioConfig().getDeviceSimultaneousSources(), config.getAudioConfig().getDeviceBufferSize(), 1);
+			if (config.getAudioConfig().getDriver() == DriverType.PortAudio && main.getAudioProcessor() != null) {
+				// PortAudio使用時はOpenAL(WASAPI)とのデバイス競合を防ぐためlibGDXのオーディオ初期化を無効化する
+				gdxConfig.disableAudio(true);
+			} else {
+				gdxConfig.setAudioConfig(config.getAudioConfig().getDeviceSimultaneousSources(), config.getAudioConfig().getDeviceBufferSize(), 1);
+			}
 
 			Config.DisplayMode displaymode = config.getDisplaymode();
 			//new Lwjgl3Application(main, gdxConfig);
