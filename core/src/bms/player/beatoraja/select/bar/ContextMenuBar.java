@@ -228,6 +228,14 @@ public class ContextMenuBar extends DirectoryBar {
     }
 
     private void addMetaEntries(ArrayList<Bar> options) {
+        // rianIRの楽曲ランキングページを開く
+        var rianirPage = new FunctionBar((selector, self) -> {
+            String urlBase = "https://rianir.link/ranking?sha256=";
+            boolean success = ContextMenuBar.browserOpen(urlBase + song.getSha256());
+            selector.play(success ? FOLDER_OPEN : OPTION_CHANGE);
+        }, "Open rianIR Page", STYLE_FOLDER);
+        if (song.getSha256() != null && !song.getSha256().isEmpty()) options.add(rianirPage);
+
         var bmsirPage = new FunctionBar((selector, self) -> {
     String urlBase =
         "https://www.bms-ir.org/new/song?songmd5=";
