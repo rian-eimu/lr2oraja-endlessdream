@@ -253,6 +253,23 @@ public class BMSPlayerInputProcessor extends ControllerAdapter {
 		midiinput.setConfig(config);
 	}
 
+	/** Change menu bindings at a polling boundary; a held button is not a new menu press. */
+	public void rebindMusicSelectInputs(PlayModeConfig config) {
+		synchronized (kbinput) {
+			setPlayConfig(config);
+			resetAllKeyState();
+			startPressed = selectPressed = false;
+			Arrays.fill(isAnalog, false);
+			Arrays.fill(currentAnalogValue, 0);
+			Arrays.fill(lastAnalogValue, 0);
+			kbinput.syncHeldKeys();
+			for (BMControllerInputProcessor controller : bminput) {
+				controller.syncHeldButtons();
+			}
+			midiinput.clear();
+		}
+	}
+
 	public void setStartTime(long starttime) {
 		this.starttime = starttime;
 		if (starttime != 0) {
@@ -508,6 +525,8 @@ public class BMSPlayerInputProcessor extends ControllerAdapter {
 			return isControlKeyPressed(ControlKeys.F3, MASK_CTRL_SHIFT);
 		case SWITCH_SCREEN_MODE:
 			return isControlKeyPressed(ControlKeys.F4);
+		case SWITCH_PLAY_SIDE:
+			return isControlKeyPressed(ControlKeys.F5);
 		case SAVE_SCREENSHOT:
 			return isControlKeyPressed(ControlKeys.F6);
 		case POST_TWITTER:
@@ -523,7 +542,7 @@ public class BMSPlayerInputProcessor extends ControllerAdapter {
 		case OPEN_SKIN_CONFIGURATION:
 			return isControlKeyPressed(ControlKeys.F12);
 		case TOGGLE_MOD_MENU:
-			return isControlKeyPressed(ControlKeys.F5) || isControlKeyPressed(ControlKeys.INSERT);
+			return isControlKeyPressed(ControlKeys.INSERT);
 		}
 		return false;
 	}

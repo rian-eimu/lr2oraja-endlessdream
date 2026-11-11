@@ -5,8 +5,10 @@ import bms.player.beatoraja.MainState;
 import static bms.player.beatoraja.skin.SkinProperty.*;
 
 import bms.player.beatoraja.PlayerConfig;
+import bms.player.beatoraja.PlaySide;
 import bms.player.beatoraja.SkinConfig;
 import bms.player.beatoraja.input.BMSPlayerInputProcessor;
+import bms.player.beatoraja.input.KeyCommand;
 import bms.player.beatoraja.input.KeyBoardInputProcesseor.ControlKeys;
 import bms.player.beatoraja.skin.*;
 import bms.player.beatoraja.skin.json.JSONSkinLoader;
@@ -32,6 +34,9 @@ public class SkinConfiguration extends MainState {
 
 	private SkinConfigurationSkin skin;
 	private SkinType type;
+	private PlaySide side = PlaySide.P1;
+
+	public PlaySide getPlaySide() { return side; }
 	private SkinConfig config;
 	private List<SkinHeader> allSkins;
 	private List<SkinHeader> availableSkins;
@@ -70,6 +75,11 @@ public class SkinConfiguration extends MainState {
 
 	public void input() {
 		BMSPlayerInputProcessor input = main.getInputProcessor();
+		if (player.isIndependentPlaySides() && PlaySide.supports(type)
+				&& (getStage() == null || getStage().getKeyboardFocus() == null)
+				&& input.isActivated(KeyCommand.SWITCH_PLAY_SIDE)) {
+			changeSkinType(type, side.other());
+		}
 		int mov = -input.getScroll();
 		input.resetScroll();
 		if (mov != 0 && customOptions != null) {
@@ -151,12 +161,17 @@ public class SkinConfiguration extends MainState {
 	}
 
 	private void changeSkinType(SkinType type) {
+		changeSkinType(type, side);
+	}
+
+	private void changeSkinType(SkinType type, PlaySide requestedSide) {
 		saveSkinHistory();
 		this.type = type != null ? type : SkinType.PLAY_7KEYS;
-		this.config = main.getPlayerConfig().getSkin()[this.type.getId()];
+		side = player.isIndependentPlaySides() && PlaySide.supports(this.type) ? requestedSide : PlaySide.P1;
+		this.config = player.getSkinConfig(this.type, side);
 		availableSkins = new ArrayList<>();
 		for (SkinHeader header : allSkins) {
-			if (header.getSkinType() == type) {
+			if (header.getSkinType() == this.type) {
 				availableSkins.add(header);
 			}
 		}
@@ -186,7 +201,7 @@ public class SkinConfiguration extends MainState {
 
 		if (config == null) {
 			config = new SkinConfig();
-			main.getPlayerConfig().getSkin()[type.getId()] = config;
+			player.setSkinConfig(type, side, config);
 		} else {
 			saveSkinHistory();
 		}
@@ -204,8 +219,8 @@ public class SkinConfiguration extends MainState {
 			customOptions = new ArrayList<>();
 			customOptionOffset = 0;
 			// Loading properties from SkinHistory
-			for (SkinConfig skinc : player.getSkinHistory()) {
-				if (skinc.getPath().equals(selectedSkinHeader.getPath().toString())) {
+			for (SkinConfig skinc : player.getSkinHistory(side)) {
+				if (skinc != null && skinc.getPath() != null && Paths.get(skinc.getPath()).equals(selectedSkinHeader.getPath())) {
 					config.setProperties(skinc.getProperties());
 					break;
 				}
@@ -228,8 +243,9 @@ public class SkinConfiguration extends MainState {
 	private void saveSkinHistory() {
 		if(config != null && config.getPath() != null) {
 			int index = -1;
-			for (int i = 0; i < player.getSkinHistory().length; i++) {
-				if (player.getSkinHistory()[i].getPath().equals(config.getPath())) {
+			var saved = player.getSkinHistory(side);
+			for (int i = 0; i < saved.length; i++) {
+				if (saved[i] != null && saved[i].getPath() != null && Paths.get(saved[i].getPath()).equals(Paths.get(config.getPath()))) {
 					index = i;
 					break;
 				}
@@ -239,11 +255,11 @@ public class SkinConfiguration extends MainState {
 			sc.setPath(config.getPath());
 			sc.setProperties(config.getProperties());
 			if (index >= 0) {
-				player.getSkinHistory()[index] = sc;
+				saved[index] = sc;
 			} else {
-				SkinConfig[] history = Arrays.copyOf(player.getSkinHistory(), player.getSkinHistory().length + 1);
+				SkinConfig[] history = Arrays.copyOf(saved, saved.length + 1);
 				history[history.length - 1] = sc;
-				player.setSkinHistory(history);
+				player.setSkinHistory(side, history);
 			}
 		}
 	}

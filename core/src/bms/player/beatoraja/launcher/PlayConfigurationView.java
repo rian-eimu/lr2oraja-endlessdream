@@ -219,6 +219,8 @@ public class PlayConfigurationView implements Initializable {
 	@FXML
 	private CheckBox guidese;
 	@FXML
+	private CheckBox independentPlaySides;
+	@FXML
 	private CheckBox windowhold;
 	@FXML
 	private Spinner<Integer> extranotedepth;
@@ -563,6 +565,7 @@ public class PlayConfigurationView implements Initializable {
 			player = PlayerConfig.validatePlayerConfig("player1", new PlayerConfig());
         }
         playername.setText(player.getName());
+		independentPlaySides.setSelected(player.isIndependentPlaySides());
 
 		player.migrationJudgetiming();
 
@@ -677,6 +680,14 @@ public class PlayConfigurationView implements Initializable {
 		Config.write(config);
 
 		tableController.commit();
+	}
+
+	@FXML
+	private void changeIndependentPlaySides() {
+		if (player == null || player.isIndependentPlaySides() == independentPlaySides.isSelected()) return;
+		skinController.commit();
+		player.setIndependentPlaySides(independentPlaySides.isSelected());
+		skinController.update(player);
 	}
 
 	public void commitPlayer() {

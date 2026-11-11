@@ -30,6 +30,8 @@ public class VideoConfigurationView implements Initializable {
 	@FXML
 	private CheckBox vSync;
 	@FXML
+	private CheckBox notePositionSmoothing;
+	@FXML
 	private CheckBox hideMisslayerOnGood;
 
 	@FXML
@@ -52,6 +54,7 @@ public class VideoConfigurationView implements Initializable {
 		displayMode.setValue(config.getDisplaymode());
 		resolution.setValue(config.getResolution());
 		vSync.setSelected(config.isVsync());
+		notePositionSmoothing.setSelected(config.isNotePositionSmoothing());
 		monitor.setValue(config.getMonitorName());
 		bgaOp.getSelectionModel().select(config.getBga());
 		bgaExpand.getSelectionModel().select(config.getBgaExpand());
@@ -67,6 +70,7 @@ public class VideoConfigurationView implements Initializable {
 		config.setResolution(resolution.getValue());
 		config.setDisplaymode(displayMode.getValue());
 		config.setVsync(vSync.isSelected());
+		config.setNotePositionSmoothing(notePositionSmoothing.isSelected());
 		config.setMonitorName(monitor.getValue());
 		config.setBga(bgaOp.getSelectionModel().getSelectedIndex());
 		config.setBgaExpand(bgaExpand.getSelectionModel().getSelectedIndex());

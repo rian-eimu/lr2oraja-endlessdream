@@ -99,6 +99,17 @@ public class KeyBoardInputProcesseor extends BMSPlayerInputDevice implements Inp
 		mouseScratchInput.clear();
 	}
 
+	public void syncHeldKeys() {
+		clear();
+		if (Gdx.input == null) {
+			Arrays.fill(keystate, false);
+			return;
+		}
+		for (int i = 0; i < keystate.length; i++) {
+			keystate[i] = Gdx.input.isKeyPressed(i);
+		}
+	}
+
 	public void poll(final long microtime) {
 		// NOTE: For further dev came here, it's better to wrap this variable instead of
 		// accessing imgui menu's field directly

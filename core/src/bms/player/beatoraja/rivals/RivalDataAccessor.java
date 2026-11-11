@@ -1,5 +1,6 @@
 package bms.player.beatoraja.rivals;
 
+import bms.player.beatoraja.Config;
 import bms.player.beatoraja.MainController;
 import bms.player.beatoraja.PlayerInformation;
 import bms.player.beatoraja.ScoreData;
@@ -35,12 +36,21 @@ import java.util.stream.Stream;
 public final class RivalDataAccessor implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(RivalDataAccessor.class);
 
+    private final Path rivalDirectory;
     private final ExecutorService syncExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "rival-score-sync");
         thread.setDaemon(true);
         return thread;
     });
     private final AtomicBoolean syncScheduled = new AtomicBoolean();
+
+    public RivalDataAccessor() {
+        this(Paths.get("rival"));
+    }
+
+    RivalDataAccessor(Path rivalDirectory) {
+        this.rivalDirectory = rivalDirectory;
+    }
 
     /**
      * ライバル情報とスコアデータキャッシュ
@@ -202,72 +212,70 @@ public final class RivalDataAccessor implements AutoCloseable {
     }
 
     public void update(MainController main) {
-        if (main.getIRStatus().length > 0) {
-            // TODO 別のクラスに移動
-            if (main.getIRStatus()[0].config.isImportscore()) {
-                main.getIRStatus()[0].config.setImportscore(false);
-                try {
-                    IRResponse<IRScoreData[]> scores = main.getIRStatus()[0].connection.getPlayData(main.getIRStatus()[0].player, null);
-                    if (scores.isSucceeded()) {
-                        ScoreDataImporter scoreimport = new ScoreDataImporter(new ScoreDatabaseAccessor(main.getConfig().getPlayerpath() + File.separatorChar + main.getConfig().getPlayername() + File.separatorChar + "score.db"));
-                        scoreimport.importScores(convert(scores.getData()), main.getIRStatus()[0].config.getIrname());
+        MainController.IRStatus[] statuses = main.getIRStatus();
+        update(main.getConfig(), statuses.length > 0 ? statuses[0] : null);
+    }
 
-                        logger.info("IRからのスコアインポート完了");
-                    } else {
-                        logger.warn("IRからのスコアインポート失敗 : {}", scores.getMessage());
-                    }
-                } catch (Throwable e) {
-                    e.printStackTrace();
+    void update(Config config, MainController.IRStatus status) {
+        if (status != null && status.config.isImportscore()) {
+            status.config.setImportscore(false);
+            try {
+                IRResponse<IRScoreData[]> scores = status.connection.getPlayData(status.player, null);
+                if (scores.isSucceeded()) {
+                    ScoreDataImporter scoreimport = new ScoreDataImporter(new ScoreDatabaseAccessor(config.getPlayerpath() + File.separatorChar + config.getPlayername() + File.separatorChar + "score.db"));
+                    scoreimport.importScores(convert(scores.getData()), status.config.getIrname());
+
+                    logger.info("IRからのスコアインポート完了");
+                } else {
+                    logger.warn("IRからのスコアインポート失敗 : {}", scores.getMessage());
                 }
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        }
+
+        try {
+            // ライバルスコアデータベース作成
+            Files.createDirectories(rivalDirectory);
+
+            var irName = status != null ? status.config.getIrname() : "";
+            IRPlayerData[] irRivalsData = new IRPlayerData[0];
+            if (status != null && status.config.isImportrival()) {
+                irRivalsData = fetchRivals(status.connection);
+                var irRivalDatabases = createIrRivalDatabases(rivalDirectory, irRivalsData, irName);
+                rivals.addAll(irRivalDatabases);
             }
 
-            try {
-                // ライバルスコアデータベース作成
-                var rivalsPath = Paths.get("rival");
-                if (!Files.exists(rivalsPath)) {
-                    Files.createDirectory(rivalsPath);
-                }
+            var existingRivalIds = rivals.stream().map(rival -> rival.rivalInformation().getId()).toList();
+            var localRivalDatabases = loadRemainingLocalDatabases(rivalDirectory, existingRivalIds, irName);
+            rivals.addAll(localRivalDatabases);
 
-                var irName = main.getIRStatus()[0].config.getIrname();
-                IRPlayerData[] irRivalsData = new IRPlayerData[0];
-                if (main.getIRStatus()[0].config.isImportrival()) {
-                    IRResponse<IRPlayerData[]> response = main.getIRStatus()[0].connection.getRivals();
-                    if (response.isSucceeded()) {
-                        irRivalsData = response.getData() != null ? response.getData() : new IRPlayerData[0];
-                        var irRivalDatabases = createIrRivalDatabases(rivalsPath, irRivalsData, irName);
-                        rivals.addAll(irRivalDatabases);
-                    } else {
-                        logger.warn("IRからのライバル取得失敗 : {}", response.getMessage());
-                    }
-                }
-
-                var existingRivalIds = rivals.stream().map(rival -> rival.rivalInformation().getId()).toList();
-                var localRivalDatabases = loadRemainingLocalDatabases(rivalsPath, existingRivalIds, irName);
-                rivals.addAll(localRivalDatabases);
-
+            if (status != null && irRivalsData.length > 0 && syncScheduled.compareAndSet(false, true)) {
                 final IRPlayerData[] syncTargets = irRivalsData;
-                final IRConnection connection = main.getIRStatus()[0].connection;
-                if (syncTargets.length > 0 && syncScheduled.compareAndSet(false, true)) {
-                    try {
-                        syncExecutor.execute(() -> {
-                            try {
-                                for (IRPlayerData irPlayer : syncTargets) {
-                                    if (Thread.currentThread().isInterrupted()) {
-                                        return;
-                                    }
-                                    var rivalInformation = irPlayer.toPlayerInformation();
-                                    rivals.stream().filter(rival -> rival.rivalInformation.equals(rivalInformation))
-                                            .findFirst()
-                                            .ifPresent(rival -> syncRivalScores(connection, irPlayer, rival));
+                final IRConnection connection = status.connection;
+                try {
+                    syncExecutor.execute(() -> {
+                        try {
+                            for (IRPlayerData irPlayer : syncTargets) {
+                                if (Thread.currentThread().isInterrupted()) {
+                                    return;
                                 }
-                            } finally {
-                                syncScheduled.set(false);
+                                if (irPlayer == null) {
+                                    continue;
+                                }
+                                var rivalInformation = irPlayer.toPlayerInformation();
+                                rivals.stream().filter(rival -> rival.rivalInformation.equals(rivalInformation))
+                                        .findFirst()
+                                        .ifPresent(rival -> syncRivalScores(connection, irPlayer, rival));
                             }
-                        });
-                    } catch (RejectedExecutionException exception) {
-                        syncScheduled.set(false);
-                    }
+                        } finally {
+                            syncScheduled.set(false);
+                        }
+                    });
+                } catch (RejectedExecutionException exception) {
+                    syncScheduled.set(false);
                 }
+            }
 
 //					Array<String> targets = new Array<String>(TargetProperty.getTargets());
 //					for(int i = 0;i < this.rivals.length;i++) {
@@ -275,10 +283,23 @@ public final class RivalDataAccessor implements AutoCloseable {
 //					}
 //					TargetProperty.setTargets(targets.toArray(String.class));
 
-            } catch (Throwable e) {
-                e.printStackTrace();
-            }
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
+    }
+
+    private IRPlayerData[] fetchRivals(IRConnection connection) {
+        try {
+            IRResponse<IRPlayerData[]> response = connection.getRivals();
+            if (response != null && response.isSucceeded()) {
+                IRPlayerData[] data = response.getData();
+                return data != null ? data : new IRPlayerData[0];
+            }
+            logger.warn("IRからのライバル取得失敗 : {}", response != null ? response.getMessage() : "応答なし");
+        } catch (RuntimeException exception) {
+            logger.warn("IRからのライバル取得失敗 : {}", exception.getMessage());
+        }
+        return new IRPlayerData[0];
     }
 
     private void syncRivalScores(IRConnection connection, IRPlayerData irPlayer, Rival rival) {
@@ -318,6 +339,9 @@ public final class RivalDataAccessor implements AutoCloseable {
     private List<Rival> createIrRivalDatabases(Path rivalsPath, IRPlayerData[] rivalsData, String irName) {
         List<Rival> irRivals = new ArrayList<>();
         for (var irPlayer : rivalsData) {
+            if (irPlayer == null) {
+                continue;
+            }
             var rivalInformation = irPlayer.toPlayerInformation();
             try {
                 var scoreDb = new ScoreDatabaseAccessor(

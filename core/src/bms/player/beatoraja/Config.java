@@ -70,10 +70,16 @@ public class Config implements Validatable {
 	 * ディスプレイモード
 	 */
 	private DisplayMode displaymode = DisplayMode.WINDOW;
+	private boolean imeBridgeEnabled = true;
+
+	public boolean isImeBridgeEnabled() { return imeBridgeEnabled; }
+
+	public void setImeBridgeEnabled(boolean enabled) { imeBridgeEnabled = enabled; }
 	/**
 	 * 垂直同期
 	 */
 	private boolean vsync;
+	private boolean notePositionSmoothing;
 	/**
 	 * 解像度
 	 */
@@ -398,6 +404,19 @@ public class Config implements Validatable {
 
 	public void setVsync(boolean vsync) {
 		this.vsync = vsync;
+	}
+
+	public boolean isNotePositionSmoothing() {
+		return notePositionSmoothing;
+	}
+
+	public void setNotePositionSmoothing(boolean notePositionSmoothing) {
+		this.notePositionSmoothing = notePositionSmoothing;
+	}
+
+	public boolean isNotePositionSmoothingEnabled() {
+		String override = System.getProperty("beatoraja.notePositionSmoothing");
+		return override == null ? notePositionSmoothing : Boolean.parseBoolean(override);
 	}
 
 	public int getBga() {

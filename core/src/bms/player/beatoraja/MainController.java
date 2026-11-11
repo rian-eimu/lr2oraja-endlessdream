@@ -730,6 +730,18 @@ public class MainController {
 			sprite.end();
 		}
 
+		if (systemfont != null && player.isIndependentPlaySides()) {
+			PlaySide side = current instanceof MusicSelector select ? select.getSelectedPlaySide()
+					: current instanceof SkinConfiguration skin && PlaySide.supports(skin.getSkinType()) ? skin.getPlaySide() : null;
+			if (side != null) {
+				sprite.begin();
+				systemfont.setColor(Color.WHITE);
+				systemfont.draw(sprite, side == PlaySide.P2 ? "SP SIDE: 2P" : "SP SIDE: 1P",
+						Math.max(0, config.getResolution().width - 245), config.getResolution().height - 5);
+				sprite.end();
+			}
+		}
+
         periodicConfigSave();
 
         if (config.isEnableHttp()) { DownloadTaskState.update(); }
@@ -871,7 +883,9 @@ public class MainController {
 	}
 
 	private void setCursorCatched(long time) {
-		PlayModeConfig.MouseScratchConfig config = player.getPlayConfig(player.getMode())
+		PlaySide side = current instanceof BMSPlayer ? resource.getPlaySide()
+				: current instanceof MusicSelector select ? select.getSelectedPlaySide() : PlaySide.P1;
+		PlayModeConfig.MouseScratchConfig config = player.getPlayInputConfig(player.getMode(), side)
 				.getKeyboardConfig()
 				.getMouseScratchConfig();
         if (config.isMouseScratchEnabled()) {

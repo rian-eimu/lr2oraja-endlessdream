@@ -127,6 +127,36 @@ public class BMControllerInputProcessor extends BMSPlayerInputDevice {
 		lastPressedButton = -1;
 	}
 
+	public void syncHeldButtons() {
+		clear();
+		if (controller == null) {
+			Arrays.fill(buttonstate, false);
+			return;
+		}
+		for (int i = 0; i < AXIS_LENGTH; i++) {
+			axis[i] = controller.getAxis(i);
+		}
+		for (int button = 0; button < buttonstate.length; button++) {
+			if (button <= BMKeys.HAT1_BOTTOM) {
+				buttonstate[button] = controller.getButton(button);
+			} else if (jkoc) {
+				if (button == BMKeys.AXIS1_PLUS) {
+					buttonstate[button] = (axis[0] > 0.9) || (axis[3] > 0.9);
+				} else if (button == BMKeys.AXIS1_MINUS) {
+					buttonstate[button] = (axis[0] < -0.9) || (axis[3] < -0.9);
+				} else {
+					buttonstate[button] = false;
+				}
+			} else if (analogScratchAlgorithm != null) {
+				buttonstate[button] = false;
+			} else {
+				int axisIndex = (button - BMKeys.AXIS1_PLUS) / 2;
+				boolean plusRange = (button - BMKeys.AXIS1_PLUS) % 2 == 0;
+				buttonstate[button] = scratchInput(axisIndex, plusRange);
+			}
+		}
+	}
+
 	public void poll(final long microtime) {
 		if (!enabled) return;
 	
