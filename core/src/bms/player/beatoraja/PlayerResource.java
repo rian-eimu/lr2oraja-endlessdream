@@ -97,6 +97,8 @@ public final class PlayerResource {
 	private FloatArray[] gauge;
 
 	private ReplayData replay;
+
+	private ReplayData playinfo;
 	
 	private ReplayData chartOption;
 
@@ -455,6 +457,14 @@ public final class PlayerResource {
 
 	public void setReplayData(ReplayData replay) {
 		this.replay = replay;
+	}
+
+	public ReplayData getPlayInfo() {
+		return playinfo;
+	}
+
+	public void setPlayInfo(ReplayData playinfo) {
+		this.playinfo = playinfo;
 	}
 
 	public ScoreData getCourseScoreData() {

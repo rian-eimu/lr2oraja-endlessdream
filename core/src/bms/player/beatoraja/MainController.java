@@ -904,6 +904,9 @@ public class MainController {
 		}
 
 		saveConfig();
+		if (input != null) {
+			input.disableMouseScratch();
+		}
 		rivals.close();
 		closeIRConnections();
 

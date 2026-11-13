@@ -9,6 +9,8 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.ParseException;
+
+import bms.tool.mdprocessor.HttpDownloadSourceMeta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1073,6 +1075,7 @@ public class Config implements Validatable {
 		playerpath = playerpath != null ? playerpath : PLAYERPATH_DEFAULT;
 		skinpath = skinpath != null ? skinpath : SKINPATH_DEFAULT;
 		downloadDirectory = validatePath(downloadDirectory) ? downloadDirectory : DEFAULT_DOWNLOAD_DIRECTORY;
+		downloadSource = validateDownloadSource(downloadSource) ? downloadSource : HttpDownloadProcessor.getDefaultDownloadSource().getName();
 		return true;
 	}
 
@@ -1194,5 +1197,9 @@ public class Config implements Validatable {
 			return false;
 		}
 		return true;
+	}
+
+	private boolean validateDownloadSource(String downloadSource) {
+		return HttpDownloadProcessor.DOWNLOAD_SOURCES.containsKey(downloadSource);
 	}
 }
