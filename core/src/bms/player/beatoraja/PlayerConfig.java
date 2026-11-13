@@ -1504,25 +1504,44 @@ public final class PlayerConfig {
     }
 
     public static void write(String playerpath, PlayerConfig player) {
-        write(playerpath, player, getConfigJson(player));
+        writeWithResult(playerpath, player);
+    }
+
+    public static boolean writeWithResult(String playerpath, PlayerConfig player) {
+        if (player == null) {
+            return false;
+        }
+        Path directory = getPlayerDirectory(playerpath, player.getId());
+        if (directory == null) {
+            logger.warn("Refusing to write player config with an invalid path or id");
+            return false;
+        }
+        player.validate();
+        return writeWithResult(playerpath, player, getConfigJson(player));
     }
 
 	public static void write(String playerpath, PlayerConfig player, String configJson) {
+        writeWithResult(playerpath, player, configJson);
+    }
+
+	public static boolean writeWithResult(String playerpath, PlayerConfig player, String configJson) {
         try {
             if (player == null) {
-                return;
+                return false;
             }
             Path directory = getPlayerDirectory(playerpath, player.getId());
             if (directory == null) {
                 logger.warn("Refusing to write player config with an invalid path or id");
-                return;
+                return false;
             }
             player.validate();
             Path path = directory.resolve(configpath);
             RobustFile.write(path, configJson.getBytes(StandardCharsets.UTF_8));
+            return true;
         }
         catch (IOException e) {
             e.printStackTrace();
+            return false;
         }
     }
 

@@ -959,9 +959,14 @@ public class MainController {
 	}
 
 	public void saveConfig(){
+		saveConfigAndReportPlayerResult();
+	}
+
+	public boolean saveConfigAndReportPlayerResult() {
 		Config.write(config);
-		PlayerConfig.write(config.getPlayerpath(), player);
-		logger.info("設定情報を保存");
+		boolean saved = PlayerConfig.writeWithResult(config.getPlayerpath(), player);
+		if (saved) logger.info("設定情報を保存");
+		return saved;
 	}
 
     private long lastConfigSave = 0;
