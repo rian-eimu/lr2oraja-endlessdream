@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import bms.player.beatoraja.modmenu.ImGuiNotify;
 import bms.player.beatoraja.modmenu.SongManagerMenu;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Json;
@@ -51,6 +52,8 @@ public class BarManager {
 	 * 難易度表バー一覧
 	 */
 	private TableBar[] tables = new TableBar[0];
+	private TableBar localTable;
+	private DirectoryBar openLocalTable;
 	private final IRTableLoader irTables = new IRTableLoader();
 	private boolean disposed;
 
@@ -104,7 +107,7 @@ public class BarManager {
 
         TableData[] unsortedtables;
         try (var perf = PerformanceMetrics.get().Event("Saved table load")) {
-            unsortedtables = tdaccessor.readAll();
+            unsortedtables = tdaccessor.readAllExcept(LocalTableFile.FILE_NAME);
         }
 
 		final List<TableData> sortedtables = new ArrayList<TableData>(unsortedtables.length);
@@ -142,6 +145,11 @@ public class BarManager {
 			}
 		}).start();
 
+		var local = tdaccessor.read(LocalTableFile.FILE_NAME);
+		if (local != null) {
+			localTable = createLocalTable(local);
+			table.add(localTable);
+		}
 		this.tables = table.toArray(TableBar.class);
 
 
@@ -206,6 +214,54 @@ public class BarManager {
 
 		commands = l.toArray(Bar.class);
 		if (select.main.getIRStatus().length > 0) irTables.start(select.main.getIRStatus()[0].connection);
+	}
+
+	private TableBar createLocalTable(TableData data) {
+		return new TableBar(select, data, new TableDataAccessor.DifficultyTableAccessor(
+				select.resource.getConfig().getTablepath(), data.getUrl()));
+	}
+
+	/** IR難易度表やダウンロード済み難易度表には触れず、編集可能なローカル難易度表のみを再読み込みする。 */
+	private boolean reloadLocalTable() {
+		var previous = tables;
+		try {
+			var accessor = new TableDataAccessor(select.resource.getConfig().getTablepath());
+			var data = accessor.read(LocalTableFile.FILE_NAME);
+			if (data == null) return false;
+			var replacement = createLocalTable(data);
+			int index = Arrays.asList(previous).indexOf(localTable);
+			var updated = Arrays.copyOf(previous, index < 0 ? previous.length + 1 : previous.length);
+			updated[index < 0 ? previous.length : index] = replacement;
+			tables = updated;
+			if (dir.size == 0 && !updateBar()) {
+				tables = previous;
+				return false;
+			}
+			localTable = replacement;
+			return true;
+		} catch (RuntimeException e) {
+			tables = previous;
+			logger.warn("Local table reload failed: {}", e.getClass().getSimpleName());
+			return false;
+		}
+	}
+
+	public boolean handleLocalTableUpdate(Bar selected) {
+		boolean browsingLocal = dir.size > 0 && (dir.first() == localTable || dir.first() == openLocalTable);
+		boolean firstLoad = localTable == null && dir.size == 0 && selected == courses
+				&& Files.isRegularFile(Paths.get(select.resource.getConfig().getTablepath(), LocalTableFile.FILE_NAME));
+		if (!browsingLocal && !firstLoad && (localTable == null || selected != localTable)) return false;
+		var currentRoot = browsingLocal ? dir.first() : null;
+		boolean reloaded = reloadLocalTable();
+		if (reloaded) {
+			openLocalTable = currentRoot;
+			ImGuiNotify.info(browsingLocal
+					? "Local table reloaded. Return to the root and reopen it."
+					: "Local table reloaded", 3000);
+		} else {
+			ImGuiNotify.error("Local table reload failed. Previous table kept.", 3000);
+		}
+		return true;
 	}
 
 	/** Applies completed metadata on the selection/render thread only. */

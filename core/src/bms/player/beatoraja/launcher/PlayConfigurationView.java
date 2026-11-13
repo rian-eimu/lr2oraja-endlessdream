@@ -300,7 +300,9 @@ public class PlayConfigurationView implements Initializable {
 	@FXML
 	private IRConfigurationView irController;
 	@FXML
-	private TableEditorView tableController;
+	private Button openTableEditorButton;
+	private Stage tableEditorStage;
+	private boolean gameStarted = false;
 	@FXML
     private StreamEditorView streamController;
 	@FXML
@@ -519,22 +521,32 @@ public class PlayConfigurationView implements Initializable {
 			players.getSelectionModel().select(0);
 		}
 		updatePlayer();
-
-		try {
-			tableController.init(getSongDatabaseAccessor());
-			tableController.update(Paths.get(config.getTablepath() + "/" + "default.json"));
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		}
 	}
 
 	public void changePlayer() {
 		commitPlayer();
 		updatePlayer();
+	}
+
+	@FXML
+	private void openTableEditor() {
+		if (tableEditorStage != null && tableEditorStage.isShowing()) {
+			tableEditorStage.toFront();
+			return;
+		}
 		try {
-			tableController.init(getSongDatabaseAccessor());
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			tableEditorStage = TableEditorView.open(Paths.get(config.getTablepath(), LocalTableFile.FILE_NAME),
+					new TableChartLookup(config.getSongpath()));
+			tableEditorStage.addEventHandler(WindowEvent.WINDOW_HIDDEN, event -> {
+				if (!gameStarted && openTableEditorButton.getScene() != null
+						&& !openTableEditorButton.getScene().getWindow().isShowing()) {
+					Platform.exit();
+					System.exit(0);
+				}
+			});
+		} catch (IOException | RuntimeException e) {
+			logger.warn("Cannot open local table editor", e);
+			new Alert(Alert.AlertType.ERROR, "Could not open the local table.", ButtonType.OK).showAndWait();
 		}
 	}
 
@@ -678,8 +690,6 @@ public class PlayConfigurationView implements Initializable {
 		commitPlayer();
 
 		Config.write(config);
-
-		tableController.commit();
 	}
 
 	@FXML
@@ -861,11 +871,11 @@ public class PlayConfigurationView implements Initializable {
 		// Minimise the stage after start
 		Stage stage = (Stage) root.getScene().getWindow();
 		stage.setIconified(true);
+		gameStarted = true;
 
-        // On linux the main play/GL loop needs to run on a thread separate
-        // from the JavaFX thread; otherwise the launcher becomes uninteractable
-        // and certain calls such as opening the file manager, or the browser.
-        if (System.getProperty("os.name").toLowerCase().contains("linux")) {
+        // macOS以外はPlay/GLループをJavaFXスレッドから分離して起動し、
+        // 別ウィンドウのTable Editorやブラウザ・ファイラー呼び出しがブロックされないようにする。
+        if (!System.getProperty("os.name").toLowerCase().contains("mac")) {
             Runnable play =
                 () -> MainLoader.play(null,
                                       bms.player.beatoraja.BMSPlayerMode.PLAY,
@@ -1074,6 +1084,14 @@ public class PlayConfigurationView implements Initializable {
     @FXML
 	public void exit() {
 		commit();
+		closeLauncher();
+	}
+
+	private void closeLauncher() {
+		if (tableEditorStage != null && tableEditorStage.isShowing()) {
+			openTableEditorButton.getScene().getWindow().hide();
+			return;
+		}
 		Platform.exit();
 		System.exit(0);
 	}
