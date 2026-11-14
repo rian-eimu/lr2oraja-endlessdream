@@ -199,7 +199,7 @@ public final class SkinHitErrorVisualizer extends SkinObject {
 		BMSModel model = resource.getBMSModel();
 		final PlayerConfig config = resource.getPlayerConfig();
 		JudgeProperty rule = BMSPlayerRule.getBMSPlayerRule(resource.getOriginalMode()).judge;
-		if (config.isDxMode() && model.getMode() == Mode.POPN_9K) {
+		if (config.isDxMode() && (model.getMode() == Mode.POPN_5K || model.getMode() == Mode.POPN_9K)) {
 			rule = JudgeProperty.POP;
 		} else if (config.isDxMode()) {
 			rule = JudgeProperty.IIDX;

@@ -40,7 +40,7 @@ public final class GrooveGauge {
 		this.gauges = new Gauge[property.values.length];
 		for(int i = 0; i < property.values.length; i++) {
 			GaugeElementProperty rawElement = property.values[i];
-			if (dxMode && model.getMode() == Mode.POPN_9K) {
+			if (dxMode && (model.getMode() == Mode.POPN_5K || model.getMode() == Mode.POPN_9K)) {
 				switch (i) {
 				case 0: // ASSIST EASY
 					rawElement = GaugeElementProperty.ASSIST_EASY_POP;
