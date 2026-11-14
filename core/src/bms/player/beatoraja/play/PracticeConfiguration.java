@@ -94,7 +94,7 @@ public final class PracticeConfiguration {
 				}
 			} else {
 				if (!hasJson || property.startgauge == 20) {
-					property.startgauge = (model.getMode() == Mode.POPN_9K ? 30 : 22);
+					property.startgauge = (model.getMode() == Mode.POPN_5K || model.getMode() == Mode.POPN_9K ? 30 : 22);
 				}
 			}
 		}
@@ -615,7 +615,7 @@ public final class PracticeConfiguration {
 				if (property.gaugetype >= 3) {
 					property.startgauge = 100;
 				} else {
-					property.startgauge = (practice.model.getMode() == Mode.POPN_9K ? 30 : 22);
+					property.startgauge = (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K ? 30 : 22);
 				}
 			} else if ((practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K) && property.gaugetype >= 3 && property.startgauge > 100) {
 				property.startgauge = 100;
@@ -640,7 +640,7 @@ public final class PracticeConfiguration {
 			final PracticeProperty property = practice.property;
 			int change = turboSpeed ? 10 : 1;
 			int maxValue = practice.dxMode ? 100 : (int)property.gaugecategory.values[property.gaugetype].max;
-			if (practice.dxMode && practice.model != null && practice.model.getMode() == Mode.POPN_9K) {
+			if (practice.dxMode && practice.model != null && (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K)) {
 				maxValue = 120;
 			}
 			if (inc && turboSpeed && property.startgauge == 1) {
@@ -662,7 +662,7 @@ public final class PracticeConfiguration {
 				property.judgerank = MathUtils.clamp(property.judgerank + (inc ? change : -change), 1, 400);
 			}
 		}, true, "JUDGERANK", practice -> practice.dxMode
-				? (practice.model != null && practice.model.getMode() == Mode.POPN_9K ? "POP (DX MODE)" : "DX (DX MODE)")
+				? (practice.model != null && (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K) ? "POP (DX MODE)" : "DX (DX MODE)")
 				: Integer.toString(practice.property.judgerank)),
 		TOTAL((practice, inc, isAnalog, turboSpeed) -> {
 			// DX MODE時はAC仕様TOTAL計算固定（無視）
@@ -677,7 +677,7 @@ public final class PracticeConfiguration {
 		}, true, "TOTAL", practice -> {
 			if (practice.dxMode && practice.model != null) {
 				int totalNotes = practice.model.getTotalNotes();
-				if (practice.model.getMode() == Mode.POPN_9K) {
+				if (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K) {
 					double popTotal = totalNotes > 3072 ? Math.floor(0.097 * totalNotes) : Math.min(300, Math.floor(3072.0 / totalNotes) * totalNotes / 1024.0 * 100.0);
 					return (int)popTotal + " (DX MODE)";
 				} else {
