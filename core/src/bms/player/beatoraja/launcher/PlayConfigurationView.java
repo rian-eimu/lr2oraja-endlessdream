@@ -887,6 +887,8 @@ public class PlayConfigurationView implements Initializable {
         // macOS以外はPlay/GLループをJavaFXスレッドから分離して起動し、
         // 別ウィンドウのTable Editorやブラウザ・ファイラー呼び出しがブロックされないようにする。
         if (!System.getProperty("os.name").toLowerCase().contains("mac")) {
+            // JavaFXスレッド上で列挙用に初期化されたPortAudioを解放し、Play Thread側でCOM/ASIOを初期化できるようにする
+            bms.player.beatoraja.audio.PortAudioDriver.terminateIfIdle();
             Runnable play =
                 () -> MainLoader.play(null,
                                       bms.player.beatoraja.BMSPlayerMode.PLAY,

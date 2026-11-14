@@ -20,6 +20,7 @@ import bms.player.beatoraja.song.SongResource;
 public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnable {
 
 	private static DeviceInfo[] devices;
+	private static Thread initializedThread;
 	private static int activeDrivers;
 	
 	private volatile StreamLifecycle stream;
@@ -39,8 +40,14 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 	private AudioDiagnostics diagnostics;
 
 	public static synchronized DeviceInfo[] getDevices() {
+		// WindowsのASIOドライバはSTA COMスレッドアフィニティを持つため、
+		// 未使用状態で初期化スレッドと異なるスレッドから呼ばれた場合は現在のスレッドで再初期化する
+		if(devices != null && activeDrivers == 0 && initializedThread != Thread.currentThread()) {
+			terminatePortAudioLocked();
+		}
 		if(devices == null) {
 			PortAudio.initialize();
+			initializedThread = Thread.currentThread();
 			try {
 				Logger.getGlobal().info("PortAudio initialized : " + PortAudio.getVersionText());
 
@@ -51,6 +58,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 				logDevices(devices);
 			} catch (RuntimeException | Error e) {
 				devices = null;
+				initializedThread = null;
 				try {
 					PortAudio.terminate();
 				} catch (Throwable cleanupFailure) {
@@ -62,6 +70,25 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		return devices;
 	}
 
+	/**
+	 * アクティブなストリームが存在しない場合にPortAudioを終了し、
+	 * 別スレッド（Play Thread等）でのCOM/ASIO再初期化を可能にする。
+	 */
+	public static synchronized void terminateIfIdle() {
+		if (activeDrivers == 0 && devices != null) {
+			terminatePortAudioLocked();
+		}
+	}
+
+	private static void terminatePortAudioLocked() {
+		try {
+			PortAudio.terminate();
+		} finally {
+			devices = null;
+			initializedThread = null;
+		}
+	}
+
 	private static synchronized DeviceInfo[] acquireDevices() {
 		DeviceInfo[] result = getDevices();
 		activeDrivers++;
@@ -70,11 +97,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 
 	private static synchronized void releasePortAudio() {
 		if (--activeDrivers == 0) {
-			try {
-				PortAudio.terminate();
-			} finally {
-				devices = null;
-			}
+			terminatePortAudioLocked();
 		}
 	}
 
@@ -243,6 +266,9 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		private volatile boolean closed;
 		private volatile boolean abortAttempted;
 		private boolean closeRequested;
+		private boolean mixerRunning;
+		private boolean ownerDisposing;
+		private boolean closeDeferredToMixer;
 		private int activeOperations;
 		private long writeAttempts;
 		private long writesCompleted;
@@ -360,9 +386,37 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		}
 
 		void run(Runnable mixerLoop) {
+			synchronized (this) {
+				mixerRunning = true;
+			}
 			try {
 				mixerLoop.run();
 			} finally {
+				boolean closeOnMixer;
+				synchronized (this) {
+					mixerRunning = false;
+					closeOnMixer = !ownerDisposing || closeDeferredToMixer;
+				}
+				if (closeOnMixer) {
+					close();
+				}
+			}
+		}
+
+		void beginOwnerDispose() {
+			synchronized (this) {
+				ownerDisposing = true;
+			}
+			abort();
+		}
+
+		void deferCloseToMixer() {
+			boolean closeNow;
+			synchronized (this) {
+				closeDeferredToMixer = true;
+				closeNow = !mixerRunning;
+			}
+			if (closeNow) {
 				close();
 			}
 		}
@@ -1087,7 +1141,7 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 		stop = true;
 		StreamLifecycle currentStream = stream;
 		if(currentStream != null) {
-			currentStream.abort();
+			currentStream.beginOwnerDispose();
 			try {
 				if(mixer != null && mixer.isAlive() && mixer != Thread.currentThread()) {
 					mixer.join(2000);
@@ -1095,10 +1149,11 @@ public class PortAudioDriver extends AbstractAudioDriver<PCM> implements Runnabl
 			} catch(InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
-			if (!mixer.isAlive()) {
+			if (mixer == null || !mixer.isAlive()) {
 				currentStream.close();
 			} else {
 				Logger.getGlobal().warning("PortAudio mixer is still stopping; stream cleanup deferred until it exits");
+				currentStream.deferCloseToMixer();
 			}
 		}
 		super.dispose();
