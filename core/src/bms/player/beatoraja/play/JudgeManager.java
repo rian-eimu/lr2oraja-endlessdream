@@ -30,6 +30,10 @@ public class JudgeManager {
      * LN type
      */
     private int lntype;
+    /**
+     * MSS (疑似BSS/MSS変換オプション) の中間ノート判定を行うか
+     */
+    private boolean mssEnabled;
 
     /**
      * 現在の判定カウント内訳
@@ -162,6 +166,7 @@ public class JudgeManager {
         }
 
         this.lntype = model.getLntype();
+        this.mssEnabled = resource.getPlayerConfig().isPseudoBssAsBss();
         Lane[] lanes = model.getLanes();
 
         algorithm = JudgeAlgorithm.valueOf(resource.getPlayerConfig().getPlayConfig(orgmode).getPlayconfig().getJudgetype());
@@ -278,9 +283,10 @@ public class JudgeManager {
      * スクラッチレーンで CN/HCN 終端の直後 {@link PseudoBssConverter#MSS_LINK_MAX_GAP_MICRO} マイクロ秒以内に
      * 未判定の CN/HCN 始端があり、押下時刻がその始端の BAD 判定幅に入っている場合のみ返す。
      * 中間ノートで判定されなかった (切り返しが早すぎる等) 場合も、始端は通常どおり後から押して途中復帰できる。
+     * 疑似BSS/MSS変換オプションが無効な場合は常に null (従来の判定のまま)。
      */
     private LongNote findMssNextStart(LaneState state, LongNote end, long pmtime) {
-        if (state.sckey < 0 || !isChargeOrHellChargeNote(end)) {
+        if (!mssEnabled || state.sckey < 0 || !isChargeOrHellChargeNote(end)) {
             return null;
         }
         final LongNote next = findMssLinkedStart(state.lanemodel.getNotes(), end);
