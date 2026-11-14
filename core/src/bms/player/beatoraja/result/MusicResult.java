@@ -177,6 +177,11 @@ public class MusicResult extends AbstractResult {
                     if (IRUtil.shouldSkipIR(irc.config.getIrname(), resource.getPlayerConfig().isDxMode())) {
                         continue;
                     }
+                    // 拡張子.bmcの譜面はBMS-IRへのスコア送信を一時的にスキップする（将来廃止予定）
+                    if (IRUtil.shouldSkipBmcScoreSend(irc.config.getIrname(), resource.getSongdata())) {
+                        logger.info("{}: 拡張子.bmcの譜面のためスコア送信をスキップしました。", irc.config.getIrname());
+                        continue;
+                    }
                     
                     IRSendStatus status = new IRSendStatus(irc.connection, resource.getSongdata(), newscore, resource.getReplayData());
     				main.irSendStatus.add(status);

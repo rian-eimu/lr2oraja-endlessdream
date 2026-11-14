@@ -123,6 +123,11 @@ public class CourseResult extends AbstractResult {
     				if (IRUtil.shouldSkipIR(irc.config.getIrname(), resource.getPlayerConfig().isDxMode())) {
     					continue;
     				}
+    				// 拡張子.bmcの譜面を含むコースはBMS-IRへのスコア送信を一時的にスキップする（将来廃止予定）
+    				if (IRUtil.shouldSkipBmcScoreSend(irc.config.getIrname(), resource.getCourseData())) {
+    					logger.info("{}: 拡張子.bmcの譜面を含むためコーススコア送信をスキップしました。", irc.config.getIrname());
+    					continue;
+    				}
 
     				irSendStatus.add(new IRSendStatus(irc.connection, resource.getCourseData(), lnmode, newscore, resource.getCourseReplay()));
     			}
