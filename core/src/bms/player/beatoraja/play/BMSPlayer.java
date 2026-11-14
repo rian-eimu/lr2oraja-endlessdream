@@ -805,7 +805,7 @@ public class BMSPlayer extends MainState {
 					if (config.isDxMode()) {
 						// DX MODE時はノーツ数に基づくAC仕様のTOTAL値を設定
 						int totalNotes = model.getTotalNotes();
-						if (model.getMode() == Mode.POPN_9K) {
+						if (model.getMode() == Mode.POPN_5K || model.getMode() == Mode.POPN_9K) {
 							double popTotal = totalNotes > 3072 ? Math.floor(0.097 * totalNotes) : Math.min(300, Math.floor(3072.0 / totalNotes) * totalNotes / 1024.0 * 100.0);
 							model.setTotal(popTotal);
 						} else {
