@@ -143,6 +143,10 @@ public final class PlayerConfig {
 	private int lnmode = 0;
 	private boolean forcedcnendings = false;
 	/**
+	 * CN/HCNモード時に疑似BSS(スクラッチLN+直後のスクラッチノーツ)をBSSとして、連続したスクラッチLNをMSSとして扱うか
+	 */
+	private boolean pseudoBssAsBss = false;
+	/**
 	 * スクロール追加/削除モード
 	 */
     private int scrollMode = 0;
@@ -1021,6 +1025,14 @@ public final class PlayerConfig {
 
 	public void setForcedCNEndings(boolean forcedcnendings) {
 		this.forcedcnendings = forcedcnendings;
+	}
+
+	public boolean isPseudoBssAsBss() {
+		return pseudoBssAsBss;
+	}
+
+	public void setPseudoBssAsBss(boolean pseudoBssAsBss) {
+		this.pseudoBssAsBss = pseudoBssAsBss;
 	}
 
 	public boolean isShowpastnote() {

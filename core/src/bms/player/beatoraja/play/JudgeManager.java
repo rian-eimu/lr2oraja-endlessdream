@@ -273,6 +273,75 @@ public class JudgeManager {
     }
 
     /**
+     * MSS (マルチスピンスクラッチ) の中間ノートで、BSS 終端と同じ切り返しで判定すべき次区間の始端を返す。
+     * <p>
+     * スクラッチレーンで CN/HCN 終端の直後 {@link PseudoBssConverter#MSS_LINK_MAX_GAP_MICRO} マイクロ秒以内に
+     * 未判定の CN/HCN 始端があり、押下時刻がその始端の BAD 判定幅に入っている場合のみ返す。
+     * 中間ノートで判定されなかった (切り返しが早すぎる等) 場合も、始端は通常どおり後から押して途中復帰できる。
+     */
+    private LongNote findMssNextStart(LaneState state, LongNote end, long pmtime) {
+        if (state.sckey < 0 || !isChargeOrHellChargeNote(end)) {
+            return null;
+        }
+        final LongNote next = findMssLinkedStart(state.lanemodel.getNotes(), end);
+        if (next == null || !isChargeOrHellChargeNote(next)) {
+            return null;
+        }
+        return mssStartJudge(smjudge, next.getMicroTime() - pmtime) >= 0 ? next : null;
+    }
+
+    /**
+     * MSS 中間ノートの始端判定。BSS 終端の切り返しと同じ押下で判定し、判定数・コンボを加算する
+     * (中間ノート 1 つで終端 + 始端の 2 ノーツ分)。
+     * 通常の押下判定にある「LN 始端の遅い BAD は判定しない」規則は適用せず、BAD 幅内なら必ず判定する。
+     */
+    private void judgeMssNextStart(LaneState state, LongNote start, int key, int sc, long pmtime, long mtime) {
+        final long dmtime = start.getMicroTime() - pmtime;
+        final int j = mssStartJudge(smjudge, dmtime);
+        keysound.play(start, getKeyVolume(), 0);
+        if (judgeVanish[j]) {
+            state.processing = start.getPair();
+            state.releasetime = Long.MIN_VALUE;
+            state.lnendJudge = Integer.MIN_VALUE;
+            sckey[sc] = key;
+        }
+        this.updateMicro(state, start, mtime, j, dmtime, judgeVanish[j]);
+    }
+
+    /**
+     * MSS 中間ノートの始端の判定値 (0:PG 〜 3:BAD) を返す。BAD 幅外なら -1。
+     */
+    static int mssStartJudge(long[][] mjudge, long dmtime) {
+        for (int j = 0; j < 4 && j < mjudge.length; j++) {
+            if (dmtime >= mjudge[j][0] && dmtime <= mjudge[j][1]) {
+                return j;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * レーンのノーツ列から、指定の LN 終端の直後に連結された (MSS の中間ノートを構成する) 未判定の LN 始端を返す。
+     * 譜面オプションでノーツが複製されても外れないよう、オブジェクトの同一性ではなく時刻で探す。
+     */
+    static LongNote findMssLinkedStart(Note[] laneNotes, LongNote end) {
+        final long endTime = end.getMicroTime();
+        for (Note n : laneNotes) {
+            final long gap = n.getMicroTime() - endTime;
+            if (gap < 0) {
+                continue;
+            }
+            if (gap > PseudoBssConverter.MSS_LINK_MAX_GAP_MICRO) {
+                break;
+            }
+            if (n instanceof LongNote next && !next.isEnd() && !next.isDummy() && next.getState() == 0) {
+                return next;
+            }
+        }
+        return null;
+    }
+
+    /**
      * 指定レーンのいずれかのキーが押下されているか判定する
      */
     private boolean isLanePressed(LaneState state, BMSPlayerInputProcessor input) {
@@ -781,6 +850,7 @@ public class JudgeManager {
                             || state.processing.getType() == LongNote.TYPE_HELLCHARGENOTE)) {
                         if(sc >= 0 && key != sckey[sc]) {
                             // BSS終端処理
+                            final LongNote bssEnd = state.processing;
                             final long[][] mjudge = scnendmjudge;
                             final long dmtime = state.processing.getMicroTime() - pmtime;
                             int j = 0;
@@ -793,7 +863,12 @@ public class JudgeManager {
                             state.processing = null;
                             state.releasetime = Long.MIN_VALUE;
                             state.lnendJudge = Integer.MIN_VALUE;
-                            sckey[sc] = 0;                          
+                            sckey[sc] = 0;
+                            // MSS中間ノート: 同じ切り返しで次区間の始端も判定し、判定・コンボを2ノーツ分加算する
+                            final LongNote mssNext = findMssNextStart(state, bssEnd, pmtime);
+                            if (mssNext != null) {
+                                judgeMssNextStart(state, mssNext, key, sc, pmtime, mtime);
+                            }
                         } else {
                             // 押し直し処理
                             state.releasetime = Long.MIN_VALUE;

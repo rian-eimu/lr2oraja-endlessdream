@@ -8,6 +8,7 @@ import bms.player.beatoraja.audio.BMSLoudnessAnalyzer;
 import bms.player.beatoraja.ir.RankingData;
 import bms.player.beatoraja.play.BMSPlayerRule;
 import bms.player.beatoraja.play.GrooveGauge;
+import bms.player.beatoraja.play.PseudoBssConverter;
 import bms.player.beatoraja.play.bga.BGAProcessor;
 import bms.player.beatoraja.song.SongData;
 import bms.player.beatoraja.song.SongResource;
@@ -254,6 +255,13 @@ public final class PlayerResource {
 		}
 		if (decoder instanceof OSUDecoder) {
 			model.setFromOSU(true);
+		}
+
+		if (pconfig != null && pconfig.isPseudoBssAsBss()) {
+			final PseudoBssConverter.Result converted = PseudoBssConverter.convert(model);
+			if (!converted.isEmpty()) {
+				logger.info("疑似BSS/MSSを変換しました: BSS {} 件, MSS中間ノート {} 件", converted.bss(), converted.mssLinks());
+			}
 		}
 
 		marginTime = BMSModelUtils.setStartNoteTime(model, 1000);

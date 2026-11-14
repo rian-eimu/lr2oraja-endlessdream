@@ -210,6 +210,8 @@ public class PlayConfigurationView implements Initializable {
 	@FXML
 	private CheckBox forcedcnendings;
 	@FXML
+	private CheckBox pseudobss;
+	@FXML
 	private Slider longnoterate;
 	@FXML
 	private Spinner<Integer> hranthresholdbpm;
@@ -625,6 +627,7 @@ public class PlayConfigurationView implements Initializable {
 		scrollmode.getSelectionModel().select(player.getScrollMode());
 		longnotemode.getSelectionModel().select(player.getLongnoteMode());
 		forcedcnendings.setSelected(player.isForcedCNEndings());
+		pseudobss.setSelected(player.isPseudoBssAsBss());
 		longnoterate.setValue(player.getLongnoteRate());
 		hranthresholdbpm.getValueFactory().setValue(player.getHranThresholdBPM());
 		judgeregion.setSelected(player.isShowjudgearea());
@@ -753,6 +756,7 @@ public class PlayConfigurationView implements Initializable {
 		player.setScrollMode(scrollmode.getValue());
 		player.setLongnoteMode(longnotemode.getValue());
 		player.setForcedCNEndings(forcedcnendings.isSelected());
+		player.setPseudoBssAsBss(pseudobss.isSelected());
 		player.setLongnoteRate(longnoterate.getValue());
 		player.setHranThresholdBPM(getValue(hranthresholdbpm));
 		player.setMarkprocessednote(markprocessednote.isSelected());

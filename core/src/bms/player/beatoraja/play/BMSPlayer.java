@@ -573,7 +573,13 @@ public class BMSPlayer extends MainState {
 		resource.setUpdateScore(score);
 		resource.setUpdateCourseScore(resource.isUpdateCourseScore() && score);
 		resource.setForceNoIRSend(forceNoIRSend);
+		final boolean pseudoBssAsBss = resource.getPlayerConfig().isPseudoBssAsBss();
 		this.conditionalModifierApplier = m -> {
+			// 分岐後モデルはパーサから再構築されるため、初回ロード時と同じく疑似BSS変換を
+			// 譜面オプション適用前に行い、ノーツ数・判定対象を本体モデルと揃える
+			if (pseudoBssAsBss) {
+				PseudoBssConverter.convert(m);
+			}
 			for (java.util.function.Consumer<BMSModel> step : branchModSteps) {
 				step.accept(m);
 			}
