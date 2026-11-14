@@ -261,16 +261,15 @@ public class MainController {
 			if(ir != null) {
 				if(irconfig.getUserid().length() == 0 || irconfig.getPassword().length() == 0) {
 				} else {
-					try {
-						IRResponse<IRPlayerData> response = ir.login(new IRAccount(irconfig.getUserid(), irconfig.getPassword(), ""));
-						if(response.isSucceeded()) {
-							irarray.add(new IRStatus(irconfig, ir, response.getData()));
-						} else {
-							logger.warn("IRへのログイン失敗 : {}", response.getMessage());
+					try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.IR_LOGIN)) {
+						IRResponse<IRPlayerData> response;
+						try {
+							response = ir.login(new IRAccount(irconfig.getUserid(), irconfig.getPassword(), ""));
+						} catch (IllegalArgumentException e) {
+							logger.info("trying pre-0.8.5 IR login method");
+							response = ir.login(irconfig.getUserid(), irconfig.getPassword());
 						}
-					} catch (IllegalArgumentException e) {
-						logger.info("trying pre-0.8.5 IR login method");
-						IRResponse<IRPlayerData> response = ir.login(irconfig.getUserid(), irconfig.getPassword());
+						timing.outcome(response.isSucceeded() ? StartupDiagnostics.Outcome.OK : StartupDiagnostics.Outcome.FAILED);
 						if(response.isSucceeded()) {
 							irarray.add(new IRStatus(irconfig, ir, response.getData()));
 						} else {
@@ -463,18 +462,22 @@ public class MainController {
             ImGuiRenderer.init();
         }
 
-        try (var perf = PerformanceMetrics.get().Event("System font load")) {
+        try (var perf = PerformanceMetrics.get().Event("System font load");
+             var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.SYSTEM_FONT)) {
 			FreeTypeFontGenerator generator = new FreeTypeFontGenerator(Gdx.files.internal(config.getSystemfontpath()));
 			FreeTypeFontParameter parameter = new FreeTypeFontParameter();
 			parameter.size = 24;
 			systemfont = generator.generateFont(parameter);
 			generator.dispose();
+			timing.outcome(StartupDiagnostics.Outcome.OK);
 		} catch (GdxRuntimeException e) {
 			logger.error("System Font読み込み失敗");
 		}
 
-        try (var perf = PerformanceMetrics.get().Event("Input Processor constructor")) {
+        try (var perf = PerformanceMetrics.get().Event("Input Processor constructor");
+             var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.INPUT_DEVICES)) {
 			input = new BMSPlayerInputProcessor(config, player);
+			timing.outcome(StartupDiagnostics.Outcome.OK);
 		}
 
 		switch(config.getAudioConfig().getDriver()) {
@@ -652,6 +655,7 @@ public class MainController {
 
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
+		final MainState drawnState = current;
 		current.render();
 		sprite.begin();
 		if (current.getSkin() != null) {
@@ -659,6 +663,10 @@ public class MainController {
 			current.getSkin().drawAllObjects(sprite, current);
 		}
 		sprite.end();
+
+		if (current == drawnState && current instanceof MusicSelector && current.getSkin() != null && StartupDiagnostics.enabled()) {
+			StartupDiagnostics.selectionFrame(timer.isTimerOn(bms.player.beatoraja.skin.SkinProperty.TIMER_STARTINPUT));
+		}
 
 		final Stage stage = current.getStage();
 		if (stage != null) {

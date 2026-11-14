@@ -864,6 +864,7 @@ public class PlayConfigurationView implements Initializable {
 
     @FXML
 	public void start() {
+		bms.player.beatoraja.StartupDiagnostics.start();
 		commit();
 		playerPanel.setDisable(true);
 		videoTab.setDisable(true);

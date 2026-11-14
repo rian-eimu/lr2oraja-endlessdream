@@ -134,6 +134,7 @@ public class MainLoader extends Application {
 	}
 
 	public static void play(Path bmsPath, BMSPlayerMode playerMode, boolean forceExit, Config config, PlayerConfig player, boolean songUpdated) {
+		StartupDiagnostics.gameEntry();
 		//configuratorStage.setIconified(true);
 		if(config == null) {
             try {
@@ -155,7 +156,9 @@ public class MainLoader extends Application {
         try {
             songdb = songDatabaseAccessorProvider.get(config,
                     player != null ? player.getId() : config.getPlayername());
-            detectIllegalSongs(songdb, player);
+            try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.IR_CHART_CHECK)) {
+                timing.outcome(detectIllegalSongs(songdb, player));
+            }
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             logger.error("楽曲データベース初期化中の例外:{}", e.getMessage());
@@ -360,11 +363,12 @@ public class MainLoader extends Application {
 		return illegalSongs.toArray(new String[illegalSongs.size()]);
 	}
 
-	private static void detectIllegalSongs(SongDatabaseAccessor songdb, PlayerConfig player) {
+	private static StartupDiagnostics.Outcome detectIllegalSongs(SongDatabaseAccessor songdb, PlayerConfig player) {
 		illegalSongs.clear();
 		if (songdb == null) {
-			return;
+			return StartupDiagnostics.Outcome.SKIPPED;
 		}
+		boolean failed = false;
 		Set<String> hashes = new LinkedHashSet<>();
 		addIllegalSongHashes(hashes, SongUtils.illegalsongs);
 		if (player != null && player.getIrconfig() != null) {
@@ -382,6 +386,7 @@ public class MainLoader extends Application {
 						addIllegalSongHashes(hashes, response.getData());
 					} else if (response.getMessage() != null && response.getMessage().length() > 0
 							&& !"Not supported".equals(response.getMessage())) {
+						failed = true;
 						logger.warn("IR illegal song list取得失敗 - {} : {}", irconfig.getIrname(), response.getMessage());
 					}
 				} finally {
@@ -390,13 +395,19 @@ public class MainLoader extends Application {
 			}
 		}
 		if (hashes.isEmpty()) {
-			return;
+			return failed ? StartupDiagnostics.Outcome.FAILED : StartupDiagnostics.Outcome.OK;
 		}
-		for (SongData song : songdb.getSongDatas(hashes.toArray(String[]::new))) {
+		SongData[] matches;
+		try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.IR_CHART_DB_LOOKUP)) {
+			matches = songdb.getSongDatas(hashes.toArray(String[]::new));
+			timing.outcome(StartupDiagnostics.Outcome.OK);
+		}
+		for (SongData song : matches) {
 			if (song != null && song.getSha256() != null && song.getSha256().length() > 0) {
 				MainLoader.putIllegalSong(song.getSha256());
 			}
 		}
+		return failed ? StartupDiagnostics.Outcome.FAILED : StartupDiagnostics.Outcome.OK;
 	}
 
 	private static void addIllegalSongHashes(Set<String> hashes, String[] candidates) {
