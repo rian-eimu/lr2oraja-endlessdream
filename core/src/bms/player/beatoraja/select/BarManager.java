@@ -857,7 +857,7 @@ public class BarManager {
                                 return false;
                             }
                         }
-                        return true;
+                        continue;
                     }
                     Object valueArr[] = ((String)this.getFilter().get(key)).split("&&");
                     for (Object value : valueArr) // Fork for string values of the filter key.
