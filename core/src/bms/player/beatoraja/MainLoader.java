@@ -267,7 +267,7 @@ public class MainLoader extends Application {
 			Config.DisplayMode displaymode = config.getDisplaymode();
 			//new Lwjgl3Application(main, gdxConfig);
 			Graphics.DisplayMode finalGdxDisplayMode = gdxDisplayMode;
-			new Lwjgl3Application(new ApplicationListener() {
+			new Lwjgl3GameApplication(new ApplicationListener() {
 				public void resume() {
 					main.resume();
 				}
