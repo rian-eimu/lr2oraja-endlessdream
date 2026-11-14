@@ -270,6 +270,17 @@ public class BooleanPropertyFactory {
 
 	}
 	
+	private static DrawProperty createSplitNowJudge(int region, boolean scratch, boolean early) {
+		return new DrawProperty(DrawConditionProperty.TYPE_NO_STATIC, state -> {
+			if (state instanceof BMSPlayer player) {
+				var judgement = player.getJudgeManager().getSplitJudgement(region, scratch);
+				return judgement != null && judgement.rank() > 1
+						&& (early ? judgement.timingMs() > 0 : judgement.timingMs() < 0);
+			}
+			return false;
+		});
+	}
+
 	private static class NowJudgeDrawCondition extends DrawProperty {
 
 		public NowJudgeDrawCondition(final int player, final int type) {
@@ -575,6 +586,18 @@ public class BooleanPropertyFactory {
 		judge_3p_perfect(OPTION_3P_PERFECT, new NowJudgeDrawCondition(2, 0)),
 		judge_3p_early(OPTION_3P_EARLY, new NowJudgeDrawCondition(2, 1)),
 		judge_3p_late(OPTION_3P_LATE, new NowJudgeDrawCondition(2, 2)),
+		judge_k1_early(OPTION_1P_KEYS_EARLY, createSplitNowJudge(0, false, true)),
+		judge_k1_late(OPTION_1P_KEYS_LATE, createSplitNowJudge(0, false, false)),
+		judge_k2_early(OPTION_2P_KEYS_EARLY, createSplitNowJudge(1, false, true)),
+		judge_k2_late(OPTION_2P_KEYS_LATE, createSplitNowJudge(1, false, false)),
+		judge_k3_early(OPTION_3P_KEYS_EARLY, createSplitNowJudge(2, false, true)),
+		judge_k3_late(OPTION_3P_KEYS_LATE, createSplitNowJudge(2, false, false)),
+		judge_s1_early(OPTION_1P_SCRATCH_EARLY, createSplitNowJudge(0, true, true)),
+		judge_s1_late(OPTION_1P_SCRATCH_LATE, createSplitNowJudge(0, true, false)),
+		judge_s2_early(OPTION_2P_SCRATCH_EARLY, createSplitNowJudge(1, true, true)),
+		judge_s2_late(OPTION_2P_SCRATCH_LATE, createSplitNowJudge(1, true, false)),
+		judge_s3_early(OPTION_3P_SCRATCH_EARLY, createSplitNowJudge(2, true, true)),
+		judge_s3_late(OPTION_3P_SCRATCH_LATE, createSplitNowJudge(2, true, false)),
 		
 		judge_perfect_exist(OPTION_PERFECT_EXIST, new DrawProperty(DrawProperty.TYPE_STATIC_ON_RESULT,
 				(state) -> (state.getJudgeCount(0, true) + state.getJudgeCount(0, false) > 0))),
