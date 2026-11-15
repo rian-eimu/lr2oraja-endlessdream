@@ -6,6 +6,7 @@ import bms.player.beatoraja.song.SongData;
 import com.badlogic.gdx.utils.*;
 
 import javax.annotation.Nullable;
+import java.util.function.ToIntFunction;
 
 /**
  * スコアデータのキャッシュ
@@ -79,6 +80,33 @@ public abstract class ScoreDataCache {
         	collector.collect(song, score);
         };
         readScoreDatasFromSource(cachecollector, noscores, lnmode);
+    }
+
+    /**
+     * 楽曲毎に LN MODE が異なる場合のスコアデータ一括取得。
+     * LN MODE は KEY モード毎に設定されるため、フォルダ内でモードが混在する場合に使用する。
+     * LN MODE 毎にまとめて {@link #readScoreDatas(ScoreDataCollector, SongData[], int)} を呼び出すため、
+     * collector の呼び出し順は songs の順序と一致しない。
+     *
+     * @param collector スコアデータの収集先
+     * @param songs 楽曲データ
+     * @param lnmodeOf 楽曲データから LN MODE を返す関数
+     */
+    public void readScoreDatas(ScoreDataCollector collector, SongData[] songs, ToIntFunction<SongData> lnmodeOf) {
+        final int lnmodes = scorecache.length - 1;
+        final Array<SongData>[] groups = new Array[lnmodes];
+        for (SongData song : songs) {
+            final int lnmode = Math.max(0, Math.min(lnmodes - 1, lnmodeOf.applyAsInt(song)));
+            if (groups[lnmode] == null) {
+                groups[lnmode] = new Array<SongData>();
+            }
+            groups[lnmode].add(song);
+        }
+        for (int lnmode = 0; lnmode < lnmodes; lnmode++) {
+            if (groups[lnmode] != null) {
+                readScoreDatas(collector, groups[lnmode].toArray(SongData.class), lnmode);
+            }
+        }
     }
 
     boolean existsScoreDataCache(SongData song, int lnmode) {

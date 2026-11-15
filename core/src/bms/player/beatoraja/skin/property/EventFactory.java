@@ -1,5 +1,6 @@
 package bms.player.beatoraja.skin.property;
 
+import bms.model.Mode;
 import bms.player.beatoraja.*;
 import bms.player.beatoraja.config.KeyConfiguration;
 import bms.player.beatoraja.MainState.MainStateType;
@@ -721,7 +722,9 @@ public class EventFactory {
             if(state instanceof MusicSelector selector) {
 				final int lnmodelength = 4;
 	            PlayerConfig config = selector.resource.getPlayerConfig();
-	            config.setLnmode((config.getLnmode() + (arg1 >= 0 ? 1 : lnmodelength - 1)) % lnmodelength);
+	            // LN MODE は KEY モード毎の設定。選択中のバーのモード (未確定時はモードフィルターの代表モード) を変更する
+	            final Mode target = selector.getSelectedBarLnmodeTarget();
+	            config.setLnmode(target, (config.getLnmode(target) + (arg1 >= 0 ? 1 : lnmodelength - 1)) % lnmodelength);
 	            selector.getBarManager().updateBar();
 	            selector.play(OPTION_CHANGE);
 			}

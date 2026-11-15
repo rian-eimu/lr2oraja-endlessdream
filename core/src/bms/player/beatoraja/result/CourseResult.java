@@ -39,7 +39,7 @@ public class CourseResult extends AbstractResult {
 	public void create() {
 		for(int i = 0;i < REPLAY_SIZE;i++) {
 			saveReplay[i] = main.getPlayDataAccessor().existsReplayData(resource.getCourseBMSModels(),
-					resource.getPlayerConfig().getLnmode(), i ,resource.getConstraint()) ? ReplayStatus.EXIST : ReplayStatus.NOT_EXIST ;
+					resource.getCourseLnmode(), i ,resource.getConstraint()) ? ReplayStatus.EXIST : ReplayStatus.NOT_EXIST ;
 		}
 
 		for(int i = resource.getCourseGauge().size;i < resource.getCourseBMSModels().length;i++) {
@@ -95,7 +95,7 @@ public class CourseResult extends AbstractResult {
 					break;
 				}
 			}
-			final int lnmode = uln ? config.getLnmode() : 0;
+			final int lnmode = uln ? resource.getCourseLnmode() : 0;
 			
         	for(IRStatus irc : ir) {
 
@@ -284,14 +284,14 @@ public class CourseResult extends AbstractResult {
 			random = 1;
 		}
 		final ScoreData score = main.getPlayDataAccessor().readScoreData(models,
-				config.getLnmode(), random, resource.getConstraint());
+				resource.getCourseLnmode(), random, resource.getConstraint());
 		oldscore = score != null ? score : new ScoreData();
 
 		getScoreDataProperty().setTargetScore(oldscore.getExscore(), resource.getTargetScoreData() != null ? resource.getTargetScoreData().getExscore() : 0,
 				Arrays.asList(resource.getCourseData().getSong()).stream().mapToInt(sd -> sd.getNotes()).sum());
 		getScoreDataProperty().update(newscore);
 
-		main.getPlayDataAccessor().writeScoreData(newscore, models, config.getLnmode(),
+		main.getPlayDataAccessor().writeScoreData(newscore, models, resource.getCourseLnmode(),
 				random, resource.getConstraint(), resource.isUpdateCourseScore());
 
 
@@ -317,7 +317,7 @@ public class CourseResult extends AbstractResult {
 					rd[i].gauge = resource.getPlayerConfig().getGauge();
 				}
 				if (main.getPlayDataAccessor().wrireReplayData(rd, resource.getCourseBMSModels(),
-						resource.getPlayerConfig().getLnmode(), index, resource.getConstraint())) {
+						resource.getCourseLnmode(), index, resource.getConstraint())) {
 					saveReplay[index] = ReplayStatus.SAVED;
 					main.saveLastRecording("ON_REPLAY");
 				}

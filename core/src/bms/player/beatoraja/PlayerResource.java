@@ -189,7 +189,7 @@ public final class PlayerResource {
 		this.mode = mode;
 		replay = new ReplayData();
 		chartResource = SongResources.fromPath(f);
-		model = loadBMSModel(chartResource, pconfig.getLnmode());
+		model = loadBMSModel(chartResource);
 		if (model == null) {
 			logger.warn("楽曲が存在しないか、解析時にエラーが発生しました:{}", f.toString());
 			return false;
@@ -221,6 +221,48 @@ public final class PlayerResource {
 			analysisTask = null;
 		}
 		return true;
+	}
+
+	/**
+	 * 譜面を読み込み、譜面のモード (KEY モード) に対応する LN モードを PlayerConfig から適用する
+	 *
+	 * @param f 譜面ファイル
+	 * @return 譜面データ。読み込めなかった場合は null
+	 */
+	public BMSModel loadBMSModel(Path f) {
+		return loadBMSModel(SongResources.fromPath(f));
+	}
+
+	/**
+	 * 譜面を読み込み、譜面のモード (KEY モード) に対応する LN モードを PlayerConfig から適用する
+	 *
+	 * @param resource 譜面リソース
+	 * @return 譜面データ。読み込めなかった場合は null
+	 */
+	public BMSModel loadBMSModel(SongResource resource) {
+		// LN モードは譜面のモード毎に保持しているため、デコード後に判明したモードの値を適用する。
+		// デコーダーは lntype を ChartInformation に格納するだけなので、デコード後の差し替えで結果は変わらない。
+		BMSModel model = loadBMSModel(resource, BMSModel.LNTYPE_LONGNOTE);
+		if (model != null) {
+			applyLnmode(model, pconfig.getLnmode(model.getMode()));
+		}
+		return model;
+	}
+
+	/**
+	 * 譜面データの LN モード (ChartInformation.lntype) を差し替える
+	 *
+	 * @param model 譜面データ
+	 * @param lnmode LN モード
+	 */
+	public static void applyLnmode(BMSModel model, int lnmode) {
+		final ChartInformation info = model.getChartInformation();
+		if (info == null || info.lntype == lnmode) {
+			return;
+		}
+		model.setChartInformation(info.source != null
+				? new ChartInformation(info.source, lnmode, info.selectedRandoms)
+				: new ChartInformation(info.path, lnmode, info.selectedRandoms));
 	}
 
 	public BMSModel loadBMSModel(Path f, int lnmode) {
@@ -368,7 +410,7 @@ public final class PlayerResource {
 	public boolean setCourseBMSFiles(Path[] files) {
 		Array<BMSModel> models = new Array();
 		for (Path f : files) {
-			BMSModel model = loadBMSModel(f, pconfig.getLnmode());
+			BMSModel model = loadBMSModel(f);
 			if (model == null) {
 				return false;
 			}
@@ -381,6 +423,34 @@ public final class PlayerResource {
 
 	public BMSModel[] getCourseBMSModels() {
 		return course;
+	}
+
+	/**
+	 * 現在の譜面に適用している LN モードを返す。
+	 * 譜面読み込み時に元譜面のモードから決定した値 ({@link BMSModel#getLntype()}) を返すため、
+	 * 7to9 等でモードが変換されていても読み込み時のモードの値になる。
+	 * 譜面未読み込みの場合は楽曲データのモード (なければ BEAT_7K) の設定値を返す。
+	 *
+	 * @return LN モード
+	 */
+	public int getLnmode() {
+		if (model != null) {
+			return model.getLntype();
+		}
+		return songdata != null ? pconfig.getLnmode(songdata.getMode()) : pconfig.getLnmode(bms.model.Mode.BEAT_7K);
+	}
+
+	/**
+	 * コースのスコア・リプレイ・IR に使用する LN モードを返す。
+	 * コース内でモードが混在する場合は 1 曲目のモードの設定値を使用する。
+	 *
+	 * @return LN モード
+	 */
+	public int getCourseLnmode() {
+		if (course != null && course.length > 0) {
+			return pconfig.getLnmode(course[0].getMode());
+		}
+		return getLnmode();
 	}
 
 	public void setAutoPlaySongs(Path[] paths, boolean loop) {
@@ -426,7 +496,7 @@ public final class PlayerResource {
 
 	public void reloadBMSFile() {
 		if (model != null) {
-			model = loadBMSModel(Paths.get(model.getPath()), pconfig.getLnmode());
+			model = loadBMSModel(Paths.get(model.getPath()));
 		}
 		final String name = tablename;
 		final String lev = tablelevel;
