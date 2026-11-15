@@ -5,7 +5,6 @@ import bms.player.beatoraja.skin.json.JSONSkinLoader;
 import bms.player.beatoraja.skin.lr2.LR2SkinCSVLoader;
 import bms.player.beatoraja.skin.lr2.LR2SkinHeaderLoader;
 import bms.player.beatoraja.skin.lua.LuaSkinLoader;
-import bms.player.beatoraja.play.SkinNote;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.utils.Array;
@@ -41,8 +40,7 @@ public abstract class SkinLoader {
      * @return
      */
     public static Skin load(MainState state, SkinType skinType) {
-        var side = state instanceof bms.player.beatoraja.play.BMSPlayer ? state.resource.getPlaySide() : PlaySide.P1;
-        SkinConfig skinConfig = state.resource.getPlayerConfig().getSkinConfig(skinType, side);
+        SkinConfig skinConfig = state.resource.getPlayerConfig().getSkin()[skinType.getId()];
         Skin skin = skinConfig != null && skinConfig.validate() ? load(state, skinType, skinConfig) : null;
         if(skin == null) {
             SkinConfig.Default defaultSkin = SkinConfig.Default.get(skinType);
@@ -61,38 +59,30 @@ public abstract class SkinLoader {
             return null;
         }
         try {
-            Skin skin;
             if (sc.getPath().endsWith(".json")) {
                 JSONSkinLoader sl = new JSONSkinLoader(state, resource.getConfig());
-                skin = sl.loadSkin(Paths.get(sc.getPath()), skinType, sc.getProperties());
+                Skin skin = sl.loadSkin(Paths.get(sc.getPath()), skinType, sc.getProperties());
+                SkinLoader.resource.disposeOld();
+                return skin;
             } else if (sc.getPath().endsWith(".luaskin")) {
                 LuaSkinLoader loader = new LuaSkinLoader(state, resource.getConfig());
-                skin = loader.loadSkin(Paths.get(sc.getPath()), skinType, sc.getProperties());
+                Skin skin = loader.loadSkin(Paths.get(sc.getPath()), skinType, sc.getProperties());
+                SkinLoader.resource.disposeOld();
+                return skin;
             } else {
                 LR2SkinHeaderLoader loader = new LR2SkinHeaderLoader(resource.getConfig());
                 SkinHeader header = loader.loadSkin(Paths.get(sc.getPath()), state, sc.getProperties());
                 LR2SkinCSVLoader<?> dloader = LR2SkinCSVLoader.getSkinLoader(skinType,  header.getResolution(), resource.getConfig());
                 header.setSourceResolution(dloader.src);
                 header.setDestinationResolution(dloader.dst);
-                skin = dloader.loadSkin(state, header, loader.getOption());
+                Skin skin = dloader.loadSkin(state, header, loader.getOption());
+                SkinLoader.resource.disposeOld();
+                return skin;
             }
-            applyNotesOffsetCenter(skin, sc.getProperties());
-            SkinLoader.resource.disposeOld();
-            return skin;
         } catch (Throwable e) {
             e.printStackTrace();
         }
         return null;
-    }
-
-    static void applyNotesOffsetCenter(Skin skin, SkinConfig.Property property) {
-        if (skin != null && property.getNotesOffsetCenter() != 0) {
-            for (SkinObject object : skin.getAllSkinObjects()) {
-                if (object instanceof SkinNote) {
-                    object.setOffsetCenter(property.getNotesOffsetCenter());
-                }
-            }
-        }
     }
 
     public static PixmapResourcePool getResource() {

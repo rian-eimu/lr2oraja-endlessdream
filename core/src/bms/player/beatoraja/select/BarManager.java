@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import bms.player.beatoraja.modmenu.ImGuiNotify;
 import bms.player.beatoraja.modmenu.SongManagerMenu;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Json;
@@ -28,8 +27,7 @@ import bms.player.beatoraja.*;
 import bms.player.beatoraja.CourseData.CourseDataConstraint;
 import bms.player.beatoraja.CourseData.TrophyData;
 import bms.player.beatoraja.external.BMSSearchAccessor;
-import bms.player.beatoraja.ir.IRChartData;
-import bms.player.beatoraja.ir.IRCourseData;
+import bms.player.beatoraja.ir.IRResponse;
 import bms.player.beatoraja.ir.IRTableData;
 import bms.player.beatoraja.select.bar.*;
 import bms.player.beatoraja.skin.property.EventFactory.EventType;
@@ -52,10 +50,6 @@ public class BarManager {
 	 * 難易度表バー一覧
 	 */
 	private TableBar[] tables = new TableBar[0];
-	private TableBar localTable;
-	private DirectoryBar openLocalTable;
-	private final IRTableLoader irTables = new IRTableLoader();
-	private boolean disposed;
 
 	private Bar[] commands;
 	
@@ -107,7 +101,7 @@ public class BarManager {
 
         TableData[] unsortedtables;
         try (var perf = PerformanceMetrics.get().Event("Saved table load")) {
-            unsortedtables = tdaccessor.readAllExcept(LocalTableFile.FILE_NAME);
+            unsortedtables = tdaccessor.readAll();
         }
 
 		final List<TableData> sortedtables = new ArrayList<TableData>(unsortedtables.length);
@@ -138,6 +132,72 @@ public class BarManager {
 			}			
 		}).forEach(table::add);;
 
+		if(select.main.getIRStatus().length > 0) {
+			IRResponse<IRTableData[]> response = select.main.getIRStatus()[0].connection.getTableDatas();
+			if(response.isSucceeded()) {
+				for(IRTableData irtd : response.getData()) {
+					TableData td = new TableData();
+					td.setName(irtd.name);
+					td.setFolder(Stream.of(irtd.folders).map(folder -> {
+						TableData.TableFolder tf = new TableData.TableFolder();
+						tf.setName(folder.name);
+						tf.setSong(Stream.of(folder.charts).map(chart -> {
+							SongData song = new SongData();
+							song.setSha256(chart.sha256);
+							song.setMd5(chart.md5);
+							song.setTitle(chart.title);
+							song.setArtist(chart.artist);
+							song.setGenre(chart.genre);
+							song.setUrl(chart.url);
+							song.setAppendurl(chart.appendurl);
+							if(chart.mode != null) {
+								song.setMode(chart.mode.id);								
+							}
+							return song;
+						}).toArray(SongData[]::new));
+						return tf;
+					}).toArray(TableData.TableFolder[]::new));
+					
+					td.setCourse(Stream.of(irtd.courses).map(course -> {
+						CourseData cd = new CourseData();
+						cd.setName(course.name);
+						cd.setSong(Stream.of(course.charts).map(chart -> {
+							SongData song = new SongData();
+							song.setSha256(chart.sha256);
+							song.setMd5(chart.md5);
+							song.setTitle(chart.title);
+							song.setArtist(chart.artist);
+							song.setGenre(chart.genre);
+							song.setUrl(chart.url);
+							song.setAppendurl(chart.appendurl);
+							if(chart.mode != null) {
+								song.setMode(chart.mode.id);								
+							}
+							return song;
+						}).toArray(SongData[]::new));
+						
+						cd.setConstraint(course.constraint);
+						cd.setTrophy(Stream.of(course.trophy).map(t -> {
+						    TrophyData trophyData = new TrophyData();
+						    trophyData.setName(t.name);
+						    trophyData.setMissrate(t.smissrate);
+						    trophyData.setScorerate(t.scorerate);
+							return trophyData;
+						}).toArray(TrophyData[]::new));
+						
+						cd.setRelease(true);
+						return cd;
+					}).toArray(CourseData[]::new));
+					
+					if(td.validate()) {
+						table.add(new TableBar(select, td, new TableDataAccessor.DifficultyTableAccessor(select.resource.getConfig().getTablepath(), td.getUrl())));						
+					}
+				}
+			} else {
+				logger.warn("IRからのテーブル取得失敗 : {}", response.getMessage());
+			}
+		}
+
 		new Thread(() -> {
 			TableData td = bmssearcha.read();
 			if (td != null) {
@@ -145,11 +205,6 @@ public class BarManager {
 			}
 		}).start();
 
-		var local = tdaccessor.read(LocalTableFile.FILE_NAME);
-		if (local != null) {
-			localTable = createLocalTable(local);
-			table.add(localTable);
-		}
 		this.tables = table.toArray(TableBar.class);
 
 
@@ -213,110 +268,6 @@ public class BarManager {
 		}
 
 		commands = l.toArray(Bar.class);
-		if (select.main.getIRStatus().length > 0) irTables.start(select.main.getIRStatus()[0].connection);
-	}
-
-	private TableBar createLocalTable(TableData data) {
-		return new TableBar(select, data, new TableDataAccessor.DifficultyTableAccessor(
-				select.resource.getConfig().getTablepath(), data.getUrl()));
-	}
-
-	/** IR難易度表やダウンロード済み難易度表には触れず、編集可能なローカル難易度表のみを再読み込みする。 */
-	private boolean reloadLocalTable() {
-		var previous = tables;
-		try {
-			var accessor = new TableDataAccessor(select.resource.getConfig().getTablepath());
-			var data = accessor.read(LocalTableFile.FILE_NAME);
-			if (data == null) return false;
-			var replacement = createLocalTable(data);
-			int index = Arrays.asList(previous).indexOf(localTable);
-			var updated = Arrays.copyOf(previous, index < 0 ? previous.length + 1 : previous.length);
-			updated[index < 0 ? previous.length : index] = replacement;
-			tables = updated;
-			if (dir.size == 0 && !updateBar()) {
-				tables = previous;
-				return false;
-			}
-			localTable = replacement;
-			return true;
-		} catch (RuntimeException e) {
-			tables = previous;
-			logger.warn("Local table reload failed: {}", e.getClass().getSimpleName());
-			return false;
-		}
-	}
-
-	public boolean handleLocalTableUpdate(Bar selected) {
-		boolean browsingLocal = dir.size > 0 && (dir.first() == localTable || dir.first() == openLocalTable);
-		boolean firstLoad = localTable == null && dir.size == 0 && selected == courses
-				&& Files.isRegularFile(Paths.get(select.resource.getConfig().getTablepath(), LocalTableFile.FILE_NAME));
-		if (!browsingLocal && !firstLoad && (localTable == null || selected != localTable)) return false;
-		var currentRoot = browsingLocal ? dir.first() : null;
-		boolean reloaded = reloadLocalTable();
-		if (reloaded) {
-			openLocalTable = currentRoot;
-			ImGuiNotify.info(browsingLocal
-					? "Local table reloaded. Return to the root and reopen it."
-					: "Local table reloaded", 3000);
-		} else {
-			ImGuiNotify.error("Local table reload failed. Previous table kept.", 3000);
-		}
-		return true;
-	}
-
-	/** Applies completed metadata on the selection/render thread only. */
-	void updateIRTables() {
-		if (disposed) return;
-		IRTableData[] received = irTables.take();
-		if (received == null) return;
-		List<TableBar> combined = new ArrayList<>(Arrays.asList(tables));
-		for (IRTableData entry : received) {
-			try {
-				TableData data = toTableData(entry);
-				if (data.validate()) combined.add(new TableBar(select, data,
-						new TableDataAccessor.DifficultyTableAccessor(select.resource.getConfig().getTablepath(), data.getUrl())));
-			} catch (RuntimeException e) {
-				logger.warn("IRテーブルを無視します : {}", e.getClass().getSimpleName());
-			}
-		}
-		if (combined.size() == tables.length) return;
-		tables = combined.toArray(TableBar[]::new);
-		// Do not navigate out of a folder or rebuild its contents when metadata arrives.
-		if (dir.size == 0) updateBar();
-	}
-
-	public void dispose() { disposed = true; irTables.close(); }
-
-	static TableData toTableData(IRTableData entry) {
-		Objects.requireNonNull(entry);
-		TableData data = new TableData(); data.setName(entry.name);
-		data.setFolder(Arrays.stream(entry.folders != null ? entry.folders : new IRTableData.IRTableFolder[0])
-				.filter(Objects::nonNull).map(folder -> {
-					TableData.TableFolder result = new TableData.TableFolder(); result.setName(folder.name);
-					result.setSong(Arrays.stream(folder.charts != null ? folder.charts : new IRChartData[0])
-							.filter(Objects::nonNull).map(BarManager::toSongData).toArray(SongData[]::new));
-					return result;
-				}).toArray(TableData.TableFolder[]::new));
-		data.setCourse(Arrays.stream(entry.courses != null ? entry.courses : new IRCourseData[0])
-				.filter(Objects::nonNull).map(course -> {
-					CourseData result = new CourseData(); result.setName(course.name);
-					result.setSong(Arrays.stream(course.charts).filter(Objects::nonNull).map(BarManager::toSongData).toArray(SongData[]::new));
-					result.setConstraint(course.constraint);
-					result.setTrophy(Arrays.stream(course.trophy).filter(Objects::nonNull).map(trophy -> {
-						TrophyData item = new TrophyData(); item.setName(trophy.name);
-						item.setMissrate(trophy.smissrate); item.setScorerate(trophy.scorerate); return item;
-					}).toArray(TrophyData[]::new));
-					result.setRelease(true); return result;
-				}).toArray(CourseData[]::new));
-		return data;
-	}
-
-	private static SongData toSongData(IRChartData chart) {
-		SongData song = new SongData(); song.setSha256(chart.sha256); song.setMd5(chart.md5);
-		song.setTitle(chart.title); song.setArtist(chart.artist); song.setGenre(chart.genre);
-		song.setUrl(chart.url); song.setAppendurl(chart.appendurl);
-		if (chart.mode != null) song.setMode(chart.mode.id);
-		return song;
 	}
 	
 	public boolean updateBar() {

@@ -24,7 +24,6 @@ public abstract class SkinObject extends DisposableObject {
 	private int[] offset = new int[0];
 
 	private boolean relative;
-	private int offsetcenter;
 
 	/**
 	 * 参照するタイマー定義
@@ -405,7 +404,16 @@ public abstract class SkinObject extends DisposableObject {
 				}
 			}
 
-			applyOffsets(region);
+			for(SkinOffset off : this.off) {
+				if (off != null) {
+					if(!relative) {
+						region.x += off.x - off.w / 2;
+						region.y += off.y - off.h / 2;
+					}
+					region.width += off.w;
+					region.height += off.h;
+				}
+			}
 			return;
 		} else {
 			if (offset.length == 0) {
@@ -413,24 +421,17 @@ public abstract class SkinObject extends DisposableObject {
 				return;
 			}
 			region.set(fixr);
-			applyOffsets(region);
-			return;
-		}
-	}
-
-	private void applyOffsets(Rectangle target) {
-		for (SkinOffset off : this.off) {
-			if (off == null) continue;
-			if (!relative) {
-				target.x += off.x - off.w * CENTERX[offsetcenter];
-				target.y += off.y - off.h * CENTERY[offsetcenter];
-			} else if (offsetcenter != 0) {
-				// Relative children inherit translation, but can explicitly anchor their own size changes.
-				target.x -= off.w * CENTERX[offsetcenter];
-				target.y -= off.h * CENTERY[offsetcenter];
+			for(SkinOffset off : this.off) {
+				if (off != null) {
+					if(!relative) {
+						region.x += off.x - off.w / 2;
+						region.y += off.y - off.h / 2;
+					}
+					region.width += off.w;
+					region.height += off.h;
+				}
 			}
-			target.width += off.w;
-			target.height += off.h;
+			return;
 		}
 	}
 
@@ -459,7 +460,16 @@ public abstract class SkinObject extends DisposableObject {
 			}
 		}
 
-		applyOffsets(clipRegion);
+		for(SkinOffset off : this.off) {
+			if (off != null) {
+				if(!relative) {
+					clipRegion.x += off.x - off.w / 2;
+					clipRegion.y += off.y - off.h / 2;
+				}
+				clipRegion.width += off.w;
+				clipRegion.height += off.h;
+			}
+		}
 		clipRegion.x += offsetX;
 		clipRegion.y += offsetY;
 		clip = clipRegion.width > 0 && clipRegion.height > 0;
@@ -726,23 +736,6 @@ public abstract class SkinObject extends DisposableObject {
 
 	public void setRelative(boolean relative) {
 		this.relative = relative;
-	}
-
-	/** Offset-size anchor in keypad order; zero preserves the object's legacy behavior. */
-	public final int getOffsetCenter() {
-		return offsetcenter;
-	}
-
-	public final void setOffsetCenter(int center) {
-		offsetcenter = center >= 1 && center <= 9 ? center : 0;
-	}
-
-	public static float getOffsetCenterX(int center) {
-		return CENTERX[center >= 1 && center <= 9 ? center : 0];
-	}
-
-	public static float getOffsetCenterY(int center) {
-		return CENTERY[center >= 1 && center <= 9 ? center : 0];
 	}
 
 	/**

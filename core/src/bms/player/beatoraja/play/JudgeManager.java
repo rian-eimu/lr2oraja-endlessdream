@@ -61,10 +61,6 @@ public class JudgeManager {
      */
     private int[] judgenow;
     private int[] judgecombo;
-    private static final int SPLIT_JUDGE_REGIONS = 3;
-    private final DisplayJudgement[] splitJudgements = new DisplayJudgement[SPLIT_JUDGE_REGIONS * 2];
-
-    public record DisplayJudgement(int rank, int timingMs) {}
     /**
      * ゴースト記録用の判定ログ
      */
@@ -153,10 +149,6 @@ public class JudgeManager {
         judgecombo = new int[judgeregion];
         judgefast = new long[judgeregion];
         mjudgefast = new long[judgeregion];
-        Arrays.fill(splitJudgements, null);
-        for (int id = TIMER_JUDGE_1P_KEYS; id <= TIMER_JUDGE_3P_SCRATCH; id++) {
-            main.timer.setTimerOff(id);
-        }
         score = new ScoreData(orgmode);
         score.setNotes(model.getTotalNotes());
         score.setSha256(model.getSHA256());
@@ -1400,10 +1392,8 @@ public class JudgeManager {
         }
 
         final int lanelength = states.length;
-        int splitRegion = 0;
         if (judgenow.length > 0) {
             final int judgeindex = state.lane / (lanelength / judgenow.length);
-            splitRegion = judgeindex;
             main.timer.setTimerOn(JUDGE_TIMER[judgeindex]);
             if (judgenow.length >= 3) {
                 for (int i = 0; i < COMBO_TIMER.length; i++) {
@@ -1416,12 +1406,6 @@ public class JudgeManager {
             judgecombo[judgeindex] = main.getJudgeManager().getCourseCombo();
             judgefast[judgeindex] = mfast / 1000;
             mjudgefast[judgeindex] = mfast;
-        }
-        // 判定画像が未設定の場合でも鍵盤・皿別プロパティは1つの共通領域を持つ
-        if (splitRegion < SPLIT_JUDGE_REGIONS) {
-            final int slot = splitJudgeSlot(splitRegion, state.sckey >= 0);
-            splitJudgements[slot] = new DisplayJudgement(judge + 1, (int) (mfast / 1000));
-            main.timer.setTimerOn(TIMER_JUDGE_1P_KEYS + slot);
         }
         main.update(judge, mtime / 1000);
         if (!multiBad) {
@@ -1469,15 +1453,6 @@ public class JudgeManager {
 
     public long getRecentJudgeMicroTiming(int player) {
         return player >= 0 && player < mjudgefast.length ? mjudgefast[player] : 0;
-    }
-
-    private static int splitJudgeSlot(int region, boolean scratch) {
-        return region + (scratch ? SPLIT_JUDGE_REGIONS : 0);
-    }
-
-    public DisplayJudgement getSplitJudgement(int region, boolean scratch) {
-        return region >= 0 && region < SPLIT_JUDGE_REGIONS
-                ? splitJudgements[splitJudgeSlot(region, scratch)] : null;
     }
 
     public LongNote getProcessingLongNote(int lane) {

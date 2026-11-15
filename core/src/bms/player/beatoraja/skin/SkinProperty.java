@@ -41,12 +41,6 @@ public class SkinProperty {
 	public static final int TIMER_GAUGE_MAX_2P = 45;
 	public static final int TIMER_JUDGE_1P = 46;
 	public static final int TIMER_JUDGE_2P = 47;
-	public static final int TIMER_JUDGE_1P_KEYS = 240;
-	public static final int TIMER_JUDGE_2P_KEYS = 241;
-	public static final int TIMER_JUDGE_3P_KEYS = 242;
-	public static final int TIMER_JUDGE_1P_SCRATCH = 243;
-	public static final int TIMER_JUDGE_2P_SCRATCH = 244;
-	public static final int TIMER_JUDGE_3P_SCRATCH = 245;
 	public static final int TIMER_JUDGE_3P = 247;
 	public static final int TIMER_COMBO_1P = 446;
 	public static final int TIMER_COMBO_2P = 447;
@@ -226,7 +220,6 @@ public class SkinProperty {
 	public static final int STRING_ARTIST = 14;
 	public static final int STRING_SUBARTIST = 15;
 	public static final int STRING_FULLARTIST = 16;
-	public static final int STRING_LEVELREVIEW = 29;
 	public static final int STRING_SEARCHWORD = 30;
 	public static final int STRING_SKIN_NAME = 50;
 	public static final int STRING_SKIN_AUTHOR = 51;
@@ -628,12 +621,6 @@ public class SkinProperty {
 	public static final int VALUE_JUDGE_1P_DURATION = 525;
 	public static final int VALUE_JUDGE_2P_DURATION = 526;
 	public static final int VALUE_JUDGE_3P_DURATION = 527;
-	public static final int VALUE_JUDGE_1P_KEYS_DURATION = 528;
-	public static final int VALUE_JUDGE_2P_KEYS_DURATION = 529;
-	public static final int VALUE_JUDGE_3P_KEYS_DURATION = 530;
-	public static final int VALUE_JUDGE_1P_SCRATCH_DURATION = 531;
-	public static final int VALUE_JUDGE_2P_SCRATCH_DURATION = 532;
-	public static final int VALUE_JUDGE_3P_SCRATCH_DURATION = 533;
 
 	public static final int OPTION_RANDOM_VALUE = -1;
 
@@ -883,19 +870,6 @@ public class SkinProperty {
 	public static final int OPTION_3P_GOOD = 363;
 	public static final int OPTION_3P_LATE = 1363;
 
-	public static final int OPTION_1P_KEYS_EARLY = 1244;
-	public static final int OPTION_1P_KEYS_LATE = 1245;
-	public static final int OPTION_1P_SCRATCH_EARLY = 1246;
-	public static final int OPTION_1P_SCRATCH_LATE = 1247;
-	public static final int OPTION_2P_KEYS_EARLY = 1264;
-	public static final int OPTION_2P_KEYS_LATE = 1265;
-	public static final int OPTION_2P_SCRATCH_EARLY = 1266;
-	public static final int OPTION_2P_SCRATCH_LATE = 1267;
-	public static final int OPTION_3P_KEYS_EARLY = 1364;
-	public static final int OPTION_3P_KEYS_LATE = 1365;
-	public static final int OPTION_3P_SCRATCH_EARLY = 1366;
-	public static final int OPTION_3P_SCRATCH_LATE = 1367;
-
 	public static final int OPTION_PERFECT_EXIST = 2241;
 	public static final int OPTION_GREAT_EXIST = 2242;
 	public static final int OPTION_GOOD_EXIST = 2243;
@@ -1011,7 +985,6 @@ public class SkinProperty {
 	public static final int OPTION_PRACTICE_ITEM16 = 3015;
 	public static final int OPTION_PRACTICE_ITEM1_SELECTED = 3020;
 	public static final int OPTION_PRACTICE_ITEM16_SELECTED = 3035;
-	public static final int OPTION_RESULT_LEVEL_REVIEW_EDITABLE = 3040;
 
 	// オフセットのユーザー定義は40番以降を使用して下さい
 
