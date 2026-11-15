@@ -159,7 +159,7 @@ public class JudgeManager {
         algorithm = JudgeAlgorithm.valueOf(resource.getPlayerConfig().getPlayConfig(orgmode).getPlayconfig().getJudgetype());
         JudgeProperty rule = BMSPlayerRule.getBMSPlayerRule(orgmode).judge;
     
-        if(resource.getPlayerConfig().isDxMode() && model.getMode() == Mode.POPN_9K) {
+        if(resource.getPlayerConfig().isDxMode() && (model.getMode() == Mode.POPN_5K || model.getMode() == Mode.POPN_9K)) {
         	rule = JudgeProperty.POP;
         }
         else if(resource.getPlayerConfig().isDxMode()) {
