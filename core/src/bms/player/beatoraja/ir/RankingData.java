@@ -88,11 +88,12 @@ public class RankingData {
             if (song instanceof SongData songData) {
                 response = ir[0].connection.getPlayData(null, new IRChartData(songData));
                 if (response.isSucceeded()) {
-                    var lnMode = mainstate.main.getPlayerResource().getPlayerConfig().getLnmode();
+                    var lnMode = mainstate.main.getPlayerConfig().getLnmode(songData.getMode());
                     mainstate.main.getRivalDataAccessor().updateAllRivalsScores(response.getData(), songData, lnMode);
                 }
             } else if (song instanceof CourseData) {
-                response = ir[0].connection.getCoursePlayData(null, new IRCourseData((CourseData) song, mainstate.main.getPlayerConfig().getLnmode()));
+                final CourseData courseData = (CourseData) song;
+                response = ir[0].connection.getCoursePlayData(null, new IRCourseData(courseData, mainstate.main.getPlayerConfig().getCourseLnmode(courseData.getSong())));
             }
 	        if(response.isSucceeded()) {
 	        	updateScore(ir[0].player, mainstate.main.getRivalDataAccessor(), response.getData(), mainstate.getScoreDataProperty().getScoreData());

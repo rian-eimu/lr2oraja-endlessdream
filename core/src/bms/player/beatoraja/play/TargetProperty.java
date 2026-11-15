@@ -195,7 +195,7 @@ class RivalTargetProperty extends TargetProperty {
     	case INDEX:
     		name = info != null ? info.getName() : name;
             var songData = main.getPlayerResource().getSongdata();
-            var lnMode = main.getPlayerConfig().getLnmode();
+            var lnMode = main.getPlayerResource().getLnmode();
     		score = rivalDataAccessor.getRivalScore(index, songData, lnMode);
         	break;
     	case RANK:
@@ -248,7 +248,7 @@ class RivalTargetProperty extends TargetProperty {
         Array<ScoreData> scoreArray = new Array<>();
 
         var songData = main.getPlayerResource().getSongdata();
-        var lnMode = main.getPlayerConfig().getLnmode();
+        var lnMode = main.getPlayerResource().getLnmode();
         var rivalsScores = rivalDataAccessor.getAllRivalsScores(songData, lnMode);
         rivalsScores.forEach(scoreArray::add);
 
@@ -311,7 +311,7 @@ class NextRankTargetProperty extends TargetProperty {
     @Override
     public ScoreData getTarget(MainController main) {
         ScoreData now = main.getPlayDataAccessor().readScoreData(main.getPlayerResource().getBMSModel()
-                , main.getPlayerConfig().getLnmode());
+                , main.getPlayerResource().getLnmode());
         final int nowscore = now != null ? now.getExscore() : 0;
         final int max = main.getPlayerResource().getBMSModel().getTotalNotes() * 2;
         int targetscore = max;
@@ -425,7 +425,7 @@ class InternetRankingTargetProperty extends TargetProperty {
     
     private int getTargetRank(MainController main, RankingData ranking) {
         ScoreData now = main.getPlayDataAccessor().readScoreData(main.getPlayerResource().getBMSModel()
-                , main.getPlayerConfig().getLnmode());
+                , main.getPlayerResource().getLnmode());
         final int nowscore = now != null ? now.getExscore() : 0;
 		switch(target) {
 		case NEXT:

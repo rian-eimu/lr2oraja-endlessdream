@@ -14,6 +14,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.*;
 
+import bms.model.BMSModel;
 import bms.model.Mode;
 import bms.player.beatoraja.*;
 import bms.player.beatoraja.Config.SongPreview;
@@ -176,12 +177,12 @@ public final class MusicSelector extends MainState {
 		showNoteGraph = false;
 		resource.setPlayerData(main.getPlayDataAccessor().readPlayerData());
 		if (playedsong != null) {
-			scorecache.update(playedsong, config.getLnmode());
+			scorecache.update(playedsong, config.getLnmode(playedsong.getMode()));
 			playedsong = null;
 		}
 		if (playedcourse != null) {
 			for (SongData sd : playedcourse.getSong()) {
-				scorecache.update(sd, config.getLnmode());
+				scorecache.update(sd, config.getLnmode(sd.getMode()));
 			}
 			playedcourse = null;
 		}
@@ -252,8 +253,7 @@ public final class MusicSelector extends MainState {
 			if (current instanceof SongBar && ((SongBar) current).existsSong()) {
 				SongData song = resource.getSongdata();
 				new Thread(() ->  {
-					song.setBMSModel(resource.loadBMSModel(Paths.get(((SongBar) current).getSongData().getPath()),
-							config.getLnmode()));
+					song.setBMSModel(resource.loadBMSModel(Paths.get(((SongBar) current).getSongData().getPath())));
 				}).start();;
 			}
 			showNoteGraph = true;
@@ -263,20 +263,20 @@ public final class MusicSelector extends MainState {
 			currentRankingDuration = -1;
 			if (current instanceof SongBar && ((SongBar) current).existsSong() && play == null) {
 				SongData song = ((SongBar) current).getSongData();
-				RankingData irc = main.getRankingDataCache().get(song, config.getLnmode());
+				RankingData irc = main.getRankingDataCache().get(song, config.getLnmode(song.getMode()));
 				if(irc == null) {
 					irc = new RankingData();
-					main.getRankingDataCache().put(song, config.getLnmode(), irc);
+					main.getRankingDataCache().put(song, config.getLnmode(song.getMode()), irc);
 				}
 				irc.load(this, song);
 	            currentir = irc;
 			}				
 			if (current instanceof GradeBar && ((GradeBar) current).existsAllSongs() && play == null) {
 				CourseData course = ((GradeBar) current).getCourseData();
-				RankingData irc = main.getRankingDataCache().get(course, config.getLnmode());
+				RankingData irc = main.getRankingDataCache().get(course, config.getCourseLnmode(course.getSong()));
 				if(irc == null) {
 					irc = new RankingData();
-					main.getRankingDataCache().put(course, config.getLnmode(), irc);
+					main.getRankingDataCache().put(course, config.getCourseLnmode(course.getSong()), irc);
 				}
 				irc.load(this, course);
 	            currentir = irc;
@@ -430,7 +430,7 @@ public final class MusicSelector extends MainState {
 			
 			if(main.getIRStatus().length > 0 && currentir == null) {
 				currentir = new RankingData();
-				main.getRankingDataCache().put(song, config.getLnmode(), currentir);
+				main.getRankingDataCache().put(song, resource.getLnmode(), currentir);
 			}
 			resource.setRankingData(currentir);
 			ScoreData rival = current.getRivalScore();
@@ -461,7 +461,7 @@ public final class MusicSelector extends MainState {
 				}
 				break;							
 			case REPLAYCHART:
-				replay = main.getPlayDataAccessor().readReplayData(resource.getBMSModel(), config.getLnmode(), play.id);
+				replay = main.getPlayDataAccessor().readReplayData(resource.getBMSModel(), resource.getLnmode(), play.id);
 				if (replay != null) {
 					chartOption = new ReplayData();
 					chartOption.randomoption = replay.randomoption;
@@ -473,7 +473,7 @@ public final class MusicSelector extends MainState {
 				}
 				break;
 			case REPLAYOPTION:
-				replay = main.getPlayDataAccessor().readReplayData(resource.getBMSModel(), config.getLnmode(), play.id);
+				replay = main.getPlayDataAccessor().readReplayData(resource.getBMSModel(), resource.getLnmode(), play.id);
 				if (replay != null) {
 					chartOption = new ReplayData();
 					chartOption.randomoption = replay.randomoption;
@@ -565,13 +565,13 @@ public final class MusicSelector extends MainState {
 							}
 							break;
 						case LN:
-							config.setLnmode(0);
+							setCourseLnmode(BMSModel.LNTYPE_LONGNOTE);
 							break;
 						case CN:
-							config.setLnmode(1);
+							setCourseLnmode(BMSModel.LNTYPE_CHARGENOTE);
 							break;
 						case HCN:
-							config.setLnmode(2);
+							setCourseLnmode(BMSModel.LNTYPE_HELLCHARGENOTE);
 							break;
 						default:
 							break;
@@ -585,13 +585,13 @@ public final class MusicSelector extends MainState {
 
 			if(main.getIRStatus().length > 0 && currentir == null) {
 				currentir = new RankingData();
-				main.getRankingDataCache().put(gradeBar.getCourseData(), config.getLnmode(), currentir);
+				main.getRankingDataCache().put(gradeBar.getCourseData(), resource.getCourseLnmode(), currentir);
 			}
 			
-			RankingData songrank = main.getRankingDataCache().get(songs[0], config.getLnmode());
+			RankingData songrank = main.getRankingDataCache().get(songs[0], resource.getLnmode());
 			if(main.getIRStatus().length > 0 && songrank == null) {
 				songrank = new RankingData();
-				main.getRankingDataCache().put(songs[0], config.getLnmode(), songrank);
+				main.getRankingDataCache().put(songs[0], resource.getLnmode(), songrank);
 			}
 			resource.setRankingData(songrank);
 			resource.setRivalScoreData(null);
@@ -697,10 +697,10 @@ public final class MusicSelector extends MainState {
 		final Bar current = manager.getSelected();
 		if(main.getIRStatus().length > 0) {
 			if(current instanceof SongBar && ((SongBar) current).existsSong()) {
-				currentir = main.getRankingDataCache().get(((SongBar) current).getSongData(), config.getLnmode());
+				currentir = main.getRankingDataCache().get(((SongBar) current).getSongData(), config.getLnmode(((SongBar) current).getSongData().getMode()));
 				currentRankingDuration = (currentir != null ? Math.max(rankingReloadDuration - (System.currentTimeMillis() - currentir.getLastUpdateTime()) ,0) : 0) + rankingDuration;
 			} else if(current instanceof GradeBar && ((GradeBar) current).existsAllSongs()) {
-				currentir = main.getRankingDataCache().get(((GradeBar) current).getCourseData(), config.getLnmode());
+				currentir = main.getRankingDataCache().get(((GradeBar) current).getCourseData(), config.getCourseLnmode(((GradeBar) current).getSongDatas()));
 				currentRankingDuration = (currentir != null ? Math.max(rankingReloadDuration - (System.currentTimeMillis() - currentir.getLastUpdateTime()) ,0) : 0) + rankingDuration;
 			} else {
 				currentir = null;
@@ -756,9 +756,9 @@ public final class MusicSelector extends MainState {
 			return;
 		}
 		ScoreData bestScore = main.getPlayDataAccessor().readBestScoreDataFromLog(pendingOrajaHelperSong.getSha256(),
-				pendingOrajaHelperSong.hasUndefinedLongNote(), config.getLnmode());
+				pendingOrajaHelperSong.hasUndefinedLongNote(), config.getLnmode(pendingOrajaHelperSong.getMode()));
 		ScoreData minBpScore = main.getPlayDataAccessor().readMinBpScoreDataFromLog(pendingOrajaHelperSong.getSha256(),
-				pendingOrajaHelperSong.hasUndefinedLongNote(), config.getLnmode());
+				pendingOrajaHelperSong.hasUndefinedLongNote(), config.getLnmode(pendingOrajaHelperSong.getMode()));
 		OrajaHelperClient.sendSelect(pendingOrajaHelperSong, getSongMode(pendingOrajaHelperSong), bestScore, minBpScore);
 		pendingOrajaHelperSongSent = true;
 	}
@@ -773,6 +773,52 @@ public final class MusicSelector extends MainState {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * 選択中のバーで LN モードの表示・変更対象とするモードを返す。
+	 * <ul>
+	 * <li>楽曲バー: 楽曲のモード</li>
+	 * <li>コースバー: 1 曲目のモード (コース内でモードが混在していても 1 曲目を代表とする)</li>
+	 * <li>それ以外 (フォルダ・コマンド等、モード未確定): 選曲モードフィルターの代表モード。ALL KEYS 等で代表モードがない場合は BEAT_7K</li>
+	 * </ul>
+	 * {@link #getSelectedBarPlayConfig()} の楽曲/フォルダ時の扱いに合わせている。
+	 *
+	 * @return LN モードの対象モード (null にはならない)
+	 */
+	public Mode getSelectedBarLnmodeTarget() {
+		Bar current = manager.getSelected();
+		Mode mode = null;
+		if (current instanceof SongBar songbar && songbar.existsSong()) {
+			mode = getSongMode(songbar.getSongData());
+		} else if (current instanceof GradeBar grade && grade.existsAllSongs() && grade.getSongDatas().length > 0) {
+			mode = getSongMode(grade.getSongDatas()[0]);
+		} else {
+			mode = config.getMode();
+		}
+		return mode != null ? mode : Mode.BEAT_7K;
+	}
+
+	/**
+	 * @return 選択中のバーに対応する LN モード ({@link #getSelectedBarLnmodeTarget()} のモードの設定値)
+	 */
+	public int getSelectedBarLnmode() {
+		return config.getLnmode(getSelectedBarLnmodeTarget());
+	}
+
+	/**
+	 * コースの LN 制約 (LN/CN/HCN) に合わせて、コースに含まれる全モードの LN モードを変更し、
+	 * 読み込み済みのコース譜面にも反映する
+	 */
+	private void setCourseLnmode(int lnmode) {
+		final BMSModel[] models = resource.getCourseBMSModels();
+		if (models == null) {
+			return;
+		}
+		for (BMSModel model : models) {
+			config.setLnmode(model.getMode(), lnmode);
+			PlayerResource.applyLnmode(model, lnmode);
+		}
 	}
 
 	public PlayConfig getSelectedBarPlayConfig() {

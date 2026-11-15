@@ -1221,7 +1221,15 @@ public class IntegerPropertyFactory {
 					}
 				}
 			}
-			return state.resource.getPlayerConfig().getLnmode();
+			if (state instanceof MusicSelector selector) {
+				// 選択中のバーのモード (未確定時はモードフィルターの代表モード) の LN MODE
+				return selector.getSelectedBarLnmode();
+			}
+			if (state.resource.getBMSModel() != null) {
+				// プレイ・リザルト等: 読み込み済み譜面に適用した LN MODE
+				return state.resource.getLnmode();
+			}
+			return state.resource.getPlayerConfig().getLnmode(Mode.BEAT_7K);
 		}),
 		notesdisplaytimingautoadjust(75, (state) -> (state.resource.getPlayerConfig().isNotesDisplayTimingAutoAdjust() ? 1 : 0)),
 		gaugeautoshift(78, (state) -> (state.resource.getPlayerConfig().getGaugeAutoShift())),

@@ -3,6 +3,7 @@ package bms.player.beatoraja.select.bar;
 import java.util.Arrays;
 import bms.model.Mode;
 import bms.player.beatoraja.ModeFilter;
+import bms.player.beatoraja.PlayerConfig;
 import bms.player.beatoraja.ScoreDatabaseAccessor.ScoreDataCollector;
 import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.song.SongData;
@@ -151,6 +152,8 @@ public abstract class DirectoryBar extends Bar {
 			}
 		};
 
-		selector.getScoreDataCache().readScoreDatas(collector, songs, selector.main.getPlayerConfig().getLnmode());
+		// LN MODE は KEY モード毎の設定のため、楽曲毎のモードの値で取得する
+		final PlayerConfig config = selector.main.getPlayerConfig();
+		selector.getScoreDataCache().readScoreDatas(collector, songs, song -> config.getLnmode(song.getMode()));
 	}
 }
