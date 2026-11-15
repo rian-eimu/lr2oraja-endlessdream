@@ -1011,16 +1011,6 @@ public class MainController {
 		return ir;
 	}
 
-	public void syncReviewLevel(String sha256, double level, int lnmode) {
-		if (reviewSync != null) reviewSync.offerLevel(sha256, level, lnmode);
-	}
-
-	public int getReviewLnMode(SongData song) {
-		if (!song.hasUndefinedLongNote() || reviewSync == null) return 0;
-		int fallback = player.getLnmode(song.getMode());
-		return playdata != null ? playdata.getLastPlayedLnMode(song.getSha256(), fallback) : fallback;
-	}
-
 	public SystemSoundManager getSoundManager() {
 		return sound;
 	}
