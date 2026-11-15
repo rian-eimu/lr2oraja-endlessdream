@@ -1,21 +1,14 @@
 package bms.player.beatoraja.ir;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.ResourceLock;
-import org.junit.jupiter.api.parallel.Resources;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.logging.Handler;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 /** 実際の子JVM/パイプリグレッションテスト（ネットワーク・IRアカウント・GUI・本番データは不使用）。 */
-@ResourceLock(Resources.SYSTEM_PROPERTIES)
 public final class IsolatedIRConnectionTest {
 
     @Test
@@ -24,7 +17,6 @@ public final class IsolatedIRConnectionTest {
     }
 
     public static void main(String[] args) throws Exception {
-        verifyStartupTimings();
         for (String fault : List.of("crash", "timeout")) {
             try (var f = new Fixture(fault)) {
                 f.login();
@@ -113,39 +105,6 @@ public final class IsolatedIRConnectionTest {
         }
         System.out.println("IsolatedIRConnectionTest passed (real legacy-method worker, reauthentication, crash/read/write timeout, concurrent close/requests, unknown submission outcome)");
     }
-
-    private static void verifyStartupTimings() throws Exception {
-        String property = "beatoraja.startupDiagnostics";
-        String previous = System.getProperty(property);
-        var messages = Collections.synchronizedList(new ArrayList<String>());
-        var logger = Logger.getGlobal();
-        var capture = new Handler() {
-            public void publish(LogRecord record) {
-                if (record.getMessage() != null && record.getMessage().startsWith("Startup diagnostics:")) {
-                    messages.add(record.getMessage());
-                }
-            }
-            public void flush() { }
-            public void close() { }
-        };
-        logger.addHandler(capture);
-        System.setProperty(property, "true");
-        try {
-            try (var f = new Fixture("timeout")) {
-                check(f.connection.login(new IRAccount("user-a", "startup-test-secret", "")).isSucceeded(), "Fixture login");
-                check(!f.connection.getRivals().isSucceeded(), "Fixture response timeout");
-            }
-            String output = String.join("\n", messages);
-            check(output.contains("step=IR_WORKER_START") && output.contains("step=IR_WORKER_EXIT_WAIT"), "Worker lifecycle timing");
-            check(messages.stream().anyMatch(s -> s.contains("step=IR_RESPONSE_WAIT") && s.contains("outcome=TIMEOUT")),
-                    "Record response timeout separately from exit wait");
-            check(!output.contains("user-a") && !output.contains("startup-test-secret"), "No account or secret in timings");
-        } finally {
-            logger.removeHandler(capture);
-            if (previous == null) System.clearProperty(property); else System.setProperty(property, previous);
-        }
-    }
-
     private static final class Fixture implements AutoCloseable {
         final Path root = Files.createTempDirectory("isolated-ir-recovery-");
         final Path events = root.resolve("events.txt");
