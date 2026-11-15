@@ -97,7 +97,6 @@ public class MainController {
 	private SongInformationAccessor infodb;
 
 	private IRStatus[] ir;
-	private IRReviewSync reviewSync;
 
 	private RivalDataAccessor rivals = new RivalDataAccessor();
 
@@ -232,10 +231,6 @@ public class MainController {
 	}
 
 	private void closeIRConnections() {
-		if (reviewSync != null) {
-			reviewSync.close();
-			reviewSync = null;
-		}
 		if (ir != null) {
 			for (IRStatus status : ir) {
 				if (status != null && status.connection instanceof AutoCloseable closeable) {
@@ -261,15 +256,16 @@ public class MainController {
 			if(ir != null) {
 				if(irconfig.getUserid().length() == 0 || irconfig.getPassword().length() == 0) {
 				} else {
-					try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.IR_LOGIN)) {
-						IRResponse<IRPlayerData> response;
-						try {
-							response = ir.login(new IRAccount(irconfig.getUserid(), irconfig.getPassword(), ""));
-						} catch (IllegalArgumentException e) {
-							logger.info("trying pre-0.8.5 IR login method");
-							response = ir.login(irconfig.getUserid(), irconfig.getPassword());
+					try {
+						IRResponse<IRPlayerData> response = ir.login(new IRAccount(irconfig.getUserid(), irconfig.getPassword(), ""));
+						if(response.isSucceeded()) {
+							irarray.add(new IRStatus(irconfig, ir, response.getData()));
+						} else {
+							logger.warn("IRへのログイン失敗 : {}", response.getMessage());
 						}
-						timing.outcome(response.isSucceeded() ? StartupDiagnostics.Outcome.OK : StartupDiagnostics.Outcome.FAILED);
+					} catch (IllegalArgumentException e) {
+						logger.info("trying pre-0.8.5 IR login method");
+						IRResponse<IRPlayerData> response = ir.login(irconfig.getUserid(), irconfig.getPassword());
 						if(response.isSucceeded()) {
 							irarray.add(new IRStatus(irconfig, ir, response.getData()));
 						} else {
@@ -281,7 +277,6 @@ public class MainController {
 
 		}
 		ir = irarray.toArray(IRStatus.class);
-		reviewSync = IRReviewSync.forPrimary(player.getIrconfig(), ir);
 		
 		rivals.update(this);
 	}
@@ -462,22 +457,18 @@ public class MainController {
             ImGuiRenderer.init();
         }
 
-        try (var perf = PerformanceMetrics.get().Event("System font load");
-             var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.SYSTEM_FONT)) {
+        try (var perf = PerformanceMetrics.get().Event("System font load")) {
 			FreeTypeFontGenerator generator = new FreeTypeFontGenerator(Gdx.files.internal(config.getSystemfontpath()));
 			FreeTypeFontParameter parameter = new FreeTypeFontParameter();
 			parameter.size = 24;
 			systemfont = generator.generateFont(parameter);
 			generator.dispose();
-			timing.outcome(StartupDiagnostics.Outcome.OK);
 		} catch (GdxRuntimeException e) {
 			logger.error("System Font読み込み失敗");
 		}
 
-        try (var perf = PerformanceMetrics.get().Event("Input Processor constructor");
-             var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.INPUT_DEVICES)) {
+        try (var perf = PerformanceMetrics.get().Event("Input Processor constructor")) {
 			input = new BMSPlayerInputProcessor(config, player);
-			timing.outcome(StartupDiagnostics.Outcome.OK);
 		}
 
 		switch(config.getAudioConfig().getDriver()) {
@@ -673,7 +664,6 @@ public class MainController {
 
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-		final MainState drawnState = current;
 		current.render();
 		sprite.begin();
 		if (current.getSkin() != null) {
@@ -681,10 +671,6 @@ public class MainController {
 			current.getSkin().drawAllObjects(sprite, current);
 		}
 		sprite.end();
-
-		if (current == drawnState && current instanceof MusicSelector && current.getSkin() != null && StartupDiagnostics.enabled()) {
-			StartupDiagnostics.selectionFrame(timer.isTimerOn(bms.player.beatoraja.skin.SkinProperty.TIMER_STARTINPUT));
-		}
 
 		final Stage stage = current.getStage();
 		if (stage != null) {
@@ -754,18 +740,6 @@ public class MainController {
 			}
 
 			sprite.end();
-		}
-
-		if (systemfont != null && player.isIndependentPlaySides()) {
-			PlaySide side = current instanceof MusicSelector select ? select.getSelectedPlaySide()
-					: current instanceof SkinConfiguration skin && PlaySide.supports(skin.getSkinType()) ? skin.getPlaySide() : null;
-			if (side != null) {
-				sprite.begin();
-				systemfont.setColor(Color.WHITE);
-				systemfont.draw(sprite, side == PlaySide.P2 ? "SP SIDE: 2P" : "SP SIDE: 1P",
-						Math.max(0, config.getResolution().width - 245), config.getResolution().height - 5);
-				sprite.end();
-			}
 		}
 
         periodicConfigSave();
@@ -909,9 +883,7 @@ public class MainController {
 	}
 
 	private void setCursorCatched(long time) {
-		PlaySide side = current instanceof BMSPlayer ? resource.getPlaySide()
-				: current instanceof MusicSelector select ? select.getSelectedPlaySide() : PlaySide.P1;
-		PlayModeConfig.MouseScratchConfig config = player.getPlayInputConfig(player.getMode(), side)
+		PlayModeConfig.MouseScratchConfig config = player.getPlayConfig(player.getMode())
 				.getKeyboardConfig()
 				.getMouseScratchConfig();
         if (config.isMouseScratchEnabled()) {
@@ -988,14 +960,9 @@ public class MainController {
 	}
 
 	public void saveConfig(){
-		saveConfigAndReportPlayerResult();
-	}
-
-	public boolean saveConfigAndReportPlayerResult() {
 		Config.write(config);
-		boolean saved = PlayerConfig.writeWithResult(config.getPlayerpath(), player);
-		if (saved) logger.info("設定情報を保存");
-		return saved;
+		PlayerConfig.write(config.getPlayerpath(), player);
+		logger.info("設定情報を保存");
 	}
 
     private long lastConfigSave = 0;

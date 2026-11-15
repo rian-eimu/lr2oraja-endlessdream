@@ -5,8 +5,6 @@ import java.util.Arrays;
 
 import bms.player.beatoraja.PlayModeConfig.ControllerConfig;
 import com.badlogic.gdx.controllers.Controller;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * 専用コントローラー入力処理用クラス
@@ -14,8 +12,6 @@ import org.slf4j.LoggerFactory;
  * @author exch
  */
 public class BMControllerInputProcessor extends BMSPlayerInputDevice {
-	private static final Logger logger = LoggerFactory.getLogger(BMControllerInputProcessor.class);
-	private static final boolean INPUT_DIAGNOSTICS = Boolean.getBoolean("beatoraja.inputDiagnostics");
 
 	// TODO アナログデバイスと設計(クラス)を分けたい
 
@@ -67,10 +63,6 @@ public class BMControllerInputProcessor extends BMSPlayerInputDevice {
 	 * 最後に押したボタン
 	 */
 	private int lastPressedButton = -1;
-	private DeviceButtonCapture deviceButtonCapture;
-	private boolean deviceSelectionActive;
-	private long selectionReleasedAt = Long.MIN_VALUE;
-	private int logicalTraceRemaining;
 	/**
 	 * JKOC_HACK (UP,DOWNの誤反応対策用？)
  	 */
@@ -135,53 +127,8 @@ public class BMControllerInputProcessor extends BMSPlayerInputDevice {
 		lastPressedButton = -1;
 	}
 
-	public void syncHeldButtons() {
-		clear();
-		synchronized (this) {
-			if (deviceButtonCapture != null) {
-				deviceButtonCapture.reset();
-			}
-		}
-		if (controller == null) {
-			Arrays.fill(buttonstate, false);
-			return;
-		}
-		for (int i = 0; i < AXIS_LENGTH; i++) {
-			axis[i] = controller.getAxis(i);
-		}
-		for (int button = 0; button < buttonstate.length; button++) {
-			if (button <= BMKeys.HAT1_BOTTOM) {
-				buttonstate[button] = controller.getButton(button);
-			} else if (jkoc) {
-				if (button == BMKeys.AXIS1_PLUS) {
-					buttonstate[button] = (axis[0] > 0.9) || (axis[3] > 0.9);
-				} else if (button == BMKeys.AXIS1_MINUS) {
-					buttonstate[button] = (axis[0] < -0.9) || (axis[3] < -0.9);
-				} else {
-					buttonstate[button] = false;
-				}
-			} else if (analogScratchAlgorithm != null) {
-				buttonstate[button] = false;
-			} else {
-				int axisIndex = (button - BMKeys.AXIS1_PLUS) / 2;
-				boolean plusRange = (button - BMKeys.AXIS1_PLUS) % 2 == 0;
-				buttonstate[button] = scratchInput(axisIndex, plusRange);
-			}
-		}
-	}
-
 	public void poll(final long microtime) {
 		if (!enabled) return;
-
-		synchronized (this) {
-			if (deviceButtonCapture != null && controller != null) {
-				deviceButtonCapture.sample(controller);
-				if (deviceButtonCapture.anyDown()) selectionReleasedAt = Long.MIN_VALUE;
-				else if (selectionReleasedAt == Long.MIN_VALUE) selectionReleasedAt = microtime;
-				else if (!deviceSelectionActive && microtime >= selectionReleasedAt + duration * 1000L)
-					deviceButtonCapture = null;
-			}
-		}
 	
 		// AXISの更新
 		for (int i = 0; i < AXIS_LENGTH ; i++) {
@@ -280,47 +227,15 @@ public class BMControllerInputProcessor extends BMSPlayerInputDevice {
 		}
 	}
 
-	public synchronized int getLastPressedButton() {
+	public int getLastPressedButton() {
 		return lastPressedButton;
 	}
 
-	public synchronized void setLastPressedButton(int lastPressedButton) {
-		if (lastPressedButton >= 0 && deviceButtonCapture != null) return;
+	public void setLastPressedButton(int lastPressedButton) {
 		this.lastPressedButton = lastPressedButton;
-		if (INPUT_DIAGNOSTICS && lastPressedButton >= 0 && logicalTraceRemaining > 0) {
-			logicalTraceRemaining--;
-			logger.info("KeyConfig controller input: device={}, stage=logical, index={}", name, lastPressedButton);
-		}
 	}
 
-	public synchronized int takeLastPressedButton() {
-		int button = lastPressedButton;
-		lastPressedButton = -1;
-		return button;
-	}
-
-	public synchronized void setDeviceSelectionCapture(boolean enabled) {
-		deviceSelectionActive = enabled && controller != null;
-		if (deviceSelectionActive) {
-			deviceButtonCapture = new DeviceButtonCapture();
-			selectionReleasedAt = Long.MIN_VALUE;
-		}
-		lastPressedButton = -1;
-	}
-
-	public synchronized int takeDeviceSelectionButton() {
-		return !deviceSelectionActive || deviceButtonCapture == null ? -1 : deviceButtonCapture.take();
-	}
-
-	public synchronized void setAssignmentTrace(boolean enabled) {
-		logicalTraceRemaining = INPUT_DIAGNOSTICS && enabled ? 32 : 0;
-	}
-
-	public String getAssignmentTraceId() {
-		return name;
-	}
-
-	public synchronized void setEnable(boolean enabled) {
+	public void setEnable(boolean enabled) {
 		this.enabled = enabled;
 	}
 

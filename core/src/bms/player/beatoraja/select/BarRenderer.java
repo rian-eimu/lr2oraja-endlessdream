@@ -583,13 +583,6 @@ public final class BarRenderer {
 		}
 	}
 
-	void resetSideInput() {
-		analogScrollBuffer = 0;
-		duration = 0;
-		angle = 0;
-		keyinput = false;
-	}
-
 	public void updateBarText() {
 		bartextupdate = true;
 	}

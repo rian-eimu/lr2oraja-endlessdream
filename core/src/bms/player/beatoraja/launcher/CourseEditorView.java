@@ -63,7 +63,7 @@ public class CourseEditorView implements Initializable {
 	
 	private CourseData selectedCourse;
 	
-	private TableChartLookup songdb;
+	private SongDatabaseAccessor songdb;
 	
 	public void initialize(URL arg0, ResourceBundle arg1) {
 		gradeType.getItems().setAll(null, CLASS, MIRROR, RANDOM);
@@ -107,7 +107,7 @@ public class CourseEditorView implements Initializable {
 		updateCourse(null);
 	}
 	
-	protected void setSongDatabaseAccessor(TableChartLookup songdb) {
+	protected void setSongDatabaseAccessor(SongDatabaseAccessor songdb) {
 		this.songdb = songdb;
 	}
 
@@ -116,9 +116,9 @@ public class CourseEditorView implements Initializable {
 			return;
 		}
 		if(TableEditorView.isMd5OrSha256Hash(search.getText())) {
-			searchSongs.getItems().setAll(songdb.byHash(search.getText()));
+			searchSongs.getItems().setAll(songdb.getSongDatas(new String[]{search.getText()}));			
 		} else if(search.getText().length() > 1) {
-			searchSongs.getItems().setAll(songdb.byText(search.getText()));
+			searchSongs.getItems().setAll(songdb.getSongDatasByText(search.getText()));			
 		}
 	}
 

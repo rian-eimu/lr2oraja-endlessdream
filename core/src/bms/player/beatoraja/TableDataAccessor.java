@@ -103,13 +103,8 @@ public class TableDataAccessor {
 	 * @return 全てのキャッシュされた難易度表データ
 	 */
 	public TableData[] readAll() {
-		return readAllExcept(null);
-	}
-
-	public TableData[] readAllExcept(String filename) {
 		try (Stream<Path> paths = Files.list(Paths.get(tabledir))) {
-			return paths.filter(p -> !p.getFileName().toString().equals(filename))
-					.map(TableData::read).filter(Objects::nonNull).toArray(TableData[]::new);
+			return paths.map(p -> TableData.read(p)).filter(Objects::nonNull).toArray(TableData[]::new);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

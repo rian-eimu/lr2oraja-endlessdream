@@ -10,11 +10,9 @@ import bms.player.beatoraja.play.SkinNote.SkinLane;
 import bms.model.*;
 import bms.player.beatoraja.skin.Skin.SkinObjectRenderer;
 import bms.player.beatoraja.skin.SkinObject.SkinOffset;
-import bms.player.beatoraja.skin.SkinObject;
 import bms.player.beatoraja.skin.SkinImage;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.g2d.*;
@@ -43,10 +41,6 @@ public class LaneRenderer {
 	private TimeLine[] timelines;
 
 	private int pos;
-	private final NotePositionSmoother notePositionSmoother;
-	private long nextNoteRefreshCheck;
-	private long noteMonitor;
-	private int noteRefreshRate;
 
 	private final BMSPlayer main;
 
@@ -74,7 +68,6 @@ public class LaneRenderer {
 	public LaneRenderer(BMSPlayer main, BMSModel model) {
 
 		this.main = main;
-		notePositionSmoother = main.main.getConfig().isNotePositionSmoothingEnabled() ? new NotePositionSmoother() : null;
 		Pixmap hp = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
 		hp.drawPixel(0, 0, Color.toIntBits(255, 255, 255, 255));
 		hp.dispose();
@@ -415,39 +408,6 @@ public class LaneRenderer {
 	}
 
 	public synchronized void drawLane(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets) {
-		drawLane(sprite, time, lanes, offsets, 0);
-	}
-
-	private long notePositionTimeOffset(long microtime) {
-		if (notePositionSmoother == null) return 0;
-		if (main.getState() != BMSPlayer.STATE_PLAY || !main.timer.isTimerOn(TIMER_PLAY)
-				|| !(Gdx.graphics instanceof Lwjgl3Graphics graphics)) {
-			notePositionSmoother.reset();
-			nextNoteRefreshCheck = 0;
-			return 0;
-		}
-		final long now = main.timer.getNowMicroTime();
-		final long origin = main.timer.getMicroTimer(TIMER_PLAY);
-		final Config systemConfig = main.main.getConfig();
-		if (!systemConfig.isVsync()) {
-			nextNoteRefreshCheck = 0;
-			return notePositionSmoother.sampleCapped(microtime, origin, systemConfig.getMaxFramePerSecond(), now);
-		}
-		if (nextNoteRefreshCheck == 0 || now >= nextNoteRefreshCheck) {
-			nextNoteRefreshCheck = now + 250_000;
-			if (graphics.getDisplayMode() instanceof Lwjgl3Graphics.Lwjgl3DisplayMode mode) {
-				if (noteMonitor != mode.getMonitor()) notePositionSmoother.reset();
-				noteMonitor = mode.getMonitor();
-				noteRefreshRate = mode.refreshRate;
-			} else {
-				noteRefreshRate = 0;
-			}
-		}
-		return notePositionSmoother.sample(microtime, origin, noteRefreshRate);
-	}
-
-	public synchronized void drawLane(SkinObjectRenderer sprite, long time, SkinLane[] lanes, SkinOffset[] offsets, int offsetcenter) {
-		final boolean anchored = offsetcenter >= 1 && offsetcenter <= 9;
 		float offsetX = 0;
 		float offsetY = 0;
 		float offsetW = 0;
@@ -457,10 +417,6 @@ public class LaneRenderer {
 			offsetY += offset.y;
 			offsetW += offset.w;
 			offsetH += offset.h;
-		}
-		if (anchored) {
-			offsetX -= offsetW * SkinObject.getOffsetCenterX(offsetcenter);
-			offsetY -= offsetH * SkinObject.getOffsetCenterY(offsetcenter);
 		}
 		
 		final long nowtime = time;
@@ -478,10 +434,9 @@ public class LaneRenderer {
 		double bpm = model.getBpm();
 		double nbpm = bpm;
 		double nscroll = 1.0;
-		int nextTimeline = pos > 5 ? pos - 5 : 0;
-		for (; nextTimeline < timelines.length && timelines[nextTimeline].getMicroTime() <= microtime; nextTimeline++) {
-			nbpm = timelines[nextTimeline].getBPM();
-			nscroll = timelines[nextTimeline].getScroll();
+		for (int i = (pos > 5 ? pos - 5 : 0); i < timelines.length && timelines[i].getMicroTime() <= microtime; i++) {
+			nbpm = timelines[i].getBPM();
+			nscroll = timelines[i].getScroll();
 		}
 		nowbpm = nbpm;
 		final boolean enableConstant = playconfig.isEnableConstant() && (main.getState() != BMSPlayer.STATE_PRACTICE);
@@ -492,15 +447,6 @@ public class LaneRenderer {
 		final double hu = lanes[0].region.y + lanes[0].region.height;
 		final double hl = playconfig.isEnablelift() ? lanes[0].region.y + lanes[0].region.height * playconfig.getLift() : lanes[0].region.y;
 		final double rxhs = (hu - hl) * hispeed * speed;
-		final long noteTimeOffset = notePositionTimeOffset(microtime);
-		double noteYOffset = 0;
-		if (noteTimeOffset != 0 && nextTimeline > 0 && nextTimeline < timelines.length) {
-			final TimeLine previous = timelines[nextTimeline - 1];
-			final TimeLine next = timelines[nextTimeline];
-			noteYOffset = NotePositionSmoother.positionOffset(microtime, noteTimeOffset,
-					previous.getMicroTime() + previous.getMicroStop(), next.getMicroTime(),
-					(next.getSection() - previous.getSection()) * previous.getScroll() * rxhs);
-		}
 		double y = hl;
 
 		final float lanecover = playconfig.isEnablelanecover() ? playconfig.getLanecover() : 0;
@@ -717,8 +663,6 @@ public class LaneRenderer {
 					y += tl.getSection() * (tl.getMicroTime() - microtime) / tl.getMicroTime() * rxhs;
 				}
 			}
-			// Keep timeline traversal, visibility and lane state on the uncorrected clock.
-			final double noteY = tl.getMicroTime() > microtime ? y + noteYOffset : y;
 			// ノート描画
 			for (int lane = 0; lane < lanes.length; lane++) {
 				final float scale = lanes[lane].scale;
@@ -726,23 +670,20 @@ public class LaneRenderer {
 				if (note != null) {
 					//4分のタイミングでノートを拡大する
 					float dstx = lanes[lane].region.x + offsetX;
-					float dsty = (float) noteY + offsetY;
+					float dsty = (float) y + offsetY;
 					float dstw = lanes[lane].region.width + offsetW;
 					float dsth = scale + offsetH;
-					// Explicit anchors affect offsets only; the beat animation remains centered on the resized note.
-					final float expansionWidth = lanes[lane].region.width + (anchored ? offsetW : 0);
-					final float expansionHeight = scale + (anchored ? offsetH : 0);
 					if(skin.getNoteExpansionRate()[0] != 100 || skin.getNoteExpansionRate()[1] != 100) {
 						if((now - main.getNowQuarterNoteTime()) < noteExpansionTime) {
 							dstw *= 1 + (skin.getNoteExpansionRate()[0]/100.0f - 1) * (now - main.getNowQuarterNoteTime()) / noteExpansionTime;
 							dsth *= 1 + (skin.getNoteExpansionRate()[1]/100.0f - 1) * (now - main.getNowQuarterNoteTime()) / noteExpansionTime;
-							dstx -= (dstw - expansionWidth) / 2;
-							dsty -= (dsth - expansionHeight) / 2;
+							dstx -= (dstw - lanes[lane].region.width) / 2;
+							dsty -= (dsth - scale) / 2;
 						} else if((now - main.getNowQuarterNoteTime()) >= noteExpansionTime && (now - main.getNowQuarterNoteTime()) <= (noteExpansionTime + noteContractionTime)) {
 							dstw *= 1 + (skin.getNoteExpansionRate()[0]/100.0f - 1) * (noteContractionTime - (now - main.getNowQuarterNoteTime() - noteExpansionTime)) / noteContractionTime;
 							dsth *= 1 + (skin.getNoteExpansionRate()[1]/100.0f - 1) * (noteContractionTime - (now - main.getNowQuarterNoteTime() - noteExpansionTime)) / noteContractionTime;
-							dstx -= (dstw - expansionWidth) / 2;
-							dsty -= (dsth - expansionHeight) / 2;
+							dstx -= (dstw - lanes[lane].region.width) / 2;
+							dsty -= (dsth - scale) / 2;
 						}
 					}
 					if (note instanceof NormalNote) {
@@ -773,7 +714,6 @@ public class LaneRenderer {
 							// .getTime());
 							// } else {
 							double dy = 0;
-							boolean clipped = false;
 							TimeLine prevtl = tl;
 							for (int j = i + 1; j < timelines.length
 									&& prevtl.getSection() != ln.getPair().getSection(); j++) {
@@ -785,7 +725,6 @@ public class LaneRenderer {
 									final long scrollStart = prevtl.getMicroTime() + prevtl.getMicroStop();
 									final long span = nowtl.getMicroTime() - scrollStart;
 									if (nowtl.getMicroTime() > lnLimit) {
-										clipped = true;
 										// 表示境界をまたぐ区間は境界までの分だけ伸ばして打ち切る。
 										// 以降は描かないので走査もここで止める
 										if (span > 0) {
@@ -802,16 +741,10 @@ public class LaneRenderer {
 								}
 								prevtl = nowtl;
 							}
-							if (dy > 0 && noteYOffset != 0) {
-								// Move the visible end, keeping held starts and CONSTANT's clipping edge fixed.
-								dy += (clipped || ln.getPair().getMicroTime() == microtime ? 0 : noteYOffset) - (noteY - y);
-							}
 							if (dy > 0) {
 								final float dscale = dsth > scale ? (dsth - scale) / 2 : 0;
-								final float bottom = anchored ? lanes[lane].region.y + (dsty - (float) noteY)
-										: lanes[lane].region.y - dscale;
 								this.drawLongNote(sprite, lanes[lane].longImage, dstx, (float) (dsty + dy), dstw,
-										(float) (dsty < bottom ? dsty - bottom : dy), dsth, lane,
+										(float) (dsty < (lanes[lane].region.y - dscale) ? dsty - (lanes[lane].region.y -dscale) : dy), dsth, lane,
 										ln);
 							}
 							// System.out.println(dy);
@@ -832,9 +765,7 @@ public class LaneRenderer {
 				if (config.isShowhiddennote() && tl.getMicroTime() >= microtime) {
 					final Note hnote = tl.getHiddenNote(lane);
 					if (hnote != null) {
-						sprite.draw(lanes[lane].hiddenImage, lanes[lane].region.x + (anchored ? offsetX : 0),
-								(float) noteY + (anchored ? offsetY : 0), lanes[lane].region.width + (anchored ? offsetW : 0),
-								scale + (anchored ? offsetH : 0));
+						sprite.draw(lanes[lane].hiddenImage, lanes[lane].region.x, (float) y, lanes[lane].region.width, scale);
 					}
 				}
 			}
@@ -894,28 +825,26 @@ public class LaneRenderer {
 						if (note instanceof NormalNote && !((NormalNote) note).isFreeZoneInner() && !note.isDummy()) {
 							// draw normal note
 							//4分のタイミングでノートを拡大する
-							float dstx = lanes[lane].region.x + (anchored ? offsetX : 0);
-							float dsty = (float) y + (anchored ? offsetY : 0);
-							float dstw = lanes[lane].region.width + (anchored ? offsetW : 0);
-							float dsth = scale + (anchored ? offsetH : 0);
-							final float expansionWidth = dstw, expansionHeight = dsth;
+							float dstx = lanes[lane].region.x;
+							float dsty = (float) y;
+							float dstw = lanes[lane].region.width;
+							float dsth = scale;
 							if(skin.getNoteExpansionRate()[0] != 100 || skin.getNoteExpansionRate()[1] != 100) {
 								if((now - main.getNowQuarterNoteTime()) < noteExpansionTime) {
 									dstw *= 1 + (skin.getNoteExpansionRate()[0]/100.0f - 1) * (now - main.getNowQuarterNoteTime()) / noteExpansionTime;
 									dsth *= 1 + (skin.getNoteExpansionRate()[1]/100.0f - 1) * (now - main.getNowQuarterNoteTime()) / noteExpansionTime;
-									dstx -= (dstw - expansionWidth) / 2;
-									dsty -= (dsth - expansionHeight) / 2;
+									dstx -= (dstw - lanes[lane].region.width) / 2;
+									dsty -= (dsth - scale) / 2;
 								} else if((now - main.getNowQuarterNoteTime()) >= noteExpansionTime && (now - main.getNowQuarterNoteTime()) <= (noteExpansionTime + noteContractionTime)) {
 									dstw *= 1 + (skin.getNoteExpansionRate()[0]/100.0f - 1) * (noteContractionTime - (now - main.getNowQuarterNoteTime() - noteExpansionTime)) / noteContractionTime;
 									dsth *= 1 + (skin.getNoteExpansionRate()[1]/100.0f - 1) * (noteContractionTime - (now - main.getNowQuarterNoteTime() - noteExpansionTime)) / noteContractionTime;
-									dstx -= (dstw - expansionWidth) / 2;
-									dsty -= (dsth - expansionHeight) / 2;
+									dstx -= (dstw - lanes[lane].region.width) / 2;
+									dsty -= (dsth - scale) / 2;
 								}
 							}
 							if ( ((note.getState() == 0 || note.getState() >= 4) && tl.getMicroTime() <= microtime) && y >= orgy2) {
 								final TextureRegion s = lanes[lane].noteImage;
-								if(y > orgy) sprite.draw(s, dstx,
-										(float) (orgy + (anchored ? offsetY : 0) - (dsth - expansionHeight) / 2), dstw, dsth);
+								if(y > orgy) sprite.draw(s, dstx, (float) (orgy - (dsth - scale) / 2), dstw, dsth);
 								else sprite.draw(s, dstx, dsty, dstw, dsth);
 							}
 						}

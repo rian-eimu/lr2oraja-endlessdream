@@ -471,27 +471,6 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		}
 	}
 
-	@Override
-	public SongReview getSongReview(String sha256) {
-		return reviewdb != null ? reviewdb.getSongReview(sha256) : null;
-	}
-
-	@Override
-	public boolean setSongReviewLevel(SongData song, double level) {
-		if (reviewdb == null || song == null || !reviewdb.setLevelReview(song.getSha256(), level)) {
-			return false;
-		}
-		SongReview review = song.getSongReview();
-		review.setLevelreview(level);
-		SongReview cached = songReviewCache.get(song.getSha256());
-		if (cached == null) {
-			songReviewCacheLoaded = false;
-		} else if (cached != review) {
-			cached.setLevelreview(level);
-		}
-		return true;
-	}
-
 	/**
 	 * データベースを更新する
 	 * 
