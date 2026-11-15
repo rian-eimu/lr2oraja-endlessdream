@@ -49,11 +49,11 @@ class PseudoBssConverterTest {
         return notes;
     }
 
-    /** スクラッチ LN (slot0-8) + 16 分後 (slot9) の通常スクラッチ */
+    /** スクラッチ LN (slot0-7、16 分の裏で終わる) + 16 分後の拍頭 (slot8) の通常スクラッチ */
     private static String[] pseudoBss() {
         return new String[] {
-                "#00156:" + slots16(0, 1, 8, 1),
-                "#00116:" + slots16(9, 3),
+                "#00156:" + slots16(0, 1, 7, 1),
+                "#00116:" + slots16(8, 3),
         };
     }
 
@@ -73,8 +73,8 @@ class PseudoBssConverterTest {
         assertTrue(end.isEnd());
         assertSame(end, start.getPair());
         assertSame(start, end.getPair());
-        // 終端は通常ノーツの位置 (1 + 9/16 小節) に移動し、通常ノーツの音を引き継ぐ
-        assertEquals(1 + 9.0 / 16, end.getSection(), 1e-9);
+        // 終端は通常ノーツの位置 (1 + 8/16 小節) に移動し、通常ノーツの音を引き継ぐ
+        assertEquals(1 + 8.0 / 16, end.getSection(), 1e-9);
         assertTrue(end.getWav() >= 0);
         assertEquals(before - 1, model.getTotalNotes());
     }
@@ -105,8 +105,8 @@ class PseudoBssConverterTest {
     @Test
     void ignoresKeyLaneLongNote() {
         BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
-                "#00151:" + slots16(0, 1, 8, 1),
-                "#00111:" + slots16(9, 3));
+                "#00151:" + slots16(0, 1, 7, 1),
+                "#00111:" + slots16(8, 3));
         assertEquals(0, PseudoBssConverter.convert(model).bss());
     }
 
@@ -114,16 +114,16 @@ class PseudoBssConverterTest {
     void ignoresExplicitLongNoteType() {
         // #LNMODE 1 で LN と明示された譜面は譜面作者の意図どおり扱う
         BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE, "#LNMODE 1",
-                "#00156:" + slots16(0, 1, 8, 1),
-                "#00116:" + slots16(9, 3));
+                "#00156:" + slots16(0, 1, 7, 1),
+                "#00116:" + slots16(8, 3));
         assertEquals(0, PseudoBssConverter.convert(model).bss());
     }
 
     @Test
     void ignoresMineNoteAfterLongNote() {
         BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
-                "#00156:" + slots16(0, 1, 8, 1),
-                "#001D6:" + slots16(9, 10));
+                "#00156:" + slots16(0, 1, 7, 1),
+                "#001D6:" + slots16(8, 10));
         assertEquals(0, PseudoBssConverter.convert(model).bss());
     }
 
@@ -131,13 +131,13 @@ class PseudoBssConverterTest {
     void convertsMultiplePseudoBssAcrossMeasures() {
         BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
                 "#00156:" + slots16(0, 1, 15, 1),
-                "#00216:" + slots16(0, 3, 9, 4),
-                "#00256:" + slots16(4, 2, 8, 2));
+                "#00216:" + slots16(0, 3, 8, 4),
+                "#00256:" + slots16(4, 2, 7, 2));
         assertEquals(2, PseudoBssConverter.convert(model).bss());
         List<Note> notes = scratchNotes(model);
         assertEquals(4, notes.size());
         assertEquals(2.0, notes.get(1).getSection(), 1e-9);
-        assertEquals(2 + 9.0 / 16, notes.get(3).getSection(), 1e-9);
+        assertEquals(2 + 8.0 / 16, notes.get(3).getSection(), 1e-9);
     }
 
     // ---- 曲終了判定の回帰テスト ----
@@ -192,8 +192,8 @@ class PseudoBssConverterTest {
     void judgeableNoteCountMatchesTotalNotesAfterConversion() {
         BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
                 // 小節 1: 疑似 BSS + 鍵盤 LN + 通常ノーツ
-                "#00156:" + slots16(0, 1, 8, 1),
-                "#00116:" + slots16(9, 3, 14, 4),
+                "#00156:" + slots16(0, 1, 7, 1),
+                "#00116:" + slots16(8, 3, 14, 4),
                 "#00151:" + slots16(0, 1, 4, 1),
                 "#00112:" + slots16(2, 2),
                 // 小節 2-3: 小節をまたぐ疑似 BSS (LN 2.25-2.9375 + 3.0 のノーツ)
@@ -221,8 +221,8 @@ class PseudoBssConverterTest {
                 "#00216:" + slots16(0, 3),
                 "#CONDITIONAL 2.0",
                 "#WHEN MISS >= 0",
-                "#00356:" + slots16(0, 2, 8, 2),
-                "#00316:" + slots16(9, 3),
+                "#00356:" + slots16(0, 2, 7, 2),
+                "#00316:" + slots16(8, 3),
                 "#DEFAULT",
                 "#00311:" + slots16(0, 1),
                 "#ENDCONDITIONAL",
@@ -251,17 +251,16 @@ class PseudoBssConverterTest {
         List<Note> notes = scratchNotes(model);
         assertEquals(4, notes.size());
         assertEquals(2.0, notes.get(1).getSection(), 1e-9);
-        assertEquals(3 + 9.0 / 16, notes.get(3).getSection(), 1e-9);
+        assertEquals(3 + 8.0 / 16, notes.get(3).getSection(), 1e-9);
     }
 
     // ---- 疑似 MSS (スクラッチ LN の連続) ----
 
-    /** LN1 1.0-1.5、LN2 1.5625-2.0 (16 分後に開始)、2.0625 に通常ノーツ */
+    /** LN1 1.0-1.4375、LN2 1.5-1.9375 (16 分後の拍頭で開始)、2.0 (小節頭) に通常ノーツ */
     private static String[] pseudoMss() {
         return new String[] {
-                "#00156:" + slots16(0, 1, 8, 1, 9, 2),
-                "#00256:" + slots16(0, 2),
-                "#00216:" + slots16(1, 3),
+                "#00156:" + slots16(0, 1, 7, 1, 8, 2, 15, 2),
+                "#00216:" + slots16(0, 3),
         };
     }
 
@@ -295,9 +294,9 @@ class PseudoBssConverterTest {
         // 中間ノート: 区間 1 の終端は区間 2 の始端の直前に移動する
         assertEquals(s2.getSection() - PseudoBssConverter.MSS_LINK_SECTION_OFFSET, e1.getSection(), 1e-12);
         assertEquals(s2.getMicroTime() - PseudoBssConverter.MSS_LINK_TIME_OFFSET, e1.getMicroTime());
-        assertEquals(1 + 9.0 / 16, s2.getSection(), 1e-9);
+        assertEquals(1 + 8.0 / 16, s2.getSection(), 1e-9);
         // 最後の区間は通常ノーツの位置で BSS 終端になる
-        assertEquals(2 + 1.0 / 16, e2.getSection(), 1e-9);
+        assertEquals(2.0, e2.getSection(), 1e-9);
 
         // 総ノーツ数 = (始点ノート + 中間ノート) * 2 + 18ch
         assertEquals((1 + 1) * 2 + 1, model.getTotalNotes());
@@ -313,7 +312,7 @@ class PseudoBssConverterTest {
     void linksLongChainWithoutTrailingNote() {
         // 3 本の LN が 16 分間隔で連続し、最後は通常ノーツなし
         BMSModel model = decode(BMSModel.LNTYPE_HELLCHARGENOTE,
-                "#00156:" + slots16(0, 1, 4, 1, 5, 2, 8, 2, 9, 3, 12, 3));
+                "#00156:" + slots16(0, 1, 3, 1, 4, 2, 7, 2, 8, 3, 11, 3));
         PseudoBssConverter.Result r = PseudoBssConverter.convert(model);
         assertEquals(0, r.bss());
         assertEquals(2, r.mssLinks());
@@ -338,6 +337,71 @@ class PseudoBssConverterTest {
         // 判定済みの始端は対象外 (二重判定しない)
         lane[2].setState(1);
         assertNull(JudgeManager.findMssLinkedStart(lane, (LongNote) lane[1]));
+    }
+
+    // ---- 拍の位置による判定 (次のノーツが LN 終端より粗いグリッドに乗る場合のみ変換) ----
+
+    @Test
+    void gridLevels() {
+        assertEquals(0, PseudoBssConverter.gridLevel(0));
+        assertEquals(0, PseudoBssConverter.gridLevel(0.25));
+        assertEquals(1, PseudoBssConverter.gridLevel(0.125));
+        assertEquals(2, PseudoBssConverter.gridLevel(7.0 / 16));
+        assertEquals(3, PseudoBssConverter.gridLevel(31.0 / 32));
+        assertEquals(4, PseudoBssConverter.gridLevel(1.0 / 64));
+        // 24 分系の位置はどのグリッドにも乗らない
+        assertEquals(6, PseudoBssConverter.gridLevel(1.0 / 24));
+    }
+
+    @Test
+    void doesNotConvertWhenLnEndsOnBeatAndNoteIsOffbeat() {
+        // 公式譜面に多い「BSS を拍頭で終え、16 分の裏で別ノーツを叩く」配置は変換しない
+        BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00156:" + slots16(0, 1, 8, 1),
+                "#00116:" + slots16(9, 3));
+        assertTrue(PseudoBssConverter.convert(model).isEmpty());
+        assertEquals(3, scratchNotes(model).size());
+    }
+
+    @Test
+    void doesNotConvertWhenLnEndsOnEighthAndNoteIsSixteenth() {
+        BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00156:" + slots16(0, 1, 6, 1),
+                "#00116:" + slots16(7, 3));
+        assertTrue(PseudoBssConverter.convert(model).isEmpty());
+    }
+
+    @Test
+    void convertsThirtySecondAndTwentyFourthPatterns() {
+        // 32 分: LN が 31/32 で終わり、次の小節頭にノーツ
+        BMSModel m32 = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00156:" + "01" + "00".repeat(30) + "01",
+                "#00216:" + slots16(0, 3));
+        assertEquals(1, PseudoBssConverter.convert(m32).bss());
+        // 24 分: LN が 23/24 で終わり、次の小節頭にノーツ
+        BMSModel m24 = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00156:" + "01" + "00".repeat(22) + "01",
+                "#00216:" + slots16(0, 3));
+        assertEquals(1, PseudoBssConverter.convert(m24).bss());
+        // 公式譜面の Ruina [A] と同じ「拍頭で終わり 24 分後にノーツ」は変換しない
+        BMSModel ruina = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00156:" + "01" + "00".repeat(11) + "01" + "00".repeat(11),
+                "#00116:" + "00".repeat(13) + "03" + "00".repeat(10));
+        assertTrue(PseudoBssConverter.convert(ruina).isEmpty());
+    }
+
+    @Test
+    void measuresGridFromMeasureStartWithChangedMeasureLength() {
+        // 小節 1 を 17/16 拍子にすると小節 2 は section 2.0625 から始まる。
+        // 小節 2 内で「7/16 で終わり 8/16 (拍頭) にノーツ」の疑似 BSS は、小節頭基準で判定して変換する
+        BMSModel model = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00102:1.0625",
+                "#00256:" + slots16(0, 1, 7, 1),
+                "#00216:" + slots16(8, 3));
+        assertEquals(1, PseudoBssConverter.convert(model).bss());
+        List<Note> notes = scratchNotes(model);
+        assertEquals(2, notes.size());
+        assertEquals(2.0625 + 0.5, notes.get(1).getSection(), 1e-9);
     }
 
     @Test
@@ -379,7 +443,7 @@ class PseudoBssConverterTest {
         assertInstanceOf(NormalNote.class, notes.get(0));
         assertInstanceOf(NormalNote.class, notes.get(1));
         assertEquals(1.0, notes.get(0).getSection(), 1e-9);
-        assertEquals(1 + 9.0 / 16, notes.get(1).getSection(), 1e-9);
+        assertEquals(1 + 8.0 / 16, notes.get(1).getSection(), 1e-9);
     }
 
     @Test
@@ -388,14 +452,14 @@ class PseudoBssConverterTest {
                 "#PLAYER 1", "#BPM 120", "#TOTAL 300",
                 "#WAV01 a.wav", "#WAV02 b.wav", "#WAV03 c.wav",
                 "#00118:" + slots16(0, 1),
-                // 評価位置 (2.0) をまたぐ疑似 MSS: LN 1.0-1.875, LN 1.9375-2.25, 2.3125 のノーツ
-                "#00156:" + slots16(0, 1, 14, 1, 15, 2),
-                "#00256:" + slots16(4, 2),
-                "#00216:" + slots16(5, 3),
+                // 評価前の疑似 MSS: LN 1.0-1.4375, LN 1.5-2.1875, 2.25 のノーツ
+                "#00156:" + slots16(0, 1, 7, 1, 8, 2),
+                "#00256:" + slots16(3, 2),
+                "#00216:" + slots16(4, 3),
                 "#CONDITIONAL 2.5",
                 "#WHEN MISS >= 0",
-                "#00356:" + slots16(0, 1, 4, 1, 5, 2, 8, 2),
-                "#00316:" + slots16(9, 3),
+                "#00356:" + slots16(0, 1, 3, 1, 4, 2, 7, 2),
+                "#00316:" + slots16(8, 3),
                 "#DEFAULT",
                 "#00311:" + slots16(0, 1),
                 "#ENDCONDITIONAL",

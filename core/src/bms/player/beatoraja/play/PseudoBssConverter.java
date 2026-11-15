@@ -39,6 +39,8 @@ import bms.model.TimeLine;
  * <li>スクラッチレーン上の LN (ダミー・FreeZone 内でない)</li>
  * <li>LN 終端の次にある同レーンのノーツが、通常ノーツまたは LN 始端 (いずれもダミー・FreeZone 内でない) で、
  * 終端からの距離が {@link #MAX_GAP_SECTION} 小節以内</li>
+ * <li>次のノーツが LN 終端より粗い拍のグリッドに乗っている ({@link #isReleaseOnCoarserGrid}。
+ * 例: 終端が 16 分の裏、ノーツが拍頭)</li>
  * </ul>
  * jbms-parser は LN 終端と同位置の通常ノーツを既に破棄するため、距離 0 のケースは対象外となる。
  */
@@ -106,6 +108,7 @@ public final class PseudoBssConverter {
 			return EMPTY;
 		}
 		final TimeLine[] timelines = model.getAllTimeLines();
+		final double[] measureStarts = measureStarts(timelines);
 		// MSS 終端用に挿入する TimeLine (キー: 直後に来る既存 TimeLine の index)
 		final TreeMap<Integer, TimeLine> inserts = new TreeMap<>();
 		int bss = 0;
@@ -136,7 +139,8 @@ public final class PseudoBssConverter {
 				}
 				final TimeLine nextTl = timelines[next];
 				final double gap = nextTl.getSection() - timelines[i].getSection();
-				if (gap <= 0 || gap > MAX_GAP_SECTION + 1e-9) {
+				if (gap <= 0 || gap > MAX_GAP_SECTION + 1e-9
+						|| !isReleaseOnCoarserGrid(measureStarts, timelines[i].getSection(), nextTl.getSection())) {
 					continue;
 				}
 				final Note target = nextTl.getNote(lane);
@@ -167,6 +171,71 @@ public final class PseudoBssConverter {
 			model.setAllTimeLine(merged.toArray(new TimeLine[0]));
 		}
 		return bss == 0 && mss == 0 ? EMPTY : new Result(bss, mss);
+	}
+
+	/**
+	 * 拍のグリッド (384 単位/小節)。4分, 8分, 16分, 32分, 64分, 128分 の順に細かくなる。
+	 */
+	private static final int[] GRID_STEPS = { 96, 48, 24, 12, 6, 3 };
+
+	/**
+	 * 次のノーツが LN 終端より粗い拍のグリッドに乗っているか。
+	 * <p>
+	 * 疑似 BSS は「LN を拍の 16 分手前などで切り、逆回転のノーツを拍頭 / 8 分の位置に置く」形が大半
+	 * (BMS 2 万 2 千譜面の調査で 16 分空きの 93%)。一方、公式譜面で BSS 終端の後ろに独立したノーツを置く配置は
+	 * 「BSS 終端が拍頭 / 8 分、ノーツが 16 分の裏」が 94% で、並びが逆になる。
+	 * ノーツの方が粗いグリッドに乗る場合のみ変換することで、公式由来の配置の誤変換を防ぐ。
+	 *
+	 * @param measureStarts 小節頭の section (昇順)
+	 * @param endSection LN 終端の section
+	 * @param nextSection 次のノーツの section
+	 */
+	static boolean isReleaseOnCoarserGrid(double[] measureStarts, double endSection, double nextSection) {
+		return gridLevel(nextSection - measureStartOf(measureStarts, nextSection))
+				< gridLevel(endSection - measureStartOf(measureStarts, endSection));
+	}
+
+	/**
+	 * 小節頭からの位置 (section 単位、4/4 換算) が乗っている最も粗いグリッドの段を返す。
+	 * 0 = 拍頭 (4 分)、値が大きいほど細かい。どのグリッドにも乗らない場合は {@code GRID_STEPS.length}。
+	 */
+	static int gridLevel(double relSection) {
+		final double u = relSection * 384;
+		for (int i = 0; i < GRID_STEPS.length; i++) {
+			final double k = u / GRID_STEPS[i];
+			if (Math.abs(k - Math.rint(k)) < 1e-4) {
+				return i;
+			}
+		}
+		return GRID_STEPS.length;
+	}
+
+	/**
+	 * 小節線のある TimeLine の section を昇順で返す。
+	 * 小節内に小節線を追加する拡張チャンネル (ST) がある譜面では、その位置も小節頭として扱われる。
+	 */
+	static double[] measureStarts(TimeLine[] timelines) {
+		final double[] tmp = new double[timelines.length + 1];
+		int n = 0;
+		tmp[n++] = 0;
+		for (TimeLine tl : timelines) {
+			if (tl.getSectionLine() && tl.getSection() > tmp[n - 1]) {
+				tmp[n++] = tl.getSection();
+			}
+		}
+		return java.util.Arrays.copyOf(tmp, n);
+	}
+
+	private static double measureStartOf(double[] starts, double section) {
+		double s = 0;
+		for (double x : starts) {
+			if (x <= section + 1e-9) {
+				s = x;
+			} else {
+				break;
+			}
+		}
+		return s;
 	}
 
 	/**
