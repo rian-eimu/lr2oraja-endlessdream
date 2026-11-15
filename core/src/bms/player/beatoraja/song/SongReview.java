@@ -1,7 +1,5 @@
 package bms.player.beatoraja.song;
 
-import java.math.BigDecimal;
-
 /**
  * ユーザーの楽曲評価情報
  * 
@@ -19,7 +17,6 @@ public class SongReview {
 	private int favorite;
 
 	private double levelreview;
-	private String levelreviewText = "";
 	
 	private String comment = "";
 
@@ -58,12 +55,6 @@ public class SongReview {
 
 	public void setLevelreview(double levelreview) {
 		this.levelreview = levelreview;
-		levelreviewText = Double.isFinite(levelreview) && levelreview > 0
-				? BigDecimal.valueOf(levelreview).stripTrailingZeros().toPlainString() : "";
-	}
-
-	public String getLevelreviewText() {
-		return levelreviewText;
 	}
 
 	public String getComment() {

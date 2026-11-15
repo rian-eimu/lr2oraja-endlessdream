@@ -37,9 +37,6 @@ public class MusicResult extends AbstractResult {
 	private static final Logger logger = LoggerFactory.getLogger(MusicResult.class);
 
 	private ResultKeyProperty property;
-	private LevelReviewTarget levelReviewTarget;
-
-	public record LevelReviewTarget(SongData song, int lnmode) {}
 
 	// 【追加】 元のモードを保存する変数
 	private Mode originalMode;
@@ -111,33 +108,9 @@ public class MusicResult extends AbstractResult {
 		
 		gaugeType = resource.getGrooveGauge().getType();
 
-		prepareLevelReview();
 		loadSkin(SkinType.RESULT);
 		
 		isModeRestored = false;
-	}
-
-	void prepareLevelReview() {
-		levelReviewTarget = null;
-		if (resource.getPlayMode() == null || resource.getPlayMode().mode != BMSPlayerMode.Mode.PLAY
-				|| resource.getCourseBMSModels() != null || resource.getScoreData() == null) {
-			return;
-		}
-		var song = resource.getSongdata();
-		var model = resource.getBMSModel();
-		var database = main.getSongDatabase();
-		if (song == null || model == null || database == null || song.getSha256().isEmpty()
-				|| !song.getSha256().equals(model.getSHA256())) {
-			return;
-		}
-		int lnmode = song.hasUndefinedLongNote() ? model.getLntype() : 0;
-		if (lnmode < 0 || lnmode > 3) return;
-		song.setSongReview(database.getSongReview(song.getSha256()));
-		levelReviewTarget = new LevelReviewTarget(song, lnmode);
-	}
-
-	public LevelReviewTarget getEditableLevelReview() {
-		return state != STATE_IR_PROCESSING && !main.isTimerOn(TIMER_FADEOUT) ? levelReviewTarget : null;
 	}
 	
 	public void prepare() {

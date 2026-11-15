@@ -250,75 +250,6 @@ public final class PlayerConfig {
 
 	private SkinConfig[] skin = new SkinConfig[SkinType.getMaxSkinTypeID() + 1];
 	private SkinConfig[] skinHistory;
-	private boolean independentPlaySides;
-	private PlayModeConfig[] rightSideInput;
-	private SkinConfig[] rightSideSkin;
-	private SkinConfig[] rightSideSkinHistory;
-
-	private static final Mode[] SIDE_MODES = {Mode.BEAT_5K, Mode.BEAT_7K, Mode.KEYBOARD_24K};
-	private static final SkinType[] SIDE_SKINS = {SkinType.PLAY_5KEYS, SkinType.PLAY_7KEYS, SkinType.PLAY_24KEYS};
-
-	public boolean isIndependentPlaySides() { return independentPlaySides; }
-
-	public void setIndependentPlaySides(boolean enabled) {
-		independentPlaySides = enabled;
-		if (enabled) ensureRightSideSettings();
-	}
-
-	private void ensureRightSideSettings() {
-		if (rightSideInput == null || rightSideInput.length != SIDE_MODES.length)
-			rightSideInput = rightSideInput == null ? new PlayModeConfig[SIDE_MODES.length] : Arrays.copyOf(rightSideInput, SIDE_MODES.length);
-		if (rightSideSkin == null || rightSideSkin.length != SIDE_SKINS.length)
-			rightSideSkin = rightSideSkin == null ? new SkinConfig[SIDE_SKINS.length] : Arrays.copyOf(rightSideSkin, SIDE_SKINS.length);
-		for (int i = 0; i < SIDE_MODES.length; i++) {
-			if (rightSideInput[i] == null) {
-				rightSideInput[i] = getPlayConfig(SIDE_MODES[i]).copyInputs();
-			}
-			if (rightSideSkin[i] == null || !rightSideSkin[i].validate()) {
-				SkinConfig left = getSkin()[SIDE_SKINS[i].getId()];
-				var json = new Json();
-				rightSideSkin[i] = left == null ? getDefaultSkinConfig(SIDE_SKINS[i].getId())
-						: json.fromJson(SkinConfig.class, json.toJson(left));
-			}
-		}
-	}
-
-	public PlayModeConfig getPlayInputConfig(Mode mode, PlaySide side) {
-		int index = PlaySide.index(mode);
-		if (!independentPlaySides || side != PlaySide.P2 || index < 0) return getPlayConfig(mode);
-		ensureRightSideSettings();
-		return rightSideInput[index];
-	}
-
-	public PlayModeConfig getMusicSelectInputConfig(PlaySide side) {
-		return switch (getMusicselectinput()) {
-			case 1 -> getMode9();
-			case 2 -> getMode14();
-			default -> getPlayInputConfig(Mode.BEAT_7K, side);
-		};
-	}
-
-	public SkinConfig getSkinConfig(SkinType type, PlaySide side) {
-		if (!independentPlaySides || side != PlaySide.P2 || !PlaySide.supports(type)) return getSkin()[type.getId()];
-		ensureRightSideSettings();
-		return rightSideSkin[PlaySide.index(type.getMode())];
-	}
-
-	public void setSkinConfig(SkinType type, PlaySide side, SkinConfig config) {
-		if (independentPlaySides && side == PlaySide.P2 && PlaySide.supports(type)) {
-			ensureRightSideSettings();
-			rightSideSkin[PlaySide.index(type.getMode())] = config;
-		} else getSkin()[type.getId()] = config;
-	}
-
-	public SkinConfig[] getSkinHistory(PlaySide side) {
-		return side == PlaySide.P2 ? (rightSideSkinHistory == null ? new SkinConfig[0] : rightSideSkinHistory) : getSkinHistory();
-	}
-
-	public void setSkinHistory(PlaySide side, SkinConfig[] history) {
-		if (side == PlaySide.P2) rightSideSkinHistory = history;
-		else setSkinHistory(history);
-	}
 
 	private PlayModeConfig mode5 = new PlayModeConfig(Mode.BEAT_5K);
 
@@ -1145,18 +1076,6 @@ public final class PlayerConfig {
 		mode9.validate(Mode.POPN_9K);
 		mode24.validate(Mode.KEYBOARD_24K);
 		mode24double.validate(Mode.KEYBOARD_24K_DOUBLE);
-		if (independentPlaySides || rightSideInput != null || rightSideSkin != null) {
-			ensureRightSideSettings();
-			for (int i = 0; i < SIDE_MODES.length; i++) {
-				rightSideInput[i].setPlayconfig(null);
-				rightSideInput[i].validateInputs(SIDE_MODES[i]);
-			}
-		}
-		if (rightSideSkinHistory != null) {
-			if (rightSideSkinHistory.length > MAX_SKIN_HISTORY_ENTRIES)
-				rightSideSkinHistory = Arrays.copyOf(rightSideSkinHistory, MAX_SKIN_HISTORY_ENTRIES);
-			rightSideSkinHistory = Validatable.removeInvalidElements(rightSideSkinHistory);
-		}
 
 		sort = MathUtils.clamp(sort, 0 , BarSorter.defaultSorter.length - 1);
 		enabledBarSorters = sanitizeBarSorters(enabledBarSorters);
@@ -1504,44 +1423,25 @@ public final class PlayerConfig {
     }
 
     public static void write(String playerpath, PlayerConfig player) {
-        writeWithResult(playerpath, player);
-    }
-
-    public static boolean writeWithResult(String playerpath, PlayerConfig player) {
-        if (player == null) {
-            return false;
-        }
-        Path directory = getPlayerDirectory(playerpath, player.getId());
-        if (directory == null) {
-            logger.warn("Refusing to write player config with an invalid path or id");
-            return false;
-        }
-        player.validate();
-        return writeWithResult(playerpath, player, getConfigJson(player));
+        write(playerpath, player, getConfigJson(player));
     }
 
 	public static void write(String playerpath, PlayerConfig player, String configJson) {
-        writeWithResult(playerpath, player, configJson);
-    }
-
-	public static boolean writeWithResult(String playerpath, PlayerConfig player, String configJson) {
         try {
             if (player == null) {
-                return false;
+                return;
             }
             Path directory = getPlayerDirectory(playerpath, player.getId());
             if (directory == null) {
                 logger.warn("Refusing to write player config with an invalid path or id");
-                return false;
+                return;
             }
             player.validate();
             Path path = directory.resolve(configpath);
             RobustFile.write(path, configJson.getBytes(StandardCharsets.UTF_8));
-            return true;
         }
         catch (IOException e) {
             e.printStackTrace();
-            return false;
         }
     }
 

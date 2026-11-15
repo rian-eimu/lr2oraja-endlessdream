@@ -38,7 +38,7 @@ public class FolderEditorView implements Initializable {
 	
 	private TableFolder selectedFolder;
 	
-	private TableChartLookup songdb;
+	private SongDatabaseAccessor songdb;
 	
 	private CourseData[] courses;
 	
@@ -78,7 +78,7 @@ public class FolderEditorView implements Initializable {
 		updateFolder(null);
 	}
 	
-	protected void init(TableChartLookup songdb) {
+	protected void init(SongDatabaseAccessor songdb) {
 		this.songdb = songdb;
 	}
 
@@ -87,9 +87,9 @@ public class FolderEditorView implements Initializable {
 			return;
 		}
 		if(TableEditorView.isMd5OrSha256Hash(search.getText())) {
-			searchSongs.getItems().setAll(songdb.byHash(search.getText()));
+			searchSongs.getItems().setAll(songdb.getSongDatas(new String[]{search.getText()}));			
 		} else if(search.getText().length() > 1) {
-			searchSongs.getItems().setAll(songdb.byText(search.getText()));
+			searchSongs.getItems().setAll(songdb.getSongDatasByText(search.getText()));			
 		}
 	}
 

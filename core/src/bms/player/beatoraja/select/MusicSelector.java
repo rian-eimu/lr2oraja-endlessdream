@@ -37,11 +37,6 @@ import imgui.ImGui;
  */
 public final class MusicSelector extends MainState {
 	private static final Logger logger = LoggerFactory.getLogger(MusicSelector.class);
-	private PlaySide selectedPlaySide = PlaySide.P1;
-
-	public PlaySide getSelectedPlaySide() {
-		return config.isIndependentPlaySides() ? selectedPlaySide : PlaySide.P1;
-	}
 
 	// TODO　ミラーランダム段位のスコア表示
 	private static final long ORAJA_HELPER_SELECT_SEND_DELAY = 1000;
@@ -118,7 +113,6 @@ public final class MusicSelector extends MainState {
 	private PixmapResourcePool banners;
 
 	private PixmapResourcePool stagefiles;
-	private boolean firstCreation = true;
 
 	public MusicSelector(MainController main, boolean songUpdated) {
 		super(main);
@@ -140,10 +134,7 @@ public final class MusicSelector extends MainState {
 			}
 		};
 		
-		try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.SELECT_BAR_INIT)) {
-			bar = new BarRenderer(this, manager);
-			timing.outcome(StartupDiagnostics.Outcome.OK);
-		}
+		bar = new BarRenderer(this, manager);
 		banners = new PixmapResourcePool(resource.getConfig().getBannerPixmapGen());
 		stagefiles = new PixmapResourcePool(resource.getConfig().getStagefilePixmapGen());
 		musicinput = new MusicSelectInputProcessor(this);
@@ -168,8 +159,6 @@ public final class MusicSelector extends MainState {
 	}
 
 	public void create() {
-		boolean initial = firstCreation;
-		firstCreation = false;
 		main.getSoundManager().shuffle();
 
 		play = null;
@@ -190,22 +179,12 @@ public final class MusicSelector extends MainState {
 		preview.setDefault(getSound(SELECT));
 
 		final BMSPlayerInputProcessor input = main.getInputProcessor();
-		var bindings = config.getMusicSelectInputConfig(getSelectedPlaySide());
-		if (usesSideSelectionInput()) {
-			input.rebindMusicSelectInputs(bindings);
-			bar.resetSideInput();
-		} else {
-			input.setPlayConfig(bindings);
-		}
-		try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.SELECT_BAR_BUILD, initial)) {
-			boolean built = manager.updateBar();
-			timing.outcome(built ? StartupDiagnostics.Outcome.OK : StartupDiagnostics.Outcome.FAILED);
-		}
+		PlayModeConfig pc = (config.getMusicselectinput() == 0 ? config.getMode7()
+				: (config.getMusicselectinput() == 1 ? config.getMode9() : config.getMode14()));
+		input.setPlayConfig(pc);
+		manager.updateBar();
 
-		try (var timing = StartupDiagnostics.measure(StartupDiagnostics.Step.SELECT_SKIN_LOAD, initial)) {
-			loadSkin(SkinType.MUSIC_SELECT);
-			timing.outcome(getSkin() != null ? StartupDiagnostics.Outcome.OK : StartupDiagnostics.Outcome.FAILED);
-		}
+        loadSkin(SkinType.MUSIC_SELECT);
 
 		// search text field
 		Rectangle searchRegion = ((MusicSelectSkin) getSkin()).getSearchTextRegion();
@@ -224,7 +203,6 @@ public final class MusicSelector extends MainState {
 	}
 
 	public void render() {
-		manager.updateIRTables();
 		final Bar current = manager.getSelected();
         if(timer.getNowTime() > getSkin().getInput()){
         	timer.switchTimer(TIMER_STARTINPUT, true);
@@ -319,7 +297,6 @@ public final class MusicSelector extends MainState {
 						.map(bar -> Paths.get(((SongBar) bar).getSongData().getPath())).toArray(Path[]::new);
 					if(paths.length > 0) {
 						resource.clear();
-						resource.setPlaySide(getSelectedPlaySide());
 						resource.setAutoPlaySongs(paths, false);
 						if(resource.nextSong()) {
 							main.changeState(MainStateType.DECIDE);
@@ -336,15 +313,6 @@ public final class MusicSelector extends MainState {
 
 	public void input() {
 		final BMSPlayerInputProcessor input = main.getInputProcessor();
-		if (config.isIndependentPlaySides() && (getStage() == null || getStage().getKeyboardFocus() == null)
-				&& input.isActivated(KeyCommand.SWITCH_PLAY_SIDE)) {
-			selectedPlaySide = getSelectedPlaySide().other();
-			if (usesSideSelectionInput()) {
-				input.rebindMusicSelectInputs(config.getMusicSelectInputConfig(selectedPlaySide));
-				bar.resetSideInput();
-				return;
-			}
-		}
 
 		if (input.getControlKeyState(ControlKeys.NUM6)) {
 			main.changeState(MainStateType.CONFIG);
@@ -353,10 +321,6 @@ public final class MusicSelector extends MainState {
 		}
 
 		musicinput.input();
-	}
-
-	private boolean usesSideSelectionInput() {
-		return config.isIndependentPlaySides() && config.getMusicselectinput() == 0;
 	}
 
 	public void shutdown() {
@@ -405,7 +369,6 @@ public final class MusicSelector extends MainState {
 
 	public void readChart(SongData song, Bar current) {
 		resource.clear();
-		resource.setPlaySide(getSelectedPlaySide());
 		if (resource.setBMSFile(Paths.get(song.getPath()), play)) {
 			// TODO 表名、フォルダ名をPlayerResource上でも重複実施している
 			final Queue<DirectoryBar> dir = manager.getDirectory();
@@ -534,7 +497,6 @@ public final class MusicSelector extends MainState {
 
 	private boolean _readCourse(BMSPlayerMode mode, GradeBar gradeBar) {
 		resource.clear();
-		resource.setPlaySide(getSelectedPlaySide());
 		final SongData[] songs = gradeBar.getSongDatas();
 		final Path[] files = Stream.of(songs).map(song -> Paths.get(song.getPath())).toArray(Path[]::new);
 		if (resource.setCourseBMSFiles(files)) {
@@ -613,7 +575,6 @@ public final class MusicSelector extends MainState {
 	}
 
 	public void dispose() {
-		manager.dispose();
 		super.dispose();
 		bar.dispose();
 		banners.dispose();

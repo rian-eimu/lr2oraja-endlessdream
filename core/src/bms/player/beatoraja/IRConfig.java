@@ -26,7 +26,6 @@ public class IRConfig implements Validatable{
 	private int irsend = 0;
 	
 	private boolean importscore = false;
-	private boolean syncReviewLevel;
 	
 	private boolean importrival = true;
 	
@@ -96,14 +95,6 @@ public class IRConfig implements Validatable{
 
 	public void setImportscore(boolean importscore) {
 		this.importscore = importscore;
-	}
-
-	public boolean isSyncReviewLevel() {
-		return syncReviewLevel;
-	}
-
-	public void setSyncReviewLevel(boolean syncReviewLevel) {
-		this.syncReviewLevel = syncReviewLevel;
 	}
 
 	public boolean isImportrival() {
