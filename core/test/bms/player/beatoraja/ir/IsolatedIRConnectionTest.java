@@ -200,16 +200,21 @@ public final class IsolatedIRConnectionTest {
             }
         }
     }
+    /**
+     * 一時ファイルを削除する。Windows では子 JVM 終了直後やウイルス対策ソフトのスキャン中に
+     * プラグイン JAR のハンドルが残ることがあるため、最大約 5 秒リトライし、それでも削除できない場合は
+     * JVM 終了時の削除に回す。一時ディレクトリの後始末はテストの検証対象ではない (ワーカーのリークは close で別途検証済み)。
+     */
     private static void deleteWithRetry(Path path) throws Exception {
-        for (int attempt = 0; attempt < 20; attempt++) {
+        for (int attempt = 0; attempt < 50; attempt++) {
             try {
                 Files.deleteIfExists(path);
                 return;
             } catch (java.nio.file.FileSystemException e) {
-                if (attempt == 19) throw e;
-                Thread.sleep(25);
+                Thread.sleep(100);
             }
         }
+        path.toFile().deleteOnExit();
     }
     private static void await(java.util.function.BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
