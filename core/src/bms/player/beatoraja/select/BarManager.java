@@ -479,8 +479,8 @@ public class BarManager {
 			for (Bar b : newcurrentsongs) {
 				if (b instanceof SongBar) {
 					SongData sd = ((SongBar) b).getSongData();
-					if (sd != null && select.getScoreDataCache().existsScoreDataCache(sd, config.getLnmode())) {
-						b.setScore(select.getScoreDataCache().readScoreData(sd, config.getLnmode()));
+					if (sd != null && select.getScoreDataCache().existsScoreDataCache(sd, config.getLnmode(sd.getMode()))) {
+						b.setScore(select.getScoreDataCache().readScoreData(sd, config.getLnmode(sd.getMode())));
 					}
 				}
 			}
@@ -499,7 +499,7 @@ public class BarManager {
 								.map(songBar -> ((SongBar) songBar).getSongData()).toArray(SongData[]::new);
 						if (randomFolder.getFilter() != null) {
 							randomTargets = Stream.of(randomTargets).filter(r -> {
-								ScoreData scoreData = select.getScoreDataCache().readScoreData(r, config.getLnmode());
+								ScoreData scoreData = select.getScoreDataCache().readScoreData(r, config.getLnmode(r.getMode()));
 								return randomFolder.filterSong(scoreData);
 							}).toArray(SongData[]::new);
 						}
@@ -921,14 +921,14 @@ public class BarManager {
                 if (bar instanceof SongBar songBar && songBar.existsSong()) {
                     var songData = songBar.getSongData();
                     if (songBar.getScore() == null) {
-                        songBar.setScore(select.getScoreDataCache().readScoreData(songData, config.getLnmode()));
+                        songBar.setScore(select.getScoreDataCache().readScoreData(songData, config.getLnmode(songData.getMode())));
 					}
 					if (rivalDataAccessor.isRivalSelected() && bar.getRivalScore() == null) {
-                        var rivalScore = rivalDataAccessor.getCurrentRivalScore(songData, config.getLnmode());
+                        var rivalScore = rivalDataAccessor.getCurrentRivalScore(songData, config.getLnmode(songData.getMode()));
                         songBar.setRivalScore(rivalScore);
 					}
 					for(int i = 0;i < MusicSelector.REPLAY;i++) {
-                        songBar.setExistsReplay(i, main.getPlayDataAccessor().existsReplayData(songData.getSha256(), songData.hasUndefinedLongNote(),config.getLnmode(), i));
+                        songBar.setExistsReplay(i, main.getPlayDataAccessor().existsReplayData(songData.getSha256(), songData.hasUndefinedLongNote(),config.getLnmode(songData.getMode()), i));
 					}
 				} else if (bar instanceof GradeBar && ((GradeBar)bar).existsAllSongs()) {
 					final GradeBar gb = (GradeBar) bar;
@@ -939,11 +939,12 @@ public class BarManager {
 						ln |= gb.getSongDatas()[j].hasUndefinedLongNote();
 					}
 					CourseDataConstraint[] constraint = gb.getCourseData().getConstraint();
-					gb.setScore(main.getPlayDataAccessor().readScoreData(hash, ln, config.getLnmode(), 0, constraint));
-					gb.setMirrorScore(main.getPlayDataAccessor().readScoreData(hash, ln, config.getLnmode(), 1, constraint));
-					gb.setRandomScore(main.getPlayDataAccessor().readScoreData(hash, ln, config.getLnmode(), 2, constraint));
+					final int courseLnmode = config.getCourseLnmode(gb.getSongDatas());
+					gb.setScore(main.getPlayDataAccessor().readScoreData(hash, ln, courseLnmode, 0, constraint));
+					gb.setMirrorScore(main.getPlayDataAccessor().readScoreData(hash, ln, courseLnmode, 1, constraint));
+					gb.setRandomScore(main.getPlayDataAccessor().readScoreData(hash, ln, courseLnmode, 2, constraint));
 					for(int i = 0;i < MusicSelector.REPLAY;i++) {
-						gb.setExistsReplay(i, main.getPlayDataAccessor().existsReplayData(hash, ln ,config.getLnmode(), i, constraint));
+						gb.setExistsReplay(i, main.getPlayDataAccessor().existsReplayData(hash, ln ,courseLnmode, i, constraint));
 					}
 				}
 

@@ -96,7 +96,7 @@ public class SearchTextField extends Stage {
 								Bar current = selector.getBarManager().getSelected();
 								if (current instanceof SongBar && ((SongBar) current).existsSong()) {
 									SongData song = ((SongBar) current).getSongData();
-									int lnmode = selector.main.getPlayerResource().getPlayerConfig().getLnmode();
+									int lnmode = selector.main.getPlayerResource().getPlayerConfig().getLnmode(song.getMode());
 									selector.main.getPlayDataAccessor().deleteScoreData(song.getSha256(), song.hasUndefinedLongNote(), lnmode);
 									selector.getScoreDataCache().update(song, lnmode);
 									((SongBar) current).setScore(selector.getScoreDataCache().readScoreData(song, lnmode));
@@ -108,7 +108,7 @@ public class SearchTextField extends Stage {
 								} else if (current instanceof GradeBar && ((GradeBar) current).existsAllSongs()) {
 									GradeBar grade = (GradeBar) current;
 									CourseData course = grade.getCourseData();
-									int lnmode = selector.main.getPlayerResource().getPlayerConfig().getLnmode();
+									int lnmode = selector.main.getPlayerResource().getPlayerConfig().getCourseLnmode(grade.getSongDatas());
 									selector.main.getPlayDataAccessor().deleteScoreData(grade.getSongDatas(), lnmode, course.getConstraint());
 									grade.setScore(null);
 									grade.setMirrorScore(null);

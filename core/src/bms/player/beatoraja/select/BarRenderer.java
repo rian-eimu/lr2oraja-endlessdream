@@ -416,21 +416,25 @@ public final class BarRenderer {
 			}
 
 			int flag = 0;
+			// 未定義LNに適用される LN MODE (KEY モード毎の設定。コースは 1 曲目のモード)
+			int undefinedLnmode = 0;
 			if (ba.sd instanceof SongBar songbar && songbar.existsSong()) {
 				SongData song = songbar.getSongData();
 				flag |= song.getFeature();
+				undefinedLnmode = select.main.getPlayerConfig().getLnmode(song.getMode());
 			}
 
 			if (ba.sd instanceof GradeBar gb && gb.existsAllSongs()) {
 				for (SongData song : gb.getSongDatas()) {
 					flag |= song.getFeature();
 				}
+				undefinedLnmode = select.main.getPlayerConfig().getCourseLnmode(gb.getSongDatas());
 			}
 
 			// LN
 			int ln = -1;
 			if((flag & SongData.FEATURE_UNDEFINEDLN) != 0) {
-				ln = select.main.getPlayerConfig().getLnmode();
+				ln = undefinedLnmode;
 			}
 			if((flag & SongData.FEATURE_LONGNOTE) != 0) {
 				ln = ln > 0 ? ln : 0;

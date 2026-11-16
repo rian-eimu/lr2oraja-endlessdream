@@ -210,6 +210,8 @@ public class PlayConfigurationView implements Initializable {
 	@FXML
 	private CheckBox forcedcnendings;
 	@FXML
+	private CheckBox pseudobss;
+	@FXML
 	private Slider longnoterate;
 	@FXML
 	private Spinner<Integer> hranthresholdbpm;
@@ -589,7 +591,7 @@ public class PlayConfigurationView implements Initializable {
 		guidese.setSelected(player.isGuideSE());
 		windowhold.setSelected(player.isWindowHold());
 		gaugeop.getSelectionModel().select(player.getGauge());
-		lntype.getSelectionModel().select(player.getLnmode());
+		// lntype (LN MODE) は KEY モード毎の設定のため updatePlayConfig() で選択中のモードの値を表示する
 
 		notesdisplaytimingautoadjust.setSelected(player.isNotesDisplayTimingAutoAdjust());
 
@@ -610,6 +612,7 @@ public class PlayConfigurationView implements Initializable {
 		scrollmode.getSelectionModel().select(player.getScrollMode());
 		longnotemode.getSelectionModel().select(player.getLongnoteMode());
 		forcedcnendings.setSelected(player.isForcedCNEndings());
+		pseudobss.setSelected(player.isPseudoBssAsBss());
 		longnoterate.setValue(player.getLongnoteRate());
 		hranthresholdbpm.getValueFactory().setValue(player.getHranThresholdBPM());
 		judgeregion.setSelected(player.isShowjudgearea());
@@ -710,7 +713,7 @@ public class PlayConfigurationView implements Initializable {
 		player.setGuideSE(guidese.isSelected());
 		player.setWindowHold(windowhold.isSelected());
 		player.setGauge(gaugeop.getValue());
-		player.setLnmode(lntype.getValue());
+		// lntype (LN MODE) は KEY モード毎の設定のため updatePlayConfig() で保存する
 		player.setNotesDisplayTimingAutoAdjust(notesdisplaytimingautoadjust.isSelected());
 		
 		player.setDxMode(dxMode.isSelected());
@@ -732,6 +735,7 @@ public class PlayConfigurationView implements Initializable {
 		player.setScrollMode(scrollmode.getValue());
 		player.setLongnoteMode(longnotemode.getValue());
 		player.setForcedCNEndings(forcedcnendings.isSelected());
+		player.setPseudoBssAsBss(pseudobss.isSelected());
 		player.setLongnoteRate(longnoterate.getValue());
 		player.setHranThresholdBPM(getValue(hranthresholdbpm));
 		player.setMarkprocessednote(markprocessednote.isSelected());
@@ -811,6 +815,9 @@ public class PlayConfigurationView implements Initializable {
 			conf.setJudgetiming(getValue(notesdisplaytiming));
 			conf.setJudgetype(JudgeAlgorithm.values()[judgealgorithm.getValue()].name());
 			conf.setHispeedAutoAdjust(hispeedautoadjust.isSelected());
+			if (lntype.getValue() != null) {
+				player.setLnmode(Mode.valueOf(pc.name()), lntype.getValue());
+			}
 		}
 		pc = playconfig.getValue();
 		PlayConfig conf = player.getPlayConfig(Mode.valueOf(pc.name())).getPlayconfig();
@@ -833,6 +840,7 @@ public class PlayConfigurationView implements Initializable {
 		notesdisplaytiming.getValueFactory().setValue(conf.getJudgetiming());
 		judgealgorithm.setValue(JudgeAlgorithm.getIndex(conf.getJudgetype()));
 		hispeedautoadjust.setSelected(conf.isEnableHispeedAutoAdjust());
+		lntype.getSelectionModel().select(player.getLnmode(Mode.valueOf(pc.name())));
 	}
 
 	private <T> T getValue(Spinner<T> spinner) {

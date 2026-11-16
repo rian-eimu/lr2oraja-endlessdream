@@ -1,6 +1,11 @@
 package bms.player.beatoraja.select.bar;
 
 import java.io.File;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import bms.model.Mode;
+import bms.player.beatoraja.PlayerConfig;
 
 import bms.player.beatoraja.MainController;
 import bms.player.beatoraja.select.MusicSelector;
@@ -49,10 +54,26 @@ public class CommandBar extends DirectoryBar {
         		,main.getConfig().getPlayerpath() + File.separatorChar + main.getConfig().getPlayername() + "/scorelog.db",main.getInfoDatabase() != null ? "songinfo.db" : null));
     }
 
+    /**
+     * song.mode に応じた LN MODE を返す SQL 式を生成する
+     */
+    static String lnmodeSqlExpression(PlayerConfig config) {
+        StringBuilder sb = new StringBuilder("(CASE song.mode");
+        Set<Integer> ids = new LinkedHashSet<>();
+        for (Mode mode : Mode.values()) {
+            if (ids.add(mode.id)) {
+                sb.append(" WHEN ").append(mode.id).append(" THEN ").append(config.getLnmode(mode.id));
+            }
+        }
+        sb.append(" ELSE ").append(config.getLnmode(Mode.BEAT_7K)).append(" END)");
+        return sb.toString();
+    }
+
     private String getEffectiveSql(MainController main) {
         String effectiveSql = sql;
         if (effectiveSql.contains("score.") || effectiveSql.contains("scorelog.")) {
-            int lnmode = main.getPlayerConfig().getLnmode();
+            // LN MODE は KEY モード毎の設定のため、楽曲のモード (song.mode) 毎に値を切り替える
+            String lnmode = lnmodeSqlExpression(main.getPlayerConfig());
             
             String upper = effectiveSql.toUpperCase();
             int splitIdx = effectiveSql.length();

@@ -610,16 +610,34 @@ public class MainController {
 		SongManagerMenu.injectMusicSelector(selector);
 	}
 
-	private void triggerLnWarning() {
-		String lnModeName = switch (player.getLnmode()) {
+	/** LN MODE 警告の対象モード (KEY モード毎に LN MODE を保持する。POPN_5K は POPN_9K と共有) */
+	private static final bms.model.Mode[] LN_WARNING_MODES = {
+			bms.model.Mode.BEAT_5K, bms.model.Mode.BEAT_7K, bms.model.Mode.BEAT_10K, bms.model.Mode.BEAT_14K,
+			bms.model.Mode.POPN_9K, bms.model.Mode.KEYBOARD_24K, bms.model.Mode.KEYBOARD_24K_DOUBLE };
+
+	static String lnModeName(int lnmode) {
+		return switch (lnmode) {
 			case 1 -> "CN";
 			case 2 -> "HCN";
 			case 3 -> "HLN";
 			default -> "LN";
 		};
-		if (!lnModeName.equals("LN")) {
+	}
+
+	private void triggerLnWarning() {
+		StringBuilder modes = new StringBuilder();
+		for (bms.model.Mode mode : LN_WARNING_MODES) {
+			final int lnmode = player.getLnmode(mode);
+			if (lnmode != 0) {
+				if (modes.length() > 0) {
+					modes.append(", ");
+				}
+				modes.append(mode.hint).append(": ").append(lnModeName(lnmode));
+			}
+		}
+		if (modes.length() > 0) {
 			// give them a really insistent warning
-			String lnWarning = "Long Note mode is " + lnModeName + ".\n"
+			String lnWarning = "Long Note mode is not LN (" + modes + ").\n"
 				+ "This is not recommended.\n"
 				+ "Your scores may be incompatible with IR.\n"
 				+ "You may change this in play options.";

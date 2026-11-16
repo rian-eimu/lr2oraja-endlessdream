@@ -109,6 +109,15 @@ public class PlayConfig implements Cloneable {
 	 * 判定アルゴリズム
 	 */
 	private String judgetype = JudgeAlgorithm.Combo.name();
+	/**
+	 * LNモード (0:LN, 1:CN, 2:HCN, 3:HLN。{@link bms.model.BMSModel#LNTYPE_LONGNOTE} 等に対応)。
+	 * {@link #LNMODE_UNSET} は未設定 (旧 config_player.json 由来) を表し、
+	 * {@link PlayerConfig#validate()} で旧 PlayerConfig.lnmode の値を引き継ぐ。
+	 */
+	private int lnmode = LNMODE_UNSET;
+
+	public static final int LNMODE_UNSET = -1;
+	public static final int LNMODE_MAX = 3;
 
 
 	public PlayConfig() {
@@ -264,7 +273,26 @@ public class PlayConfig implements Cloneable {
 		this.judgetiming = judgetiming;
 	}
 
+	public int getLnmode() {
+		return lnmode >= 0 ? lnmode : 0;
+	}
+
+	public void setLnmode(int lnmode) {
+		this.lnmode = MathUtils.clamp(lnmode, 0, LNMODE_MAX);
+	}
+
+	/**
+	 * @return LNモードが設定済みか (旧設定からの移行前は false)
+	 */
+	public boolean isLnmodeSet() {
+		return lnmode >= 0;
+	}
+
 	public void validate() {
+		if (lnmode != LNMODE_UNSET) {
+			// 未設定(-1)以外の負数は不正値として未設定に戻し、PlayerConfig 側で旧値を引き継がせる
+			lnmode = lnmode < 0 ? LNMODE_UNSET : Math.min(lnmode, LNMODE_MAX);
+		}
 		hispeed = clampFinite(hispeed, HISPEED_MIN, HISPEED_MAX, 1.0f);
 		duration = MathUtils.clamp(duration, DURATION_MIN, DURATION_MAX);
 		constantFadeinTime = MathUtils.clamp(constantFadeinTime, CONSTANT_FADEIN_MIN, CONSTANT_FADEIN_MAX);

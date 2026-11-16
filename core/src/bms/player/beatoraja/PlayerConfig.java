@@ -138,10 +138,16 @@ public final class PlayerConfig {
 	private int difficultyFilter = 0;
 
 	/**
-	 * LNモード
+	 * 旧LNモード (プロファイル共通)。
+	 * LNモードは KEY モード毎に {@link PlayConfig#getLnmode()} で保持するようになったため、
+	 * この値は旧 config_player.json からの移行元 (未設定モードの初期値) としてのみ使用する。
 	 */
 	private int lnmode = 0;
 	private boolean forcedcnendings = false;
+	/**
+	 * CN/HCNモード時に疑似BSS(スクラッチLN+直後のスクラッチノーツ)をBSSとして、連続したスクラッチLNをMSSとして扱うか
+	 */
+	private boolean pseudoBssAsBss = false;
 	/**
 	 * スクロール追加/削除モード
 	 */
@@ -317,7 +323,10 @@ public final class PlayerConfig {
 	private int maxRequestCount = 30;
 
 	public PlayerConfig() {
-		validate();
+		// コンストラクタ時点では LN モードの移行を行わない。
+		// Json 読み込みはコンストラクタ後にフィールドを上書きするため、ここで移行すると
+		// 旧 lnmode を読み込む前の既定値 (0) で確定してしまう。
+		validate(false);
 	}
 
     public String getName() {
@@ -405,12 +414,82 @@ public final class PlayerConfig {
 		this.bottomShiftableGauge = bottomShiftableGauge;
 	}
 
-	public int getLnmode() {
-		return lnmode;
+	/**
+	 * 指定モードの LN モードを返す
+	 *
+	 * @param mode 譜面のモード (null の場合は BEAT_7K)
+	 * @return LN モード (0:LN, 1:CN, 2:HCN, 3:HLN)
+	 */
+	public int getLnmode(Mode mode) {
+		PlayConfig pc = getLnmodePlayConfig(mode);
+		return pc != null && pc.isLnmodeSet() ? pc.getLnmode() : MathUtils.clamp(lnmode, 0, PlayConfig.LNMODE_MAX);
 	}
 
-	public void setLnmode(int lnmode) {
-		this.lnmode = lnmode;
+	/**
+	 * 指定モードIDの LN モードを返す
+	 *
+	 * @param modeId モードID ({@link Mode#id}、{@link bms.player.beatoraja.song.SongData#getMode()})
+	 * @return LN モード (0:LN, 1:CN, 2:HCN, 3:HLN)
+	 */
+	public int getLnmode(int modeId) {
+		return getLnmode(lnmodeTarget(modeId));
+	}
+
+	/**
+	 * 指定モードの LN モードを設定する
+	 *
+	 * @param mode 譜面のモード (null の場合は BEAT_7K)
+	 * @param lnmode LN モード (0:LN, 1:CN, 2:HCN, 3:HLN)
+	 */
+	public void setLnmode(Mode mode, int lnmode) {
+		PlayConfig pc = getLnmodePlayConfig(mode);
+		if (pc != null) {
+			pc.setLnmode(lnmode);
+		}
+	}
+
+	public void setLnmode(int modeId, int lnmode) {
+		setLnmode(lnmodeTarget(modeId), lnmode);
+	}
+
+	/**
+	 * コースの LN モードを返す。コース内でモードが混在する場合は 1 曲目のモードの値を使用する。
+	 *
+	 * @param songs コースの楽曲
+	 * @return LN モード
+	 */
+	public int getCourseLnmode(bms.player.beatoraja.song.SongData[] songs) {
+		return songs != null && songs.length > 0 && songs[0] != null ? getLnmode(songs[0].getMode()) : getLnmode(Mode.BEAT_7K);
+	}
+
+	/**
+	 * LN モードを保持する PlayConfig を返す。
+	 * POPN_5K と POPN_9K はモードID (9) が同じで選曲画面 (SongData) から区別できないため、
+	 * LN モードは POPN_9K (mode9) の値を共有する。それ以外は {@link #getPlayConfig(Mode)} と同じ。
+	 */
+	private PlayConfig getLnmodePlayConfig(Mode mode) {
+		return getPlayConfig(mode == Mode.POPN_5K ? Mode.POPN_9K : mode).getPlayconfig();
+	}
+
+	private static Mode lnmodeTarget(int modeId) {
+		for (Mode m : Mode.values()) {
+			if (m.id == modeId) {
+				return m == Mode.POPN_5K ? Mode.POPN_9K : m;
+			}
+		}
+		return Mode.BEAT_7K;
+	}
+
+	/**
+	 * 旧 lnmode (プロファイル共通) しか持たない設定から、各モードの LN モードへ値を引き継ぐ
+	 */
+	private void migrateLnmode() {
+		for (Mode m : Mode.values()) {
+			PlayConfig pc = getLnmodePlayConfig(m);
+			if (pc != null && !pc.isLnmodeSet()) {
+				pc.setLnmode(lnmode);
+			}
+		}
 	}
 
 	public int getRandom2() {
@@ -954,6 +1033,14 @@ public final class PlayerConfig {
 		this.forcedcnendings = forcedcnendings;
 	}
 
+	public boolean isPseudoBssAsBss() {
+		return pseudoBssAsBss;
+	}
+
+	public void setPseudoBssAsBss(boolean pseudoBssAsBss) {
+		this.pseudoBssAsBss = pseudoBssAsBss;
+	}
+
 	public boolean isShowpastnote() {
 		return showpastnote;
 	}
@@ -1028,6 +1115,10 @@ public final class PlayerConfig {
     }
 
 	public void validate() {
+		validate(true);
+	}
+
+	private void validate(boolean migrateLnmode) {
 		if(skin == null) {
 			skin = new SkinConfig[SkinType.getMaxSkinTypeID() + 1];
 		}
@@ -1102,7 +1193,10 @@ public final class PlayerConfig {
 		judgetiming = MathUtils.clamp(judgetiming, JUDGETIMING_MIN, JUDGETIMING_MAX);
 		misslayerDuration = MathUtils.clamp(misslayerDuration, MISS_LAYER_DURATION_MIN, MISS_LAYER_DURATION_MAX);
 		musicselectinput = MathUtils.clamp(musicselectinput, 0, 2);
-		lnmode = MathUtils.clamp(lnmode, 0, 3);
+		lnmode = MathUtils.clamp(lnmode, 0, PlayConfig.LNMODE_MAX);
+		if (migrateLnmode) {
+			migrateLnmode();
+		}
 		keyJudgeWindowRatePerfectGreat = MathUtils.clamp(keyJudgeWindowRatePerfectGreat, 25, 400);
 		keyJudgeWindowRateGreat = MathUtils.clamp(keyJudgeWindowRateGreat, 0, 400);
 		keyJudgeWindowRateGood = MathUtils.clamp(keyJudgeWindowRateGood, 0, 400);

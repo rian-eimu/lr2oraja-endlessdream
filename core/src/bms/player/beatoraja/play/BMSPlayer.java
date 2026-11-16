@@ -171,7 +171,7 @@ public class BMSPlayer extends MainState {
 				if (resource.getCourseReplay().length == 0) {
 					// コースモード1曲目の処理
 					ReplayData[] replays = main.getPlayDataAccessor().readReplayData(resource.getCourseBMSModels(),
-							config.getLnmode(), autoplay.id, resource.getConstraint());
+							resource.getCourseLnmode(), autoplay.id, resource.getConstraint());
 					if (replays != null) {
 						for (ReplayData rd : replays) {
 							resource.addCourseReplay(rd);
@@ -192,7 +192,7 @@ public class BMSPlayer extends MainState {
 				}
 			} else {
 				// 1曲モードのリプレイ読み込み
-				replay = main.getPlayDataAccessor().readReplayData(model, config.getLnmode(), autoplay.id);
+				replay = main.getPlayDataAccessor().readReplayData(model, model.getLntype(), autoplay.id);
 				if (replay != null) {
 					boolean isReplayPatternPlay = false;
 					if(main.getInputProcessor().getKeyState(1)) {
@@ -573,7 +573,13 @@ public class BMSPlayer extends MainState {
 		resource.setUpdateScore(score);
 		resource.setUpdateCourseScore(resource.isUpdateCourseScore() && score);
 		resource.setForceNoIRSend(forceNoIRSend);
+		final boolean pseudoBssAsBss = resource.getPlayerConfig().isPseudoBssAsBss();
 		this.conditionalModifierApplier = m -> {
+			// 分岐後モデルはパーサから再構築されるため、初回ロード時と同じく疑似BSS変換を
+			// 譜面オプション適用前に行い、ノーツ数・判定対象を本体モデルと揃える
+			if (pseudoBssAsBss) {
+				PseudoBssConverter.convert(m);
+			}
 			for (java.util.function.Consumer<BMSModel> step : branchModSteps) {
 				step.accept(m);
 			}
@@ -642,7 +648,7 @@ public class BMSPlayer extends MainState {
 
 		bga = resource.getBGAManager();
 
-		ScoreData score = main.getPlayDataAccessor().readScoreData(model, config.getLnmode());
+		ScoreData score = main.getPlayDataAccessor().readScoreData(model, model.getLntype());
 		logger.info("スコアデータベースからスコア取得");
 		final int bestLamp = score != null ? score.getClear() : ClearType.NoPlay.id;
 		if (model.hasConditional() && autoplay.mode != BMSPlayerMode.Mode.PRACTICE && playinfo.doubleoption < 2) {
@@ -1250,7 +1256,7 @@ public class BMSPlayer extends MainState {
 		final ReplayData replay = resource.getReplayData();
 		replay.player = main.getPlayerConfig().getName();
 		replay.sha256 = model.getSHA256();
-		replay.mode = config.getLnmode();
+		replay.mode = model.getLntype();
 		replay.date = Calendar.getInstance().getTimeInMillis() / 1000;
 		replay.keylog = main.getInputProcessor().getKeyInputLog();
 //		replay.pattern = playinfo.pattern;

@@ -52,7 +52,7 @@ public class MusicResult extends AbstractResult {
 	public void create() {
 		for(int i = 0;i < REPLAY_SIZE;i++) {
 			saveReplay[i] = main.getPlayDataAccessor().existsReplayData(resource.getBMSModel(),
-					resource.getPlayerConfig().getLnmode(), i) ? ReplayStatus.EXIST : ReplayStatus.NOT_EXIST ;			
+					resource.getLnmode(), i) ? ReplayStatus.EXIST : ReplayStatus.NOT_EXIST ;			
 		}
 
 		// 【修正】 モード強制変更ロジック（保存処理追加）
@@ -193,7 +193,7 @@ public class MusicResult extends AbstractResult {
                         var songData = resource.getSongdata();
                         IRResponse<bms.player.beatoraja.ir.IRScoreData[]> response = ir[0].connection.getPlayData(null, new IRChartData(songData));
                         if (response.isSucceeded()) {
-                            var lnMode = main.getPlayerResource().getPlayerConfig().getLnmode();
+                            var lnMode = main.getPlayerResource().getLnmode();
                             main.getRivalDataAccessor().updateAllRivalsScores(response.getData(), songData, lnMode);
 							ranking.updateScore(ir[0].player, main.getRivalDataAccessor(), response.getData(), newscore.getExscore() > oldscore.getExscore() ? newscore : oldscore);
 							rankingOffset = ranking.getRank() > 10 ? ranking.getRank() - 5 : 0;
@@ -271,10 +271,10 @@ public class MusicResult extends AbstractResult {
 							main.changeState(MainStateType.MUSICSELECT);
 						}
 					} else if (resource.nextCourse()) {
-						RankingData songrank = main.getRankingDataCache().get(resource.getSongdata(), main.getPlayerConfig().getLnmode());
+						RankingData songrank = main.getRankingDataCache().get(resource.getSongdata(), resource.getLnmode());
 						if(main.getIRStatus().length > 0 && songrank == null) {
 							songrank = new RankingData();
-							main.getRankingDataCache().put(resource.getSongdata(), main.getPlayerConfig().getLnmode(), songrank);
+							main.getRankingDataCache().put(resource.getSongdata(), resource.getLnmode(), songrank);
 						}
 						resource.setRankingData(songrank);
 
@@ -398,7 +398,7 @@ public class MusicResult extends AbstractResult {
 			if (saveReplay[index] != ReplayStatus.SAVED && resource.isUpdateScore()) {
 				ReplayData rd = resource.getReplayData();
 				if (main.getPlayDataAccessor().wrireReplayData(rd, resource.getBMSModel(),
-						resource.getPlayerConfig().getLnmode(), index)) {
+						resource.getLnmode(), index)) {
 					saveReplay[index] = ReplayStatus.SAVED;
 					main.saveLastRecording("ON_REPLAY");
 				}
@@ -417,7 +417,7 @@ public class MusicResult extends AbstractResult {
 			return;
 		}
 		final ScoreData oldsc = main.getPlayDataAccessor().readScoreData(resource.getBMSModel(),
-				resource.getPlayerConfig().getLnmode());
+				resource.getLnmode());
 		oldscore = oldsc != null ? oldsc : new ScoreData();
 
 		getScoreDataProperty().setTargetScore(oldscore.getExscore(), resource.getTargetScoreData() != null ? resource.getTargetScoreData().getExscore() : 0, resource.getBMSModel().getTotalNotes());
@@ -534,7 +534,7 @@ public class MusicResult extends AbstractResult {
 
 		if (resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY && !(isFreqTrainerEnabled() && isFreqNegative())) {
 			main.getPlayDataAccessor().writeScoreData(resource.getScoreData(), resource.getBMSModel(),
-					resource.getPlayerConfig().getLnmode(), resource.isUpdateScore());
+					resource.getLnmode(), resource.isUpdateScore());
 		} else {
 			logger.info("プレイモードが{}のため、スコア登録はされません", resource.getPlayMode().mode.name());
 		}

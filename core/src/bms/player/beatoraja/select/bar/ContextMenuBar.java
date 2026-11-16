@@ -16,6 +16,7 @@ import bms.player.beatoraja.select.MusicSelector;
 import bms.player.beatoraja.skin.property.EventFactory.EventType;
 import bms.player.beatoraja.ScoreDatabaseAccessor.ScoreDataCollector;
 import bms.player.beatoraja.ModeFilter;
+import bms.player.beatoraja.PlayerConfig;
 import bms.model.Mode;
 
 import static bms.player.beatoraja.select.bar.FunctionBar.*;
@@ -199,7 +200,7 @@ public class ContextMenuBar extends DirectoryBar {
         for (int i = 0; i < MusicSelector.REPLAY; ++i) {
             boolean replayExists = selector.main.getPlayDataAccessor().existsReplayData(
                 song.getSha256(), song.hasUndefinedLongNote(),
-                selector.main.getPlayerConfig().getLnmode(), i);
+                selector.main.getPlayerConfig().getLnmode(song.getMode()), i);
             if (!replayExists) { continue; }
             final int replayIndex = i;
             var replay = new FunctionBar((selector, self) -> {
@@ -379,8 +380,9 @@ public class ContextMenuBar extends DirectoryBar {
             lamps[lampIndex]++;
         };
 
+        final PlayerConfig config = selector.main.getPlayerConfig();
         selector.getScoreDataCache().readScoreDatas(collector, songs,
-                                                    selector.main.getPlayerConfig().getLnmode());
+                                                    song -> config.getLnmode(song.getMode()));
         return lamps;
     }
 
