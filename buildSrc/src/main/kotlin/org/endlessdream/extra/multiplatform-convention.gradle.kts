@@ -47,10 +47,12 @@ configurations.matching {
 }
 
 configurations.all {
+    val configuration = this
     afterEvaluate {
-        if (isCanBeResolved) {
-            val isTargetRuntime = name.equals("runtimeClasspath", ignoreCase = true)
-            attributes.attribute(platformModified, if (isTargetRuntime) "target" else "host")
+        // afterEvaluate内では暗黙のthisがProjectに切り替わるため、Configurationを明示的に参照する
+        if (configuration.isCanBeResolved) {
+            val isTargetRuntime = configuration.name.equals("runtimeClasspath", ignoreCase = true)
+            configuration.attributes.attribute(platformModified, if (isTargetRuntime) "target" else "host")
         }
     }
 }
