@@ -254,6 +254,7 @@ public class BMSPlayer extends MainState {
 
 			if(playinfo.rand != null && playinfo.rand.length > 0) {
 				model = resource.loadBMSModel(playinfo.rand);
+				resource.setPseudoBssApplied(model.getLntype(), PseudoBssConverter.isConverted(model));
 				// 暫定処置
 				conditionalInitialMarginTime = BMSModelUtils.setStartNoteTime(model, 1000);
 				BMSPlayerRule.validate(model);
@@ -578,7 +579,9 @@ public class BMSPlayer extends MainState {
 			// 分岐後モデルはパーサから再構築されるため、初回ロード時と同じく疑似BSS変換を
 			// 譜面オプション適用前に行い、ノーツ数・判定対象を本体モデルと揃える
 			if (pseudoBssAsBss) {
-				PseudoBssConverter.convert(m);
+				if (!PseudoBssConverter.convert(m).isEmpty()) {
+					resource.recordPseudoBssApplied(m.getLntype());
+				}
 			}
 			for (java.util.function.Consumer<BMSModel> step : branchModSteps) {
 				step.accept(m);

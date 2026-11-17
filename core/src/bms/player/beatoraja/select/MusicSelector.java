@@ -501,6 +501,7 @@ public final class MusicSelector extends MainState {
 		final Path[] files = Stream.of(songs).map(song -> Paths.get(song.getPath())).toArray(Path[]::new);
 		if (resource.setCourseBMSFiles(files)) {
 			if (mode.mode == BMSPlayerMode.Mode.PLAY || mode.mode == BMSPlayerMode.Mode.AUTOPLAY) {
+				boolean lnmodeChanged = false;
 				for (CourseData.CourseDataConstraint constraint : gradeBar.getCourseData().getConstraint()) {
 					switch (constraint) {
 						case CLASS:
@@ -527,17 +528,21 @@ public final class MusicSelector extends MainState {
 							}
 							break;
 						case LN:
-							setCourseLnmode(BMSModel.LNTYPE_LONGNOTE);
+							lnmodeChanged |= setCourseLnmode(BMSModel.LNTYPE_LONGNOTE);
 							break;
 						case CN:
-							setCourseLnmode(BMSModel.LNTYPE_CHARGENOTE);
+							lnmodeChanged |= setCourseLnmode(BMSModel.LNTYPE_CHARGENOTE);
 							break;
 						case HCN:
-							setCourseLnmode(BMSModel.LNTYPE_HELLCHARGENOTE);
+							lnmodeChanged |= setCourseLnmode(BMSModel.LNTYPE_HELLCHARGENOTE);
 							break;
 						default:
 							break;
 					}
+				}
+				// 疑似BSS/MSS変換は譜面デコード時に実行されるため、コース制約でLNモードが変化した場合は再読み込みして整合させる
+				if (lnmodeChanged && config.isPseudoBssAsBss() && !resource.setCourseBMSFiles(files)) {
+					return false;
 				}
 			}
 			gradeBar.getCourseData().setSong(resource.getCourseBMSModels());
@@ -771,15 +776,20 @@ public final class MusicSelector extends MainState {
 	 * コースの LN 制約 (LN/CN/HCN) に合わせて、コースに含まれる全モードの LN モードを変更し、
 	 * 読み込み済みのコース譜面にも反映する
 	 */
-	private void setCourseLnmode(int lnmode) {
+	private boolean setCourseLnmode(int lnmode) {
 		final BMSModel[] models = resource.getCourseBMSModels();
 		if (models == null) {
-			return;
+			return false;
 		}
+		boolean changed = false;
 		for (BMSModel model : models) {
+			if (model.getLntype() != lnmode) {
+				changed = true;
+			}
 			config.setLnmode(model.getMode(), lnmode);
 			PlayerResource.applyLnmode(model, lnmode);
 		}
+		return changed;
 	}
 
 	public PlayConfig getSelectedBarPlayConfig() {

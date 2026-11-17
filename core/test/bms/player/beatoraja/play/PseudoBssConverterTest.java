@@ -485,4 +485,24 @@ class PseudoBssConverterTest {
         // 18ch 1 + 評価前の MSS 2 区間 (4) + 分岐側の MSS 2 区間 (4) = 9
         assertEquals(9, model.getTotalNotes());
     }
+
+    @Test
+    void tracksConvertedStateOnlyWhenConversionOccurred() {
+        assertFalse(PseudoBssConverter.isConverted(null));
+
+        BMSModel converted = decode(BMSModel.LNTYPE_CHARGENOTE, pseudoBss());
+        assertFalse(PseudoBssConverter.isConverted(converted));
+        assertFalse(PseudoBssConverter.convert(converted).isEmpty());
+        assertTrue(PseudoBssConverter.isConverted(converted));
+
+        BMSModel unconvertedCn = decode(BMSModel.LNTYPE_CHARGENOTE,
+                "#00156:" + slots16(0, 1, 8, 1),
+                "#00116:" + slots16(10, 3));
+        assertTrue(PseudoBssConverter.convert(unconvertedCn).isEmpty());
+        assertFalse(PseudoBssConverter.isConverted(unconvertedCn));
+
+        BMSModel lnMode = decode(BMSModel.LNTYPE_LONGNOTE, pseudoBss());
+        assertTrue(PseudoBssConverter.convert(lnMode).isEmpty());
+        assertFalse(PseudoBssConverter.isConverted(lnMode));
+    }
 }

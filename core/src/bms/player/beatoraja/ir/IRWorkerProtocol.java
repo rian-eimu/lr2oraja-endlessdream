@@ -266,6 +266,7 @@ final class IRWorkerProtocol {
 		public CourseDataConstraint[] constraint;
 		public Trophy[] trophy;
 		public int lntype;
+		public boolean pseudoBss;
 
 		static Course from(IRCourseData course) {
 			if(course == null) {
@@ -277,11 +278,12 @@ final class IRWorkerProtocol {
 			dto.constraint = course.constraint;
 			dto.trophy = fromTrophies(course.trophy);
 			dto.lntype = course.lntype;
+			dto.pseudoBss = course.pseudoBss;
 			return dto;
 		}
 
 		IRCourseData toIRCourseData() {
-			return new IRCourseData(name, toIRCharts(charts), constraint, toIRTrophies(trophy), lntype);
+			return new IRCourseData(name, toIRCharts(charts), constraint, toIRTrophies(trophy), lntype, pseudoBss);
 		}
 	}
 
@@ -364,6 +366,7 @@ final class IRWorkerProtocol {
 	static class Score {
 		public String sha256;
 		public int lntype;
+		public boolean pseudoBss;
 		public String id;
 		public String player;
 		public ClearType clear;
@@ -406,6 +409,7 @@ final class IRWorkerProtocol {
 			Score dto = new Score();
 			dto.sha256 = score.sha256;
 			dto.lntype = score.lntype;
+			dto.pseudoBss = score.pseudoBss;
 			dto.id = score.id;
 			dto.player = score.player;
 			dto.clear = score.clear;
@@ -447,7 +451,7 @@ final class IRWorkerProtocol {
 			long effectivePlaytime = playtime >= 0 ? playtime : (playDuration > 0 ? playDuration : -1);
 			IRScoreData score = new IRScoreData(sha256, lntype, id, player, clear, date, epg, lpg, egr, lgr, egd, lgd, ebd, lbd,
 					epr, lpr, ems, lms, avgjudge, maxcombo, notes, passnotes, minbp, option, seed, assist, gauge,
-					deviceType, judgeAlgorithm, rule, skin, effectivePlaytime);
+					deviceType, judgeAlgorithm, rule, skin, effectivePlaytime, pseudoBss);
 			score.gaugeHistory = gaugeHistory != null ? gaugeHistory.toIRGaugeHistory() : null;
 			score.replayData = replayData;
 			score.replays = replays;

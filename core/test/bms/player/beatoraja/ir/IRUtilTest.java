@@ -12,7 +12,11 @@ import bms.model.BMSDecoder;
 import bms.model.BMSModel;
 import bms.model.ChartInformation;
 import bms.model.ChartSource;
+import bms.player.beatoraja.ClearType;
 import bms.player.beatoraja.CourseData;
+import bms.player.beatoraja.MainController;
+import bms.player.beatoraja.ReplayData;
+import bms.player.beatoraja.ScoreData;
 import bms.player.beatoraja.song.SongData;
 
 public class IRUtilTest {
@@ -83,6 +87,82 @@ public class IRUtilTest {
         CourseData normalCourse = new CourseData();
         normalCourse.setSong(new SongData[] { normalSong });
         assertFalse(IRUtil.shouldSkipBmcScoreSend("BMS-IR", "https://bms-ir.org/", normalCourse));
+    }
+
+    @Test
+    public void testShouldSkipPseudoBssScoreSend() {
+        // 疑似BSS/MSS変換が適用されたプレイは rianIR のみ送信し、他IRはすべてスキップする
+        assertFalse(IRUtil.shouldSkipPseudoBssScoreSend("rianIR", true));
+        assertFalse(IRUtil.shouldSkipPseudoBssScoreSend("rianIR (dev)", true));
+        assertTrue(IRUtil.shouldSkipPseudoBssScoreSend("BMS-IR", true));
+        assertTrue(IRUtil.shouldSkipPseudoBssScoreSend("Mocha-Repository", true));
+        assertTrue(IRUtil.shouldSkipPseudoBssScoreSend("LR2IR", true));
+        assertTrue(IRUtil.shouldSkipPseudoBssScoreSend("", true));
+        assertTrue(IRUtil.shouldSkipPseudoBssScoreSend(null, true));
+
+        // 疑似BSS/MSS変換が未発生の場合は従来通りどのIRへも送信可能
+        assertFalse(IRUtil.shouldSkipPseudoBssScoreSend("rianIR", false));
+        assertFalse(IRUtil.shouldSkipPseudoBssScoreSend("BMS-IR", false));
+        assertFalse(IRUtil.shouldSkipPseudoBssScoreSend("Mocha-Repository", false));
+    }
+
+    @Test
+    public void testPseudoBssIrLntypeAndProtocolRoundTrip() {
+        ScoreData localCnScore = new ScoreData();
+        localCnScore.setSha256("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        localCnScore.setMode(IRScoreData.LNTYPE_CN);
+        localCnScore.setClear(ClearType.Normal.id);
+        localCnScore.setEpg(100);
+
+        // ローカルScoreDataのmode(1:CN)を書き換えずに、IRScoreDataでCN+(4)・pseudoBss=trueになること
+        IRScoreData cnPlusScore = new IRScoreData(localCnScore, IRScoreData.LNTYPE_CN, true);
+        assertEquals(IRScoreData.LNTYPE_CN, localCnScore.getMode());
+        assertEquals(IRScoreData.LNTYPE_CN_PLUS, cnPlusScore.lntype);
+        assertTrue(cnPlusScore.pseudoBss);
+        assertEquals("CN+", cnPlusScore.getLntypeName());
+
+        // IRWorkerProtocolのDTOシリアライズを経由してもCN+(4)とpseudoBss=trueが保持されること
+        IRScoreData roundTrippedCnPlus = IRWorkerProtocol.Score.from(cnPlusScore).toIRScoreData();
+        assertEquals(IRScoreData.LNTYPE_CN_PLUS, roundTrippedCnPlus.lntype);
+        assertTrue(roundTrippedCnPlus.pseudoBss);
+        assertEquals(IRScoreData.LNTYPE_CN, roundTrippedCnPlus.convertToScoreData().getMode());
+
+        // HCNモード時はHCN+(5)として扱われること
+        IRScoreData hcnPlusScore = new IRScoreData(localCnScore, IRScoreData.LNTYPE_HCN, true);
+        assertEquals(IRScoreData.LNTYPE_HCN_PLUS, hcnPlusScore.lntype);
+        assertTrue(hcnPlusScore.pseudoBss);
+        assertEquals("HCN+", hcnPlusScore.getLntypeName());
+        assertEquals(IRScoreData.LNTYPE_HCN, hcnPlusScore.convertToScoreData().getMode());
+
+        // コースデータでもHCN+(5)・pseudoBss=trueが保持され、プロトコル往復すること
+        CourseData course = new CourseData();
+        course.setName("Pseudo BSS Course");
+        course.setSong(new SongData[] { createSongWithPath("D:/bms/sample/a.bms") });
+        IRCourseData irCourse = new IRCourseData(course, IRScoreData.LNTYPE_HCN, true);
+        IRCourseData roundTrippedCourse = IRWorkerProtocol.Course.from(irCourse).toIRCourseData();
+        assertEquals(IRScoreData.LNTYPE_HCN_PLUS, roundTrippedCourse.lntype);
+        assertTrue(roundTrippedCourse.pseudoBss);
+
+        // MainController.IRSendStatus 経由の送信でも CN+ が渡されること
+        IRScoreData[] captured = new IRScoreData[1];
+        IRConnection stubIr = new TestIRConnectionBase() {
+            @Override
+            public IRResponse<Object> sendPlayData(IRChartData model, IRScoreData score) {
+                captured[0] = score;
+                return new IRResponse<Object>() {
+                    @Override public boolean isSucceeded() { return true; }
+                    @Override public String getMessage() { return "ok"; }
+                    @Override public Object getData() { return null; }
+                };
+            }
+        };
+        MainController.IRSendStatus sendStatus = new MainController.IRSendStatus(
+                stubIr, createSongWithPath("D:/bms/sample/a.bms"), localCnScore, new ReplayData(),
+                IRScoreData.LNTYPE_CN, true);
+        assertTrue(sendStatus.send());
+        assertNotNull(captured[0]);
+        assertEquals(IRScoreData.LNTYPE_CN_PLUS, captured[0].lntype);
+        assertTrue(captured[0].pseudoBss);
     }
 
     private static SongData createSongWithPath(String path) {

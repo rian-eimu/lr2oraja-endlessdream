@@ -27,24 +27,38 @@ public class IRCourseData {
 	 */
 	public final IRTrophyData[] trophy;
 	/**
-	 * LN TYPE(-1 : 未指定, 0: LN, 1: CN, 2: HCN)
+	 * LN TYPE(-1 : 未指定, 0: LN, 1: CN, 2: HCN, 3: HLN, 4: CN+, 5: HCN+)
 	 */
 	public final int lntype;
+	/**
+	 * 疑似BSS/MSS変換オプションが適用されたコースプレイかどうか
+	 */
+	public final boolean pseudoBss;
 
 	public IRCourseData(String name, IRChartData[] charts, CourseDataConstraint[] constraint, IRTrophyData[] trophy,
 			int lntype) {
+		this(name, charts, constraint, trophy, lntype, IRScoreData.isPseudoBssLntype(lntype));
+	}
+
+	public IRCourseData(String name, IRChartData[] charts, CourseDataConstraint[] constraint, IRTrophyData[] trophy,
+			int lntype, boolean pseudoBss) {
 		this.name = name;
 		this.charts = charts != null ? charts : new IRChartData[0];
 		this.constraint = constraint != null ? constraint : new CourseDataConstraint[0];
 		this.trophy = trophy != null ? trophy : new IRTrophyData[0];
-		this.lntype = lntype;
+		this.lntype = IRScoreData.toIrLntype(lntype, pseudoBss);
+		this.pseudoBss = pseudoBss || IRScoreData.isPseudoBssLntype(this.lntype);
 	}
 
     public IRCourseData(CourseData course) {
-    	this(course, -1);
+    	this(course, -1, false);
     }
 
     public IRCourseData(CourseData course, int lntype) {
+    	this(course, lntype, IRScoreData.isPseudoBssLntype(lntype));
+    }
+
+    public IRCourseData(CourseData course, int lntype, boolean pseudoBss) {
     	this.name = course.getName();
     	this.charts = new IRChartData[course.getSong().length];
     	for(int i = 0;i < this.charts.length;i++) {
@@ -54,7 +68,8 @@ public class IRCourseData {
     	for(int i = 0;i < this.constraint.length;i++) {
     		constraint[i] =course.getConstraint()[i];
     	}
-    	this.lntype = lntype;
+    	this.lntype = IRScoreData.toIrLntype(lntype, pseudoBss);
+    	this.pseudoBss = pseudoBss || IRScoreData.isPseudoBssLntype(this.lntype);
 
     	this.trophy = new IRTrophyData[course.getTrophy().length];
     	for(int i = 0; i < trophy.length;i++) {
