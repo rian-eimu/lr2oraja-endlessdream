@@ -96,6 +96,8 @@ public class CourseResult extends AbstractResult {
 				}
 			}
 			final int lnmode = uln ? resource.getCourseLnmode() : 0;
+			final boolean pseudoBss = resource.isCoursePseudoBssApplied();
+			final int irLnmode = pseudoBss ? resource.getCourseIrLntype(lnmode) : lnmode;
 			
         	for(IRStatus irc : ir) {
 
@@ -123,13 +125,17 @@ public class CourseResult extends AbstractResult {
     				if (IRUtil.shouldSkipIR(irc.config.getIrname(), resource.getPlayerConfig().isDxMode())) {
     					continue;
     				}
+    				if (IRUtil.shouldSkipPseudoBssScoreSend(irc.config.getIrname(), pseudoBss)) {
+    					logger.info("{}: 疑似BSS/MSS変換が適用されたコースプレイのためスコア送信をスキップしました。", irc.config.getIrname());
+    					continue;
+    				}
     				// 拡張子.bmcの譜面を含むコースはBMS-IRへのスコア送信を一時的にスキップする（将来廃止予定）
     				if (IRUtil.shouldSkipBmcScoreSend(irc.config.getIrname(), resource.getCourseData())) {
     					logger.info("{}: 拡張子.bmcの譜面を含むためコーススコア送信をスキップしました。", irc.config.getIrname());
     					continue;
     				}
 
-    				irSendStatus.add(new IRSendStatus(irc.connection, resource.getCourseData(), lnmode, newscore, resource.getCourseReplay()));
+    				irSendStatus.add(new IRSendStatus(irc.connection, resource.getCourseData(), irLnmode, pseudoBss, newscore, resource.getCourseReplay()));
     			}
         	}
 
@@ -333,14 +339,20 @@ public class CourseResult extends AbstractResult {
 		public final IRConnection ir;
 		public final CourseData course;
 		public final int lnmode;
+		public final boolean pseudoBss;
 		public final ScoreData score;
 		public final ReplayData[] replays;
 		public int retry = 0;
 		
 		public IRSendStatus(IRConnection ir, CourseData course, int lnmode, ScoreData score, ReplayData[] replays) {
+			this(ir, course, lnmode, IRScoreData.isPseudoBssLntype(lnmode), score, replays);
+		}
+
+		public IRSendStatus(IRConnection ir, CourseData course, int lnmode, boolean pseudoBss, ScoreData score, ReplayData[] replays) {
 			this.ir = ir;
 			this.course = course;
-			this.lnmode = lnmode;
+			this.lnmode = IRScoreData.toIrLntype(lnmode, pseudoBss);
+			this.pseudoBss = pseudoBss || IRScoreData.isPseudoBssLntype(this.lnmode);
 			this.score = score;
 			this.replays = replays;
 		}
@@ -348,9 +360,9 @@ public class CourseResult extends AbstractResult {
 		public boolean send() {
 			if (retry < 0) return retry == -255;
 			logger.info("IRへスコア送信中 : {}", course.getName());
-			bms.player.beatoraja.ir.IRScoreData irscore = new bms.player.beatoraja.ir.IRScoreData(score);
+			bms.player.beatoraja.ir.IRScoreData irscore = new bms.player.beatoraja.ir.IRScoreData(score, lnmode, pseudoBss);
 			irscore.replays = replays;
-            IRResponse<Object> send1 = ir.sendCoursePlayData(new IRCourseData(course, lnmode), irscore);
+            IRResponse<Object> send1 = ir.sendCoursePlayData(new IRCourseData(course, lnmode, pseudoBss), irscore);
             if(send1.isSucceeded()) {
 				logger.info("IRスコア送信完了 : {}", course.getName());
                 retry = -255;

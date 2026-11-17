@@ -14,14 +14,25 @@ import bms.player.beatoraja.play.JudgeAlgorithm;
  */
 public class IRScoreData {
 
+	public static final int LNTYPE_LN = 0;
+	public static final int LNTYPE_CN = 1;
+	public static final int LNTYPE_HCN = 2;
+	public static final int LNTYPE_HLN = 3;
+	public static final int LNTYPE_CN_PLUS = 4;
+	public static final int LNTYPE_HCN_PLUS = 5;
+
 	/**
 	 * 譜面のハッシュ値
 	 */
 	public final String sha256;
 	/**
-	 * LN TYPE(0: LN, 1: CN, 2: HCN)
+	 * LN TYPE(0: LN, 1: CN, 2: HCN, 3: HLN, 4: CN+, 5: HCN+)
 	 */
 	public final int lntype;
+	/**
+	 * 疑似BSS/MSS変換オプションが適用されたスコアかどうか
+	 */
+	public final boolean pseudoBss;
 	/**
 	 * プレイヤーID
 	 */
@@ -153,8 +164,22 @@ public class IRScoreData {
 			long avgjudge, int maxcombo, int notes, int passnotes, int minbp, int option, long seed, int assist,
 			int gauge, BMSPlayerInputDevice.Type deviceType, JudgeAlgorithm judgeAlgorithm, BMSPlayerRule rule,
 			String skin, long playtime) {
+		this(sha256, lntype, id, player, clear, date, epg, lpg, egr, lgr, egd, lgd, ebd, lbd,
+				epr, lpr, ems, lms, avgjudge, maxcombo, notes, passnotes, minbp, option, seed, assist,
+				gauge, deviceType, judgeAlgorithm, rule, skin, playtime, isPseudoBssLntype(lntype));
+	}
+
+	/**
+	 * 実演奏時間および疑似BSS/MSS変換適用フラグ付きのIRスコアデータを生成する。
+	 */
+	public IRScoreData(String sha256, int lntype, String id, String player, ClearType clear, long date, int epg,
+			int lpg, int egr, int lgr, int egd, int lgd, int ebd, int lbd, int epr, int lpr, int ems, int lms,
+			long avgjudge, int maxcombo, int notes, int passnotes, int minbp, int option, long seed, int assist,
+			int gauge, BMSPlayerInputDevice.Type deviceType, JudgeAlgorithm judgeAlgorithm, BMSPlayerRule rule,
+			String skin, long playtime, boolean pseudoBss) {
 		this.sha256 = sha256;
-		this.lntype = lntype;
+		this.lntype = toIrLntype(lntype, pseudoBss);
+		this.pseudoBss = pseudoBss || isPseudoBssLntype(this.lntype);
 		this.id = id;
 		this.player = player;
 		this.clear = clear;
@@ -189,8 +214,17 @@ public class IRScoreData {
 	}
 
 	public IRScoreData(ScoreData score) {
+		this(score, score.getMode(), false);
+	}
+
+	public IRScoreData(ScoreData score, boolean pseudoBss) {
+		this(score, score.getMode(), pseudoBss);
+	}
+
+	public IRScoreData(ScoreData score, int baseLntype, boolean pseudoBss) {
 		this.sha256 = score.getSha256();
-		this.lntype = score.getMode();
+		this.lntype = toIrLntype(baseLntype, pseudoBss);
+		this.pseudoBss = pseudoBss || isPseudoBssLntype(this.lntype);
 		this.id = score.getID();
 		this.player = score.getPlayer();
 		this.clear = ClearType.getClearTypeByID(score.getClear());
@@ -225,6 +259,53 @@ public class IRScoreData {
 		this.gaugeHistory = IRGaugeHistory.fromGaugeLog(score.getGaugelog());
 	}
 	
+	public static boolean isPseudoBssLntype(int lntype) {
+		return lntype == LNTYPE_CN_PLUS || lntype == LNTYPE_HCN_PLUS;
+	}
+
+	/**
+	 * ローカルLNモードと疑似BSS/MSS変換適用フラグからIR送信用lntypeへ変換する
+	 */
+	public static int toIrLntype(int lnmode, boolean pseudoBss) {
+		if (!pseudoBss) {
+			return lnmode;
+		}
+		return switch (lnmode) {
+			case LNTYPE_CN, LNTYPE_CN_PLUS -> LNTYPE_CN_PLUS;
+			case LNTYPE_HCN, LNTYPE_HCN_PLUS -> LNTYPE_HCN_PLUS;
+			default -> lnmode;
+		};
+	}
+
+	/**
+	 * IRのlntypeをローカルscore.db互換のLNモード（0..3）へ正規化する
+	 */
+	public static int toLocalLnmode(int irLntype) {
+		return switch (irLntype) {
+			case LNTYPE_CN_PLUS -> LNTYPE_CN;
+			case LNTYPE_HCN_PLUS -> LNTYPE_HCN;
+			default -> irLntype;
+		};
+	}
+
+	/**
+	 * IRのlntypeに対応する表記名（LN / CN / HCN / HLN / CN+ / HCN+）を返す
+	 */
+	public static String getLntypeName(int lntype) {
+		return switch (lntype) {
+			case LNTYPE_CN -> "CN";
+			case LNTYPE_HCN -> "HCN";
+			case LNTYPE_HLN -> "HLN";
+			case LNTYPE_CN_PLUS -> "CN+";
+			case LNTYPE_HCN_PLUS -> "HCN+";
+			default -> "LN";
+		};
+	}
+
+	public String getLntypeName() {
+		return getLntypeName(this.lntype);
+	}
+
 	public int getExscore() {
 		return (epg + lpg) * 2 + egr + lgr;
 	}
@@ -232,7 +313,7 @@ public class IRScoreData {
 	public ScoreData convertToScoreData() {
 		ScoreData score = new ScoreData();
 		score.setSha256(this.sha256);
-		score.setMode(this.lntype);
+		score.setMode(toLocalLnmode(this.lntype));
 		score.setID(this.id);
 		score.setPlayer(this.player);
 		score.setClear(this.clear.id);

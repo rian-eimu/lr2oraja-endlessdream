@@ -5,6 +5,7 @@ import bms.player.beatoraja.CourseData.CourseDataConstraint;
 import bms.player.beatoraja.TableData.TableFolder;
 import bms.player.beatoraja.audio.AudioDriver;
 import bms.player.beatoraja.audio.BMSLoudnessAnalyzer;
+import bms.player.beatoraja.ir.IRScoreData;
 import bms.player.beatoraja.ir.RankingData;
 import bms.player.beatoraja.play.BMSPlayerRule;
 import bms.player.beatoraja.play.GrooveGauge;
@@ -141,6 +142,10 @@ public final class PlayerResource {
 	private boolean freqOn;
 	private String freqString;
 	private boolean forceNoIRSend;
+	private boolean pseudoBssOptionEnabled;
+	private boolean pseudoBssApplied;
+	private boolean[] courseStagePseudoBssApplied;
+	private int[] courseStageLntypes;
 	// Full list of difficult tables that contains current song
 	private List<String> reverseLookup = new ArrayList<>();
 
@@ -173,6 +178,10 @@ public final class PlayerResource {
 		setTablename("");
 		setTablelevel("");
 		failMeasure = Double.NaN;
+		pseudoBssOptionEnabled = false;
+		pseudoBssApplied = false;
+		courseStagePseudoBssApplied = null;
+		courseStageLntypes = null;
 	}
 
 	public boolean setBMSFile(final Path f, BMSPlayerMode mode) {
@@ -188,6 +197,8 @@ public final class PlayerResource {
 		if (model.getAllTimeLines().length == 0) {
 			return false;
 		}
+		pseudoBssOptionEnabled = pconfig != null && pconfig.isPseudoBssAsBss();
+		setPseudoBssApplied(model.getLntype(), PseudoBssConverter.isConverted(model));
 
 		if (this.songdata != null && (model.getBackbmp() == null || model.getBackbmp().length() == 0)) {
 			if (this.songdata.getBackbmp() != null && this.songdata.getBackbmp().length() > 0) {
@@ -424,6 +435,13 @@ public final class PlayerResource {
 			models.add(model);
 		}
 		course = models.toArray(BMSModel.class);
+		pseudoBssOptionEnabled = pconfig != null && pconfig.isPseudoBssAsBss();
+		courseStagePseudoBssApplied = new boolean[course.length];
+		courseStageLntypes = new int[course.length];
+		for (int i = 0; i < course.length; i++) {
+			courseStagePseudoBssApplied[i] = PseudoBssConverter.isConverted(course[i]);
+			courseStageLntypes[i] = course[i].getLntype();
+		}
 		updateCourseScore = true;
 		return true;
 	}
@@ -510,6 +528,75 @@ public final class PlayerResource {
 		clear();
 		tablename = name;
 		tablelevel = lev;
+		pseudoBssOptionEnabled = pconfig != null && pconfig.isPseudoBssAsBss();
+		pseudoBssApplied = PseudoBssConverter.isConverted(model);
+	}
+
+	/**
+	 * 現在のプレイ開始時点で疑似BSS/MSS変換オプションが有効であったかを返す
+	 */
+	public boolean isPseudoBssOptionEnabled() {
+		return pseudoBssOptionEnabled;
+	}
+
+	/**
+	 * 現在の単曲プレイで疑似BSS/MSS変換が1件以上適用されたかを返す
+	 */
+	public boolean isPseudoBssApplied() {
+		return pseudoBssApplied;
+	}
+
+	/**
+	 * 現在の単曲（およびコースステージ）の疑似BSS/MSS変換適用状態を更新する
+	 */
+	public void setPseudoBssApplied(int lntype, boolean applied) {
+		this.pseudoBssApplied = applied;
+		if (course != null && courseStagePseudoBssApplied != null && courseindex >= 0
+				&& courseindex < courseStagePseudoBssApplied.length) {
+			courseStagePseudoBssApplied[courseindex] = applied;
+			courseStageLntypes[courseindex] = lntype;
+		}
+	}
+
+	/**
+	 * 動的条件分岐等によりプレイ中に疑似BSS/MSS変換が適用されたことを記録する
+	 */
+	public void recordPseudoBssApplied(int lntype) {
+		setPseudoBssApplied(lntype, true);
+	}
+
+	/**
+	 * コースプレイにおいて1曲以上疑似BSS/MSS変換が適用されたかを返す
+	 */
+	public boolean isCoursePseudoBssApplied() {
+		if (courseStagePseudoBssApplied == null) {
+			return false;
+		}
+		for (boolean applied : courseStagePseudoBssApplied) {
+			if (applied) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * コースのIR送信用LNタイプを返す。疑似BSS/MSS変換が発生していた場合はCN+(4)またはHCN+(5)に変換する
+	 */
+	public int getCourseIrLntype(int fallbackLnmode) {
+		if (!isCoursePseudoBssApplied()) {
+			return fallbackLnmode;
+		}
+		int convertedLntype = fallbackLnmode;
+		if (!PseudoBssConverter.isTargetLntype(convertedLntype) && courseStagePseudoBssApplied != null
+				&& courseStageLntypes != null) {
+			for (int i = 0; i < courseStagePseudoBssApplied.length; i++) {
+				if (courseStagePseudoBssApplied[i] && PseudoBssConverter.isTargetLntype(courseStageLntypes[i])) {
+					convertedLntype = Math.max(convertedLntype, courseStageLntypes[i]);
+				}
+			}
+		}
+		return IRScoreData.toIrLntype(convertedLntype, true);
 	}
 
 	public FloatArray[] getGauge() {

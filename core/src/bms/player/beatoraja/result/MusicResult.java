@@ -150,13 +150,21 @@ public class MusicResult extends AbstractResult {
                     if (IRUtil.shouldSkipIR(irc.config.getIrname(), resource.getPlayerConfig().isDxMode())) {
                         continue;
                     }
+                    if (IRUtil.shouldSkipPseudoBssScoreSend(irc.config.getIrname(), resource.isPseudoBssApplied())) {
+                        logger.info("{}: 疑似BSS/MSS変換が適用されたプレイのためスコア送信をスキップしました。", irc.config.getIrname());
+                        continue;
+                    }
                     // 拡張子.bmcの譜面はBMS-IRへのスコア送信を一時的にスキップする（将来廃止予定）
                     if (IRUtil.shouldSkipBmcScoreSend(irc.config.getIrname(), resource.getSongdata())) {
                         logger.info("{}: 拡張子.bmcの譜面のためスコア送信をスキップしました。", irc.config.getIrname());
                         continue;
                     }
                     
-                    IRSendStatus status = new IRSendStatus(irc.connection, resource.getSongdata(), newscore, resource.getReplayData());
+                    final boolean pseudoBss = resource.isPseudoBssApplied();
+                    final int baseLnmode = resource.getBMSModel() != null && resource.getBMSModel().containsUndefinedLongNote()
+                            ? resource.getLnmode() : newscore.getMode();
+                    IRSendStatus status = new IRSendStatus(irc.connection, resource.getSongdata(), newscore,
+                            resource.getReplayData(), baseLnmode, pseudoBss);
     				main.irSendStatus.add(status);
 					addedScores.add(status);
     			}

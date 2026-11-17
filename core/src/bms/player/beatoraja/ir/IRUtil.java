@@ -40,6 +40,21 @@ public class IRUtil {
         return isDxMode;
     }
 
+    /**
+     * 疑似BSS/MSS変換が適用されたプレイについて、指定IRへのスコア送信をスキップすべきかどうかを判定する。
+     * 変換が発生したCN/HCNプレイ（CN+/HCN+）はrianIR以外に送信しない。
+     *
+     * @param irName IR名
+     * @param isPseudoBssApplied 疑似BSS/MSS変換が適用されたかどうか
+     * @return スキップすべきであればtrue
+     */
+    public static boolean shouldSkipPseudoBssScoreSend(String irName, boolean isPseudoBssApplied) {
+        if (!isPseudoBssApplied) {
+            return false;
+        }
+        return !isRianIR(irName);
+    }
+
     // =========================================================================
     // 拡張子.bmc譜面のBMS-IRスコア送信制限（将来的に廃止予定の一時措置）
     // 廃止時は以下のメソッド群および MusicResult / CourseResult の呼び出し箇所を削除すること。

@@ -1,8 +1,11 @@
 package bms.player.beatoraja.play;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
+import java.util.WeakHashMap;
 
 import bms.model.BMSModel;
 import bms.model.LongNote;
@@ -82,8 +85,19 @@ public final class PseudoBssConverter {
 	}
 
 	private static final Result EMPTY = new Result(0, 0);
+	private static final Map<BMSModel, Boolean> CONVERTED_MODELS = Collections.synchronizedMap(new WeakHashMap<>());
 
 	private PseudoBssConverter() {
+	}
+
+	/**
+	 * 指定されたモデルに対して疑似 BSS / 疑似 MSS の変換が 1 件以上適用されたかを返す
+	 *
+	 * @param model 判定対象のモデル
+	 * @return 変換が適用されていれば true
+	 */
+	public static boolean isConverted(BMSModel model) {
+		return model != null && Boolean.TRUE.equals(CONVERTED_MODELS.get(model));
 	}
 
 	/**
@@ -170,7 +184,11 @@ public final class PseudoBssConverter {
 			}
 			model.setAllTimeLine(merged.toArray(new TimeLine[0]));
 		}
-		return bss == 0 && mss == 0 ? EMPTY : new Result(bss, mss);
+		final Result result = bss == 0 && mss == 0 ? EMPTY : new Result(bss, mss);
+		if (!result.isEmpty()) {
+			CONVERTED_MODELS.put(model, Boolean.TRUE);
+		}
+		return result;
 	}
 
 	/**
