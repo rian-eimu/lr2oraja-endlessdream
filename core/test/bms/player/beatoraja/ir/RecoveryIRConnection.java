@@ -50,9 +50,31 @@ public final class RecoveryIRConnection extends TestIRConnectionBase {
     private IRResponse<Object> submission(String method) {
         event(method);
         if (mode().equals("accept-hang")) pause();
+        if (mode().equals("rate-limited")) {
+            return new RetryableResponse("Too Many Requests", true, 300_000L);
+        }
+        if (mode().equals("service-unavailable-huge-retry")) {
+            return new RetryableResponse("Service Unavailable", true, 99_999_999_999L);
+        }
         return response(loggedIn && !mode().equals("negative-response"), "negative-response".equals(mode()) ? "Read timed out" : "sent", null);
     }
     private static void pause() { try { Thread.sleep(60_000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } }
+    /** 旧本体JAR向けにビルドされた外部プラグインの公開メソッド規約を模倣するレスポンス。 */
+    public static final class RetryableResponse implements IRResponse<Object> {
+        private final String message;
+        private final boolean retryable;
+        private final long retryAfterMillis;
+        public RetryableResponse(String message, boolean retryable, long retryAfterMillis) {
+            this.message = message;
+            this.retryable = retryable;
+            this.retryAfterMillis = retryAfterMillis;
+        }
+        @Override public boolean isSucceeded() { return false; }
+        @Override public String getMessage() { return message; }
+        @Override public Object getData() { return null; }
+        public boolean isRetryable() { return retryable; }
+        public long getRetryAfterMillis() { return retryAfterMillis; }
+    }
     static <T> IRResponse<T> response(boolean success, String message, T data) {
         return new IRResponse<T>() {
             public boolean isSucceeded() { return success; }
