@@ -188,8 +188,12 @@ public class IsolatedIRConnection implements IRConnection, AutoCloseable {
 	private IRResponse<Object> submit(Request request) {
 		Invocation result = execute(request);
 		Response response = result.response;
-		if (!response.succeeded && result.attempted)
-			return IRSubmissionResponse.unknown(response.message);
+		if (!response.succeeded) {
+			if (response.retryable)
+				return IRSubmissionResponse.retryable(response.message, response.retryAfterMillis);
+			if (result.attempted)
+				return IRSubmissionResponse.unknown(response.message);
+		}
 		return new SimpleIRResponse<>(response.succeeded, response.message, null);
 	}
 
