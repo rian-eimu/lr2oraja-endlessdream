@@ -142,7 +142,7 @@ public class MainController {
 
 	public ImGuiRenderer imGui;
 
-	public List<IRSendStatus> irSendStatus = new ArrayList<IRSendStatus>();
+	public List<IRSendStatus> irSendStatus = new java.util.concurrent.CopyOnWriteArrayList<IRSendStatus>();
 
 	public MainController(Path f, Config config, PlayerConfig player, BMSPlayerMode auto, boolean songUpdated) {
 		this(f, config, player, auto, songUpdated, null);
@@ -557,8 +557,8 @@ public class MainController {
 							List<IRSendStatus> removeIrSendStatus = new ArrayList<IRSendStatus>();
 
 							for(IRSendStatus score : irSendStatus) {
-								long timeUntilNextTry = (long)(Math.pow(4, score.retry) * 1000);
-								if (score.retry != 0 && now - score.lastTry >= timeUntilNextTry) {
+								long timeUntilNextTry = score.getRetryDelayMillis();
+								if (score.retry > 0 && now - score.lastTry >= timeUntilNextTry) {
 									score.send();
 								}
 								if(score.isSent) {
@@ -566,7 +566,7 @@ public class MainController {
 								}
 								if(score.retry < 0 || score.retry > getConfig().getIrSendCount()) {
 									removeIrSendStatus.add(score);
-									ImGuiNotify.error(String.format("Failed to send a score for %s %s", score.song.getTitle(), score.song.getSubtitle()));
+									ImGuiNotify.error(String.format("Failed to send a score for %s", score.getDisplayName()));
 								}
 							}
 							irSendStatus.removeAll(removeIrSendStatus);
@@ -1239,42 +1239,98 @@ public class MainController {
 	public static class IRSendStatus {
 		public final IRConnection ir;
 		public final SongData song;
+		public final CourseData course;
 		public final ScoreData score;
 		public final ReplayData replay;
+		public final ReplayData[] replays;
 		public final int lntype;
 		public final boolean pseudoBss;
-		public int retry = 0;
-		public long lastTry = 0;
-		public boolean isSent = false;
+		public volatile int retry = 0;
+		public volatile long lastTry = 0;
+		public volatile long retryAfterMillis = 0;
+		public volatile boolean isSent = false;
 		public IRSendStatus(IRConnection ir, SongData song, ScoreData score, ReplayData replay) {
 			this(ir, song, score, replay, score != null ? score.getMode() : 0, false);
 		}
 		public IRSendStatus(IRConnection ir, SongData song, ScoreData score, ReplayData replay, int lntype, boolean pseudoBss) {
 			this.ir = ir;
 			this.song = song;
+			this.course = null;
 			this.score = score;
 			this.replay = replay;
+			this.replays = null;
 			this.lntype = lntype;
 			this.pseudoBss = pseudoBss;
 		}
+		public IRSendStatus(IRConnection ir, CourseData course, int lnmode, boolean pseudoBss, ScoreData score, ReplayData[] replays) {
+			this.ir = ir;
+			this.song = null;
+			this.course = course;
+			this.score = score;
+			this.replay = null;
+			this.replays = replays;
+			this.lntype = IRScoreData.toIrLntype(lnmode, pseudoBss);
+			this.pseudoBss = pseudoBss || IRScoreData.isPseudoBssLntype(this.lntype);
+		}
 
-		public boolean send() {
-			if (retry < 0) return isSent;
-			logger.info("IRへスコア送信中 : {}", song.getTitle());
+		/**
+		 * 次回再送までに待機すべき時間（ミリ秒）を返す。
+		 * サーバーやコネクタから指定された Retry-After と指数バックオフ（4^retry 秒）の大きい方を採用する。
+		 */
+		public long getRetryDelayMillis() {
+			int currentRetry = retry;
+			if (currentRetry <= 0) {
+				return 0L;
+			}
+			long backoffMillis = (long) (Math.pow(4, currentRetry) * 1000);
+			return Math.max(backoffMillis, retryAfterMillis);
+		}
+
+		/**
+		 * 通知表示用の対象名称を返す。
+		 */
+		public String getDisplayName() {
+			if (course != null) {
+				return course.getName() != null ? course.getName() : "";
+			}
+			if (song != null) {
+				String title = song.getTitle() != null ? song.getTitle() : "";
+				String subtitle = song.getSubtitle() != null ? song.getSubtitle() : "";
+				return title + " " + subtitle;
+			}
+			return "";
+		}
+
+		public synchronized boolean send() {
+			if (retry < 0 || isSent) return isSent;
+			String targetTitle = course != null ? course.getName() : (song != null ? song.getTitle() : "");
+			logger.info("IRへスコア送信中 : {}", targetTitle);
 			lastTry = System.currentTimeMillis();
 			bms.player.beatoraja.ir.IRScoreData irScore = new bms.player.beatoraja.ir.IRScoreData(score, lntype, pseudoBss);
-			irScore.replayData = replay;
-			IRResponse<Object> send1 = ir.sendPlayData(new IRChartData(song), irScore);
-			retry++;
+			final IRResponse<Object> send1;
+			if (course != null) {
+				irScore.replays = replays;
+				send1 = ir.sendCoursePlayData(new IRCourseData(course, lntype, pseudoBss), irScore);
+			} else {
+				irScore.replayData = replay;
+				send1 = ir.sendPlayData(new IRChartData(song), irScore);
+			}
+			lastTry = System.currentTimeMillis();
 			if(send1.isSucceeded()) {
-				logger.info("IRスコア送信完了 : {}", song.getTitle());
+				logger.info("IRスコア送信完了 : {}", targetTitle);
+				retryAfterMillis = 0;
 				isSent = true;
+				retry++;
 				return true;
 			} else {
 				logger.warn("IRスコア送信失敗 : {}", send1.getMessage());
 				if (IRSubmissionResponse.isOutcomeUnknown(send1)) {
+					retryAfterMillis = 0;
 					retry = -1;
 					logger.warn("IR送信結果が不明なため自動再送を中止します");
+				} else {
+					retryAfterMillis = IRSubmissionResponse.getRetryAfterMillis(send1);
+					retry++;
 				}
 				return false;
 			}

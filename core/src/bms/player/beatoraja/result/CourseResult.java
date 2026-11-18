@@ -28,8 +28,6 @@ import bms.player.beatoraja.skin.property.EventFactory.EventType;
 public class CourseResult extends AbstractResult {
 	private static final Logger logger = LoggerFactory.getLogger(CourseResult.class);
 
-	private List<IRSendStatus> irSendStatus = new ArrayList<IRSendStatus>();
-
 	private ResultKeyProperty property;
 
 	public CourseResult(MainController main) {
@@ -85,7 +83,7 @@ public class CourseResult extends AbstractResult {
 		if (ir.length > 0 && resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY) {
 			state = STATE_IR_PROCESSING;
 			
-			irSendStatus.clear();
+			List<MainController.IRSendStatus> addedScores = new ArrayList<MainController.IRSendStatus>();
 			Set<String> processedIRs = new HashSet<String>();
 
 			boolean uln = false;
@@ -135,23 +133,26 @@ public class CourseResult extends AbstractResult {
     					continue;
     				}
 
-    				irSendStatus.add(new IRSendStatus(irc.connection, resource.getCourseData(), irLnmode, pseudoBss, newscore, resource.getCourseReplay()));
+    				MainController.IRSendStatus status = new MainController.IRSendStatus(
+    						irc.connection, resource.getCourseData(), irLnmode, pseudoBss, newscore, resource.getCourseReplay());
+    				main.irSendStatus.add(status);
+    				addedScores.add(status);
     			}
         	}
 
 			Thread irprocess = new Thread(() -> {
 				int irsend = 0;
 				boolean succeed = true;
-				List<IRSendStatus> removeIrSendStatus = new ArrayList<>();
+				List<MainController.IRSendStatus> removeIrSendStatus = new ArrayList<>();
 
-				for (IRSendStatus irc : irSendStatus) {
+				for (MainController.IRSendStatus irc : addedScores) {
 					try {
 						if (irsend == 0) {
 							timer.switchTimer(TIMER_IR_CONNECT_BEGIN, true);
 						}
 						irsend++;
 						succeed &= irc.send();
-						if (irc.retry < 0 || irc.retry > main.getConfig().getIrSendCount()) {
+						if (irc.isSent || irc.retry < 0 || irc.retry > main.getConfig().getIrSendCount()) {
 							removeIrSendStatus.add(irc);
 						}
 					} catch (Exception e) {
@@ -161,7 +162,7 @@ public class CourseResult extends AbstractResult {
 						removeIrSendStatus.add(irc);
 					}
 				}
-				irSendStatus.removeAll(removeIrSendStatus);
+				main.irSendStatus.removeAll(removeIrSendStatus);
 
 				if (irsend > 0) {
 					timer.switchTimer(succeed ? TIMER_IR_CONNECT_SUCCESS : TIMER_IR_CONNECT_FAIL, true);
@@ -333,47 +334,5 @@ public class CourseResult extends AbstractResult {
 
 	public ScoreData getNewScore() {
 		return resource.getCourseScoreData();
-	}
-
-	static class IRSendStatus {
-		public final IRConnection ir;
-		public final CourseData course;
-		public final int lnmode;
-		public final boolean pseudoBss;
-		public final ScoreData score;
-		public final ReplayData[] replays;
-		public int retry = 0;
-		
-		public IRSendStatus(IRConnection ir, CourseData course, int lnmode, ScoreData score, ReplayData[] replays) {
-			this(ir, course, lnmode, IRScoreData.isPseudoBssLntype(lnmode), score, replays);
-		}
-
-		public IRSendStatus(IRConnection ir, CourseData course, int lnmode, boolean pseudoBss, ScoreData score, ReplayData[] replays) {
-			this.ir = ir;
-			this.course = course;
-			this.lnmode = IRScoreData.toIrLntype(lnmode, pseudoBss);
-			this.pseudoBss = pseudoBss || IRScoreData.isPseudoBssLntype(this.lnmode);
-			this.score = score;
-			this.replays = replays;
-		}
-		
-		public boolean send() {
-			if (retry < 0) return retry == -255;
-			logger.info("IRへスコア送信中 : {}", course.getName());
-			bms.player.beatoraja.ir.IRScoreData irscore = new bms.player.beatoraja.ir.IRScoreData(score, lnmode, pseudoBss);
-			irscore.replays = replays;
-            IRResponse<Object> send1 = ir.sendCoursePlayData(new IRCourseData(course, lnmode, pseudoBss), irscore);
-            if(send1.isSucceeded()) {
-				logger.info("IRスコア送信完了 : {}", course.getName());
-                retry = -255;
-                return true;
-            } else {
-				logger.warn("IRスコア送信失敗 : {}", send1.getMessage());
-                retry = IRSubmissionResponse.isOutcomeUnknown(send1) ? -1 : retry + 1;
-                if (retry == -1) logger.warn("IR送信結果が不明なため自動再送を中止します");
-                return false;
-            }
-
-		}
 	}
 }
