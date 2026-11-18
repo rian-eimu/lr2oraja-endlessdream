@@ -352,6 +352,40 @@ public class JudgeManager {
     }
 
     /**
+     * 同一フレーム内で、同じスクラッチレーンの別キーに未処理の押下イベントが存在するかを判定する
+     */
+    private boolean hasPendingScratchPressOnOtherKey(LaneState state, int releasedKey, long mtime, BMSPlayerInputProcessor input) {
+        for (int otherKey : state.laneassign) {
+            if (otherKey == releasedKey || !input.getKeyState(otherKey)) {
+                continue;
+            }
+            final long otherPmtime = input.getKeyChangedTime(otherKey);
+            if (otherPmtime != Long.MIN_VALUE && otherPmtime <= mtime) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * BSS終端の離し確定情報を記録する
+     */
+    private void recordBssReleaseSettlement(LaneState state, LongNote endNote, int releasedKey, long releaseTime) {
+        state.lastBssReleaseEnd = endNote;
+        state.lastBssReleaseKey = releasedKey;
+        state.lastBssReleaseTime = releaseTime;
+    }
+
+    /**
+     * BSS終端の離し確定情報をクリアする
+     */
+    private void clearLastBssRelease(LaneState state) {
+        state.lastBssReleaseEnd = null;
+        state.lastBssReleaseKey = -1;
+        state.lastBssReleaseTime = Long.MIN_VALUE;
+    }
+
+    /**
      * HLNの明示終端音を終点時刻で1回だけ再生する
      */
     private void playHlnEndSoundIfNeeded(LaneState state, LongNote endNote) {
@@ -848,6 +882,7 @@ public class JudgeManager {
                             || state.processing.getType() == LongNote.TYPE_HELLCHARGENOTE)) {
                         if(sc >= 0 && key != sckey[sc]) {
                             // BSS終端処理
+                            clearLastBssRelease(state);
                             final LongNote bssEnd = state.processing;
                             final long[][] mjudge = scnendmjudge;
                             final long dmtime = state.processing.getMicroTime() - pmtime;
@@ -870,12 +905,33 @@ public class JudgeManager {
                         } else {
                             // 押し直し処理
                             state.releasetime = Long.MIN_VALUE;
+                            state.lnendJudge = Integer.MIN_VALUE;
                         }
                     } else {
                         // 押し直し処理
                         state.releasetime = Long.MIN_VALUE;
                     }
                 } else {
+                    boolean mssNextHandled = false;
+                    boolean bssTurnaroundFollowThrough = false;
+                    if (sc >= 0 && state.lastBssReleaseEnd != null) {
+                        final LongNote releasedEnd = state.lastBssReleaseEnd;
+                        final int releasedKey = state.lastBssReleaseKey;
+                        final long turnaroundLimit = Math.max(
+                                releasedEnd.getMicroTime() - scnendmjudge[3][0],
+                                state.lastBssReleaseTime + 50000L);
+                        clearLastBssRelease(state);
+                        if (pmtime <= turnaroundLimit) {
+                            final LongNote mssNext = findMssNextStart(state, releasedEnd, pmtime);
+                            if (mssNext != null) {
+                                judgeMssNextStart(state, mssNext, key, sc, pmtime, mtime);
+                                mssNextHandled = true;
+                            } else if (key != releasedKey) {
+                                bssTurnaroundFollowThrough = true;
+                            }
+                        }
+                    }
+                    if (!mssNextHandled) {
                     final long[][] mjudge = sc >= 0 ? smjudge : nmjudge;
                     if (state.hlnStart != null) {
                         state.hlnReactive = true;
@@ -942,7 +998,10 @@ public class JudgeManager {
                         tnote = null;
                     }
 
-                    if (tnote != null) {
+                    if (bssTurnaroundFollowThrough && (tnote == null || judge >= 3)) {
+                        // 離し確定直後のBSS切り返しフォロー入力を吸収し、次ノーツの早BAD・空POORや二重発音を防ぐ
+                        this.judge[state.player][state.offset] = 0;
+                    } else if (tnote != null) {
                         // process multiBad
                         for (int i=multiBadCollector.arrayStart; i<multiBadCollector.size; i++) {
                             final Note mbNote = multiBadCollector.noteList[i];
@@ -1072,8 +1131,11 @@ public class JudgeManager {
                             keysound.play(n, getKeyVolume(), 0);
                         }
                     }
+                    }
                 }
-                main.getKeyinput().inputKeyOn(lane);
+                if (main.getKeyinput() != null) {
+                    main.getKeyinput().inputKeyOn(lane);
+                }
             } else {
                 // キーが離されたときの処理
                 state.hlnHeld = isLanePressed(state, input);
@@ -1145,17 +1207,37 @@ public class JudgeManager {
                                     state.lnendJudge = Integer.MIN_VALUE;
                                 }
                             }
-                        } else {
-                        boolean release = true;
-                        if (sc >= 0) {
-                            if (judge != 4 || key != sckey[sc]) {
-                                release = false;
-                            } else {
-//                               System.out.println("BSS途中離し判定 - Time : " + ptime + " Judge : " + j + " LN : " + processing[lane]);
-                                sckey[sc] = 0;
+                        } else if (sc >= 0) {
+                            // BSS終端離し処理（同一フレームに逆回転押下がある場合は切り返し処理を優先）
+                            if (key == sckey[sc] && !hasPendingScratchPressOnOtherKey(state, key, mtime, input)) {
+                                if (judge == 4) {
+                                    sckey[sc] = 0;
+                                    if (dmtime > 0) {
+                                        state.releasetime = mtime;
+                                        state.lnendJudge = judge;
+                                    } else {
+                                        this.updateMicro(state, state.processing, mtime, judge, dmtime, true);
+                                        keysound.play(state.processing, getKeyVolume(), 0);
+                                        state.processing = null;
+                                        state.releasetime = Long.MIN_VALUE;
+                                        state.lnendJudge = Integer.MIN_VALUE;
+                                    }
+                                } else if (dmtime > 0) {
+                                    // 終端判定幅内の早離し: 終端時刻まで切り返し・押し直しを待機する
+                                    state.releasetime = pmtime;
+                                    state.lnendJudge = judge;
+                                } else {
+                                    // 終端ちょうど・遅離し: 即座に終端判定を確定する
+                                    recordBssReleaseSettlement(state, state.processing, key, pmtime);
+                                    sckey[sc] = 0;
+                                    this.updateMicro(state, state.processing, mtime, judge, dmtime, true);
+                                    keysound.play(state.processing, getKeyVolume(), 0);
+                                    state.processing = null;
+                                    state.releasetime = Long.MIN_VALUE;
+                                    state.lnendJudge = Integer.MIN_VALUE;
+                                }
                             }
-                        }
-                        if (release) {
+                        } else {
                             if(judge >= 3 && dmtime > 0) {
                                 state.releasetime = mtime;
                                 state.lnendJudge = judge;
@@ -1167,7 +1249,6 @@ public class JudgeManager {
                                 state.lnendJudge = Integer.MIN_VALUE;
                             }
                         }
-                    }
                     if (false) {
                         if (false) {
                                 keysound.play(state.processing, getKeyVolume(), 0);
@@ -1237,15 +1318,27 @@ public class JudgeManager {
                         state.lnendJudge = Integer.MIN_VALUE;
                     }
                 } else {
-                    if(state.releasetime != Long.MIN_VALUE && state.releasetime + releasemargin <= mtime) {
-                        if (state.lnendJudge >= 3) {
-                            keysound.setVolume(state.processing.getPair(), 0.0f);
+                    if (state.releasetime != Long.MIN_VALUE) {
+                        final boolean isPendingBssEarlyRelease = state.sckey >= 0 && state.lnendJudge <= 3;
+                        final boolean shouldSettle = isPendingBssEarlyRelease
+                                ? state.processing.getMicroTime() <= mtime
+                                : state.releasetime + releasemargin <= mtime;
+                        if (shouldSettle) {
+                            if (state.lnendJudge >= 3) {
+                                keysound.setVolume(state.processing.getPair(), 0.0f);
+                            }
+                            if (isPendingBssEarlyRelease) {
+                                recordBssReleaseSettlement(state, state.processing, sckey[state.sckey], state.releasetime);
+                            }
+                            if (state.sckey >= 0) {
+                                sckey[state.sckey] = 0;
+                            }
+                            this.updateMicro(state, state.processing, mtime, state.lnendJudge, state.processing.getMicroTime() - state.releasetime, true);
+                            keysound.play(state.processing, getKeyVolume(), 0);
+                            state.processing = null;
+                            state.releasetime = Long.MIN_VALUE;
+                            state.lnendJudge = Integer.MIN_VALUE;
                         }
-                        this.updateMicro(state, state.processing, mtime, state.lnendJudge, state.processing.getMicroTime() - state.releasetime, true);
-                        keysound.play(state.processing, getKeyVolume(), 0);
-                        state.processing = null;
-                        state.releasetime = Long.MIN_VALUE;
-                        state.lnendJudge = Integer.MIN_VALUE;
                     }
                 }
             }
@@ -1307,6 +1400,7 @@ public class JudgeManager {
                         state.lnendJudge = Integer.MIN_VALUE;
                         if (state.sckey >= 0) {
                             sckey[state.sckey] = 0;
+                            clearLastBssRelease(state);
                         }
                     }
                 }
@@ -1387,7 +1481,7 @@ public class JudgeManager {
 
         if (judge != 4)
             this.judge[state.player][state.offset] = judge == 0 ? 1 : judge * 2 + (mfast > 0 ? 0 : 1);
-        if (judge <= ((PlaySkin) main.getSkin()).getJudgetimer()) {
+        if (main.getSkin() instanceof PlaySkin playSkin && judge <= playSkin.getJudgetimer()) {
             main.timer.setTimerOn(SkinPropertyMapper.bombTimerId(state.player, state.offset));
         }
 
@@ -1660,6 +1754,19 @@ public class JudgeManager {
         
         public long releasetime = Long.MIN_VALUE;
         public int lnendJudge = Integer.MIN_VALUE;
+
+        /**
+         * 離しによって確定した直前のBSS終端ノーツ（切り返しフォロー入力の吸収およびMSS連結用）
+         */
+        public LongNote lastBssReleaseEnd;
+        /**
+         * 直前のBSS終端を離し確定させたスクラッチキー番号
+         */
+        public int lastBssReleaseKey = -1;
+        /**
+         * 直前のBSS終端を離した時刻(us)
+         */
+        public long lastBssReleaseTime = Long.MIN_VALUE;
 
         /**
          * 現在有効なHLN始点ノーツ
