@@ -78,6 +78,8 @@ final class IRWorkerProtocol {
 		public String[] illegalSongs;
 		public long scoreRevision = -1;
 		public boolean hasMore;
+		public boolean retryable;
+		public long retryAfterMillis;
 
 		/**
 		 * worker内で発生したエラーを通常のIR失敗レスポンスとして返す。

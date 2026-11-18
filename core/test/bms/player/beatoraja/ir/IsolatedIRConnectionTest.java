@@ -59,6 +59,26 @@ public final class IsolatedIRConnectionTest {
             check(IRSubmissionResponse.isOutcomeUnknown(f.connection.sendPlayData(null, null)), "Legacy false can hide HTTP timeout");
             check(IRSubmissionResponse.isOutcomeUnknown(f.connection.sendCoursePlayData(null, null)), "Course submissions use the same policy");
         }
+        try (var f = new Fixture("rate-limited")) {
+            f.login();
+            var single = f.connection.sendPlayData(null, null);
+            check(!single.isSucceeded() && !IRSubmissionResponse.isOutcomeUnknown(single) && IRSubmissionResponse.isRetryable(single),
+                    "429 rate-limited response must remain retryable");
+            check(IRSubmissionResponse.getRetryAfterMillis(single) == 300_000L && "Too Many Requests".equals(single.getMessage()),
+                    "429 Retry-After delay and message must cross the worker pipe");
+            var course = f.connection.sendCoursePlayData(null, null);
+            check(!course.isSucceeded() && !IRSubmissionResponse.isOutcomeUnknown(course) && IRSubmissionResponse.isRetryable(course)
+                    && IRSubmissionResponse.getRetryAfterMillis(course) == 300_000L,
+                    "Course 429 response must also remain retryable with Retry-After");
+        }
+        try (var f = new Fixture("service-unavailable-huge-retry")) {
+            f.login();
+            var result = f.connection.sendPlayData(null, null);
+            check(!result.isSucceeded() && !IRSubmissionResponse.isOutcomeUnknown(result) && IRSubmissionResponse.isRetryable(result),
+                    "503 response must remain retryable");
+            check(IRSubmissionResponse.getRetryAfterMillis(result) == IRSubmissionResponse.MAX_RETRY_AFTER_MILLIS,
+                    "Untrusted worker Retry-After must be clamped");
+        }
         try (var f = new Fixture("timeout")) {
             f.login(); var executor = Executors.newSingleThreadExecutor();
             try {
@@ -117,7 +137,7 @@ public final class IsolatedIRConnectionTest {
             Path plugin = root.resolve("legacy-plugin.jar");
             try (var jar = new java.util.jar.JarOutputStream(Files.newOutputStream(plugin))) {
                 jar.putNextEntry(new java.util.jar.JarEntry("bms/player/beatoraja/ir/")); jar.closeEntry();
-                for (String name : List.of("RecoveryIRConnection", "RecoveryIRConnection$1", "TestIRConnectionBase")) {
+                for (String name : List.of("RecoveryIRConnection", "RecoveryIRConnection$1", "RecoveryIRConnection$RetryableResponse", "TestIRConnectionBase")) {
                     String resource = "bms/player/beatoraja/ir/" + name + ".class";
                     jar.putNextEntry(new java.util.jar.JarEntry(resource));
                     try (var input = IsolatedIRConnectionTest.class.getClassLoader().getResourceAsStream(resource)) { input.transferTo(jar); }

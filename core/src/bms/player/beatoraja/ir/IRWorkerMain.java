@@ -154,7 +154,12 @@ public final class IRWorkerMain {
 	}
 
 	private static Response objectResponse(IRResponse<Object> irResponse) {
-		return base(irResponse);
+		Response response = base(irResponse);
+		if(irResponse != null && !irResponse.isSucceeded() && IRSubmissionResponse.isRetryable(irResponse)) {
+			response.retryable = true;
+			response.retryAfterMillis = IRSubmissionResponse.getRetryAfterMillis(irResponse);
+		}
+		return response;
 	}
 
 	private static Response textResponse(String text) {
