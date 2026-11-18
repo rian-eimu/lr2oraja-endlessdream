@@ -19,6 +19,7 @@ import org.sqlite.SQLiteDataSource;
 import org.sqlite.SQLiteConfig.SynchronousMode;
 
 import bms.player.beatoraja.SQLiteDatabaseAccessor;
+import bms.player.beatoraja.SQLiteDatabaseRepairer;
 
 /**
  * ユーザーの楽曲評価データベースへのアクセスクラス
@@ -54,11 +55,12 @@ public class SongReviewAccessor extends SQLiteDatabaseAccessor {
 		}
 		SQLiteConfig conf = new SQLiteConfig();
 		conf.setSharedCache(true);
-		conf.setSynchronous(SynchronousMode.OFF);
+		// 強制終了時の破損を防ぐため、ユーザー入力由来の評価DBは NORMAL で同期する
+		conf.setSynchronous(SynchronousMode.NORMAL);
 		// conf.setJournalMode(JournalMode.MEMORY);
 		ds = new SQLiteDataSource(conf);
 		ds.setUrl("jdbc:sqlite:" + filepath);
-		qr = new QueryRunner(ds);
+		qr = createRepairableQueryRunner(ds, filepath, SQLiteDatabaseRepairer.IntegrityCheckMode.FULL);
 		try {
 			validate(qr);
 		} catch (SQLException e) {

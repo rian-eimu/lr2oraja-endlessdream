@@ -516,6 +516,9 @@ public class MainController {
 
         triggerLnWarning();
 
+		// 起動処理中に行われたデータベース自動修復の結果を通知する
+		SQLiteDatabaseRepairer.flushPendingNotifications();
+
 		setTargetList();
 
 		Pixmap plainPixmap = new Pixmap(2,1, Pixmap.Format.RGBA8888);

@@ -22,6 +22,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import bms.player.beatoraja.Config.SongArchiveExtractMode;
 import bms.player.beatoraja.SQLiteDatabaseAccessor;
+import bms.player.beatoraja.SQLiteDatabaseRepairer;
 import bms.player.beatoraja.song.archive.SongArchives;
 import bms.player.beatoraja.Validatable;
 import javafx.util.Pair;
@@ -136,7 +137,7 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 		// conf.setJournalMode(JournalMode.MEMORY);
 		ds = new SQLiteDataSource(conf);
 		ds.setUrl("jdbc:sqlite:" + filepath);
-		qr = new QueryRunner(ds);
+		qr = createRepairableQueryRunner(ds, filepath, SQLiteDatabaseRepairer.IntegrityCheckMode.QUICK);
 		this.reviewpath = reviewpath;
 		reviewdb = reviewpath != null && reviewpath.length() > 0 ? new SongReviewAccessor(reviewpath) : null;
 		root = Paths.get(".");
@@ -181,6 +182,17 @@ public class SQLiteSongDatabaseAccessor extends SQLiteDatabaseAccessor implement
 	}
 
 	private void createIndexes() throws SQLException {
+		qr.update("CREATE INDEX IF NOT EXISTS idx_song_folder ON song(folder)");
+		qr.update("CREATE INDEX IF NOT EXISTS idx_song_sha256 ON song(sha256)");
+		qr.update("CREATE INDEX IF NOT EXISTS idx_folder_parent ON folder(parent)");
+	}
+
+	/**
+	 * 実行時の自動修復後にテーブル定義に加えてインデックスも再作成する
+	 */
+	@Override
+	protected void onDatabaseRepaired(QueryRunner qr) throws SQLException {
+		super.onDatabaseRepaired(qr);
 		qr.update("CREATE INDEX IF NOT EXISTS idx_song_folder ON song(folder)");
 		qr.update("CREATE INDEX IF NOT EXISTS idx_song_sha256 ON song(sha256)");
 		qr.update("CREATE INDEX IF NOT EXISTS idx_folder_parent ON folder(parent)");

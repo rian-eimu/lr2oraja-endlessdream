@@ -90,11 +90,12 @@ public class ScoreDatabaseAccessor extends SQLiteDatabaseAccessor {
 		Class.forName("org.sqlite.JDBC");
 		SQLiteConfig conf = new SQLiteConfig();
 		conf.setSharedCache(true);
-		conf.setSynchronous(SynchronousMode.OFF);
+		// 強制終了時の破損を防ぐため、更新頻度の低いスコアDBは NORMAL で同期する
+		conf.setSynchronous(SynchronousMode.NORMAL);
 		// conf.setJournalMode(JournalMode.MEMORY);
 		SQLiteDataSource ds = new SQLiteDataSource(conf);
 		ds.setUrl("jdbc:sqlite:" + path);
-		qr = new QueryRunner(ds);
+		qr = createRepairableQueryRunner(ds, path, SQLiteDatabaseRepairer.IntegrityCheckMode.FULL);
 	}
 
 	public void createTable() {
