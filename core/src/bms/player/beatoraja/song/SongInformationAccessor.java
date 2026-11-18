@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import bms.player.beatoraja.Validatable;
 import bms.player.beatoraja.SQLiteDatabaseAccessor;
+import bms.player.beatoraja.SQLiteDatabaseRepairer;
 
 import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.ResultSetHandler;
@@ -61,7 +62,7 @@ public class SongInformationAccessor extends SQLiteDatabaseAccessor {
 		// conf.setJournalMode(JournalMode.MEMORY);
 		ds = new SQLiteDataSource(conf);
 		ds.setUrl("jdbc:sqlite:" + filepath);
-		qr = new QueryRunner(ds);
+		qr = createRepairableQueryRunner(ds, filepath, SQLiteDatabaseRepairer.IntegrityCheckMode.QUICK);
 		try {
 			validate(qr);
 		} catch (SQLException e) {
