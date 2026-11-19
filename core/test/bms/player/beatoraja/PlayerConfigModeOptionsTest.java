@@ -115,6 +115,7 @@ class PlayerConfigModeOptionsTest {
     void copyModeOptionsKeepsCurrentValuesOnHsReplay() {
         PlayConfig current = new PlayConfig();
         current.setJudgetiming(-15);
+        current.setJudgetype("Lowest");
         current.setLnmode(2);
         current.setTargetid("RATE_A");
         current.setGaugeAutoShift(PlayerConfig.GAUGEAUTOSHIFT_CONTINUE);
@@ -124,10 +125,12 @@ class PlayerConfigModeOptionsTest {
         replay.setTargetid("MAX");
         replay.setLnmode(0);
         replay.setJudgetiming(40);
+        replay.setJudgetype("Combo");
 
         replay.copyModeOptions(current);
         assertEquals(3.0f, replay.getHispeed());
         assertEquals(-15, replay.getJudgetiming());
+        assertEquals("Lowest", replay.getJudgetype());
         assertEquals(2, replay.getLnmode());
         assertEquals("RATE_A", replay.getTargetid());
         assertEquals(PlayerConfig.GAUGEAUTOSHIFT_CONTINUE, replay.getGaugeAutoShift());
