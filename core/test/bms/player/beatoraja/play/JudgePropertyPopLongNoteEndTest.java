@@ -10,14 +10,14 @@ class JudgePropertyPopLongNoteEndTest {
     private static final int[] RATE_100 = {100, 100, 100};
 
     @Test
-    @DisplayName("POP判定のLN終端はEARLY側のみ233.333msまで広く、LATE側は通常の判定幅のまま")
+    @DisplayName("POP判定のLN終端はEARLY側のみ250msまで広く、LATE側は通常の判定幅のまま")
     void popLongNoteEndWindowIsWideOnlyOnEarlySide() {
         final long[][] judge = JudgeProperty.POP.getJudge(JudgeProperty.NoteType.LONGNOTE_END, 100, RATE_100);
 
         final long[][] expected = {
-                {-116667, 233333},
-                {-116667, 233333},
-                {-116667, 233333},
+                {-116667, 281667},
+                {-116667, 281667},
+                {-116667, 281667},
                 {-183333, 366667},
         };
         for (int i = 0; i < expected.length; i++) {
