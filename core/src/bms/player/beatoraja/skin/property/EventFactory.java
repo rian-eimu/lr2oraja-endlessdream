@@ -517,29 +517,37 @@ public class EventFactory {
 			}
 		}),
 		target(77, (state, arg1) -> {
-			if(state instanceof MusicSelector) {
+			if(state instanceof MusicSelector selector) {
 		        final PlayerConfig config = state.resource.getPlayerConfig();
+	            // ターゲットスコアは KEY モード毎の設定。選択中のバーのモード (未確定時はモードフィルターの代表モード) を変更する
+	            final Mode mode = selector.getSelectedBarConfigMode();
 	            final String[] targets = TargetProperty.getTargets();
 	            int index = 0;
 	            for(;index < targets.length;index++) {
-	            	if(targets[index].equals(config.getTargetid())) {
+	            	if(targets[index].equals(config.getTargetid(mode))) {
 	            		break;
 	            	}
 	            }
-	            config.setTargetid(targets[(index + (arg1 >= 0 ? 1 : targets.length - 1)) % targets.length]);
+	            config.setTargetid(mode, targets[(index + (arg1 >= 0 ? 1 : targets.length - 1)) % targets.length]);
 			}
 		}),
 		gaugeautoshift(78, (state, arg1) -> {
 			if(state instanceof MusicSelector selector) {
 				final int gaslength = 5;
-	            selector.resource.getPlayerConfig().setGaugeAutoShift((selector.resource.getPlayerConfig().getGaugeAutoShift() + (arg1 >= 0 ?1 : gaslength - 1)) % gaslength);
+	            // ゲージオートシフトは KEY モード毎の設定
+	            final PlayerConfig config = selector.resource.getPlayerConfig();
+	            final Mode mode = selector.getSelectedBarConfigMode();
+	            config.setGaugeAutoShift(mode, (config.getGaugeAutoShift(mode) + (arg1 >= 0 ?1 : gaslength - 1)) % gaslength);
 	            selector.play(OPTION_CHANGE);
 			}
 		}),
 		bottomshiftablegauge(341, (state, arg1) -> {
 			if(state instanceof MusicSelector selector) {
 				final int gaugelength = 3;
-				selector.resource.getPlayerConfig().setBottomShiftableGauge((selector.resource.getPlayerConfig().getBottomShiftableGauge() + (arg1 >= 0 ? 1 : gaugelength - 1)) % gaugelength);
+				// ゲージオートシフトの下限は KEY モード毎の設定
+				final PlayerConfig config = selector.resource.getPlayerConfig();
+				final Mode mode = selector.getSelectedBarConfigMode();
+				config.setBottomShiftableGauge(mode, (config.getBottomShiftableGauge(mode) + (arg1 >= 0 ? 1 : gaugelength - 1)) % gaugelength);
 				selector.play(OPTION_CHANGE);
 			}
 		}),
@@ -722,7 +730,7 @@ public class EventFactory {
 				final int lnmodelength = 4;
 	            PlayerConfig config = selector.resource.getPlayerConfig();
 	            // LN MODE は KEY モード毎の設定。選択中のバーのモード (未確定時はモードフィルターの代表モード) を変更する
-	            final Mode target = selector.getSelectedBarLnmodeTarget();
+	            final Mode target = selector.getSelectedBarConfigMode();
 	            config.setLnmode(target, (config.getLnmode(target) + (arg1 >= 0 ? 1 : lnmodelength - 1)) % lnmodelength);
 	            selector.getBarManager().updateBar();
 	            selector.play(OPTION_CHANGE);

@@ -576,8 +576,6 @@ public class PlayConfigurationView implements Initializable {
         }
         playername.setText(player.getName());
 
-		player.migrationJudgetiming();
-
 		videoController.updatePlayer(player);
 		musicselectController.updatePlayer(player);
 
@@ -597,8 +595,7 @@ public class PlayConfigurationView implements Initializable {
 
 		bpmguide.setSelected(player.isBpmguide());
 		autoscratch.setSelected(player.isAutoscratch());
-		gaugeautoshift.setValue(player.getGaugeAutoShift());
-		bottomshiftablegauge.setValue(player.getBottomShiftableGauge());
+		// gaugeautoshift / bottomshiftablegauge は KEY モード毎の設定のため updatePlayConfig() で選択中のモードの値を表示する
 
 		customjudge.setSelected(player.isCustomJudge());
 		njudgepg.getValueFactory().setValue(player.getKeyJudgeWindowRatePerfectGreat());
@@ -628,7 +625,7 @@ public class PlayConfigurationView implements Initializable {
 
 		String[] targets = player.getTargetlist();
 		target.getItems().setAll(targets);
-		target.setValue(player.getTargetid());
+		// target は KEY モード毎の設定のため updatePlayConfig() で選択中のモードの値を表示する
 		showhiddennote.setSelected(player.isShowhiddennote());
 		showpastnote.setSelected(player.isShowpastnote());
 		noteretention.setSelected(player.isNoteretention());
@@ -721,8 +718,7 @@ public class PlayConfigurationView implements Initializable {
 
 		player.setBpmguide(bpmguide.isSelected());
 		player.setAutoscratch(autoscratch.isSelected());
-		player.setGaugeAutoShift(gaugeautoshift.getValue());
-		player.setBottomShiftableGauge(bottomshiftablegauge.getValue());
+		// gaugeautoshift / bottomshiftablegauge は KEY モード毎の設定のため updatePlayConfig() で保存する
 		player.setCustomJudge(customjudge.isSelected());
 		player.setKeyJudgeWindowRatePerfectGreat(getValue(njudgepg));
 		player.setKeyJudgeWindowRateGreat(getValue(njudgegr));
@@ -745,7 +741,7 @@ public class PlayConfigurationView implements Initializable {
 				autosavereplay3.getValue(),autosavereplay4.getValue()});
 
 		player.setShowjudgearea(judgeregion.isSelected());
-		player.setTargetid(target.getValue());
+		// target は KEY モード毎の設定のため updatePlayConfig() で保存する
 
 		player.setShowhiddennote(showhiddennote.isSelected());
 		player.setShowpastnote(showpastnote.isSelected());
@@ -818,6 +814,15 @@ public class PlayConfigurationView implements Initializable {
 			if (lntype.getValue() != null) {
 				player.setLnmode(Mode.valueOf(pc.name()), lntype.getValue());
 			}
+			if (target.getValue() != null) {
+				player.setTargetid(Mode.valueOf(pc.name()), target.getValue());
+			}
+			if (gaugeautoshift.getValue() != null) {
+				player.setGaugeAutoShift(Mode.valueOf(pc.name()), gaugeautoshift.getValue());
+			}
+			if (bottomshiftablegauge.getValue() != null) {
+				player.setBottomShiftableGauge(Mode.valueOf(pc.name()), bottomshiftablegauge.getValue());
+			}
 		}
 		pc = playconfig.getValue();
 		PlayConfig conf = player.getPlayConfig(Mode.valueOf(pc.name())).getPlayconfig();
@@ -841,6 +846,9 @@ public class PlayConfigurationView implements Initializable {
 		judgealgorithm.setValue(JudgeAlgorithm.getIndex(conf.getJudgetype()));
 		hispeedautoadjust.setSelected(conf.isEnableHispeedAutoAdjust());
 		lntype.getSelectionModel().select(player.getLnmode(Mode.valueOf(pc.name())));
+		target.setValue(player.getTargetid(Mode.valueOf(pc.name())));
+		gaugeautoshift.setValue(player.getGaugeAutoShift(Mode.valueOf(pc.name())));
+		bottomshiftablegauge.setValue(player.getBottomShiftableGauge(Mode.valueOf(pc.name())));
 	}
 
 	private <T> T getValue(Spinner<T> spinner) {

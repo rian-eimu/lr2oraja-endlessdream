@@ -83,7 +83,9 @@ public final class PlayerConfig {
 	private String chartReplicationMode = "RIVALCHART";
 
 	/**
-	 * スコアターゲット
+	 * 旧スコアターゲット (プロファイル共通)。
+	 * KEY モード毎に {@link PlayConfig#getTargetid()} で保持するようになったため、
+	 * この値は旧 config_player.json からの移行元 (未設定モードの初期値) としてのみ使用する。
 	 */
 	private String targetid = "MAX";
 	
@@ -93,7 +95,9 @@ public final class PlayerConfig {
 			, "IR_RANKRATE_5", "IR_RANKRATE_10", "IR_RANKRATE_15", "IR_RANKRATE_20", "IR_RANKRATE_25", "IR_RANKRATE_30", "IR_RANKRATE_35", "IR_RANKRATE_40", "IR_RANKRATE_45","IR_RANKRATE_50"
 			,"RIVAL_RANK_1","RIVAL_RANK_2","RIVAL_RANK_3","RIVAL_NEXT_1","RIVAL_NEXT_2","RIVAL_NEXT_3"};
 	/**
-	 * 判定タイミング
+	 * 旧判定タイミング (プロファイル共通)。
+	 * KEY モード毎に {@link PlayConfig#getJudgetiming()} で保持するようになったため、
+	 * この値は旧 config_player.json からの移行元としてのみ使用する。
 	 */
 	private int judgetiming = 0;
 	
@@ -101,7 +105,8 @@ public final class PlayerConfig {
 	public static final int JUDGETIMING_MIN = -500;
 
 	/**
-	 * 判定タイミングをPlayerConfigからPlayConfigに移行したか
+	 * 判定タイミングをPlayerConfigからPlayConfigに移行したか。
+	 * 判定タイミングは負の値も有効なため、他の KEY モード毎の設定のような未設定値ではなく、このフラグで移行要否を判定する。
 	 */
 	private boolean migrationJudgetiming = false;
 	
@@ -208,11 +213,15 @@ public final class PlayerConfig {
 	 */
 	private int hranThresholdBPM = 120;
 	/**
-	 * プレイ中のゲージ切替
+	 * 旧プレイ中のゲージ切替 (プロファイル共通)。
+	 * KEY モード毎に {@link PlayConfig#getGaugeAutoShift()} で保持するようになったため、
+	 * この値は旧 config_player.json からの移行元 (未設定モードの初期値) としてのみ使用する。
 	 */
 	private int gaugeAutoShift = GAUGEAUTOSHIFT_NONE;
 	/**
-	 * GASで遷移可能なゲージの下限  ASSIST EASY, EASY, NORMALから選択
+	 * 旧GASで遷移可能なゲージの下限 (プロファイル共通)  ASSIST EASY, EASY, NORMALから選択。
+	 * KEY モード毎に {@link PlayConfig#getBottomShiftableGauge()} で保持するようになったため、
+	 * この値は旧 config_player.json からの移行元 (未設定モードの初期値) としてのみ使用する。
 	 */
 	private int bottomShiftableGauge = GrooveGauge.ASSISTEASY;
 
@@ -361,19 +370,6 @@ public final class PlayerConfig {
 		this.judgetiming = judgetiming;
 	}
 
-	public void migrationJudgetiming() {
-		if (this.migrationJudgetiming == false) {
-			this.getPlayConfig(Mode.BEAT_5K).getPlayconfig().setJudgetiming(getJudgetiming());
-			this.getPlayConfig(Mode.BEAT_7K).getPlayconfig().setJudgetiming(getJudgetiming());
-			this.getPlayConfig(Mode.BEAT_10K).getPlayconfig().setJudgetiming(getJudgetiming());
-			this.getPlayConfig(Mode.BEAT_14K).getPlayconfig().setJudgetiming(getJudgetiming());
-			this.getPlayConfig(Mode.POPN_9K).getPlayconfig().setJudgetiming(getJudgetiming());
-			this.getPlayConfig(Mode.KEYBOARD_24K).getPlayconfig().setJudgetiming(getJudgetiming());
-			this.getPlayConfig(Mode.KEYBOARD_24K_DOUBLE).getPlayconfig().setJudgetiming(getJudgetiming());
-		}
-		this.migrationJudgetiming = true;
-	}
-
 	public boolean isNotesDisplayTimingAutoAdjust() {
 		return notesDisplayTimingAutoAdjust;
 	}
@@ -398,20 +394,51 @@ public final class PlayerConfig {
 		this.autoscratch = autoscratch;
 	}
 
-	public int getGaugeAutoShift() {
-		return gaugeAutoShift;
+	/**
+	 * 指定モードのゲージオートシフトを返す
+	 *
+	 * @param mode 譜面のモード (null の場合は BEAT_7K)
+	 * @return ゲージオートシフト ({@link #GAUGEAUTOSHIFT_NONE} 等)
+	 */
+	public int getGaugeAutoShift(Mode mode) {
+		PlayConfig pc = getModePlayConfig(mode);
+		return pc.isGaugeAutoShiftSet() ? pc.getGaugeAutoShift()
+				: MathUtils.clamp(gaugeAutoShift, GAUGEAUTOSHIFT_NONE, GAUGEAUTOSHIFT_SELECT_TO_UNDER);
 	}
 
-	public void setGaugeAutoShift(int gaugeAutoShift) {
-		this.gaugeAutoShift = gaugeAutoShift;
+	public void setGaugeAutoShift(Mode mode, int gaugeAutoShift) {
+		getModePlayConfig(mode).setGaugeAutoShift(gaugeAutoShift);
 	}
 
-	public int getBottomShiftableGauge() {
-		return bottomShiftableGauge;
+	/**
+	 * 指定モードのゲージオートシフトで遷移可能なゲージの下限を返す
+	 *
+	 * @param mode 譜面のモード (null の場合は BEAT_7K)
+	 * @return ゲージ下限 (ASSIST EASY, EASY, NORMAL)
+	 */
+	public int getBottomShiftableGauge(Mode mode) {
+		PlayConfig pc = getModePlayConfig(mode);
+		return pc.isBottomShiftableGaugeSet() ? pc.getBottomShiftableGauge()
+				: MathUtils.clamp(bottomShiftableGauge, GrooveGauge.ASSISTEASY, GrooveGauge.NORMAL);
 	}
 
-	public void setBottomShiftableGauge(int bottomShiftableGauge) {
-		this.bottomShiftableGauge = bottomShiftableGauge;
+	public void setBottomShiftableGauge(Mode mode, int bottomShiftableGauge) {
+		getModePlayConfig(mode).setBottomShiftableGauge(bottomShiftableGauge);
+	}
+
+	/**
+	 * 指定モードのターゲットスコアIDを返す
+	 *
+	 * @param mode 譜面のモード (null の場合は BEAT_7K)
+	 * @return ターゲットスコアID
+	 */
+	public String getTargetid(Mode mode) {
+		PlayConfig pc = getModePlayConfig(mode);
+		return pc.isTargetidSet() ? pc.getTargetid() : (targetid != null && !targetid.isBlank() ? targetid : "MAX");
+	}
+
+	public void setTargetid(Mode mode, String targetid) {
+		getModePlayConfig(mode).setTargetid(targetid);
 	}
 
 	/**
@@ -421,7 +448,7 @@ public final class PlayerConfig {
 	 * @return LN モード (0:LN, 1:CN, 2:HCN, 3:HLN)
 	 */
 	public int getLnmode(Mode mode) {
-		PlayConfig pc = getLnmodePlayConfig(mode);
+		PlayConfig pc = getModePlayConfig(mode);
 		return pc != null && pc.isLnmodeSet() ? pc.getLnmode() : MathUtils.clamp(lnmode, 0, PlayConfig.LNMODE_MAX);
 	}
 
@@ -432,7 +459,7 @@ public final class PlayerConfig {
 	 * @return LN モード (0:LN, 1:CN, 2:HCN, 3:HLN)
 	 */
 	public int getLnmode(int modeId) {
-		return getLnmode(lnmodeTarget(modeId));
+		return getLnmode(toConfigMode(modeId));
 	}
 
 	/**
@@ -442,14 +469,14 @@ public final class PlayerConfig {
 	 * @param lnmode LN モード (0:LN, 1:CN, 2:HCN, 3:HLN)
 	 */
 	public void setLnmode(Mode mode, int lnmode) {
-		PlayConfig pc = getLnmodePlayConfig(mode);
+		PlayConfig pc = getModePlayConfig(mode);
 		if (pc != null) {
 			pc.setLnmode(lnmode);
 		}
 	}
 
 	public void setLnmode(int modeId, int lnmode) {
-		setLnmode(lnmodeTarget(modeId), lnmode);
+		setLnmode(toConfigMode(modeId), lnmode);
 	}
 
 	/**
@@ -463,15 +490,15 @@ public final class PlayerConfig {
 	}
 
 	/**
-	 * LN モードを保持する PlayConfig を返す。
+	 * KEY モード毎の設定 (LN モード・ターゲットスコア・ゲージオートシフト等) を保持する PlayConfig を返す。
 	 * POPN_5K と POPN_9K はモードID (9) が同じで選曲画面 (SongData) から区別できないため、
-	 * LN モードは POPN_9K (mode9) の値を共有する。それ以外は {@link #getPlayConfig(Mode)} と同じ。
+	 * POPN_9K (mode9) の値を共有する。それ以外は {@link #getPlayConfig(Mode)} と同じ。
 	 */
-	private PlayConfig getLnmodePlayConfig(Mode mode) {
+	private PlayConfig getModePlayConfig(Mode mode) {
 		return getPlayConfig(mode == Mode.POPN_5K ? Mode.POPN_9K : mode).getPlayconfig();
 	}
 
-	private static Mode lnmodeTarget(int modeId) {
+	private static Mode toConfigMode(int modeId) {
 		for (Mode m : Mode.values()) {
 			if (m.id == modeId) {
 				return m == Mode.POPN_5K ? Mode.POPN_9K : m;
@@ -485,11 +512,35 @@ public final class PlayerConfig {
 	 */
 	private void migrateLnmode() {
 		for (Mode m : Mode.values()) {
-			PlayConfig pc = getLnmodePlayConfig(m);
+			PlayConfig pc = getModePlayConfig(m);
 			if (pc != null && !pc.isLnmodeSet()) {
 				pc.setLnmode(lnmode);
 			}
 		}
+	}
+
+	/**
+	 * 旧判定タイミング・ターゲットスコア・ゲージオートシフト・ゲージ下限 (プロファイル共通) しか持たない設定から、
+	 * 各モードの設定へ値を引き継ぐ
+	 */
+	private void migrateModeOptions() {
+		final boolean migrateJudgetiming = !migrationJudgetiming;
+		for (Mode m : Mode.values()) {
+			PlayConfig pc = getModePlayConfig(m);
+			if (migrateJudgetiming) {
+				pc.setJudgetiming(judgetiming);
+			}
+			if (!pc.isTargetidSet()) {
+				pc.setTargetid(targetid);
+			}
+			if (!pc.isGaugeAutoShiftSet()) {
+				pc.setGaugeAutoShift(gaugeAutoShift);
+			}
+			if (!pc.isBottomShiftableGaugeSet()) {
+				pc.setBottomShiftableGauge(bottomShiftableGauge);
+			}
+		}
+		migrationJudgetiming = true;
 	}
 
 	public int getRandom2() {
@@ -836,14 +887,6 @@ public final class PlayerConfig {
 
 	public void setIrconfig(IRConfig[] irconfig) {
 		this.irconfig = irconfig;
-	}
-
-	public String getTargetid() {
-		return targetid;
-	}
-
-	public void setTargetid(String targetid) {
-		this.targetid = targetid;
 	}
 
 	public String[] getTargetlist() {
@@ -1196,6 +1239,7 @@ public final class PlayerConfig {
 		lnmode = MathUtils.clamp(lnmode, 0, PlayConfig.LNMODE_MAX);
 		if (migrateLnmode) {
 			migrateLnmode();
+			migrateModeOptions();
 		}
 		keyJudgeWindowRatePerfectGreat = MathUtils.clamp(keyJudgeWindowRatePerfectGreat, 25, 400);
 		keyJudgeWindowRateGreat = MathUtils.clamp(keyJudgeWindowRateGreat, 0, 400);

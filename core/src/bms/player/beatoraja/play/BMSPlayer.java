@@ -539,7 +539,11 @@ public class BMSPlayer extends MainState {
 
 		if(HSReplay != null && HSReplay.config != null) {
 			//保存されたHSオプションログからHSオプション再現
-			config.getPlayConfig(model.getMode()).setPlayconfig(HSReplay.config);
+			// ターゲットスコア・ゲージオートシフトは HS オプションではないため、現在の設定を維持する
+			final PlayConfig current = config.getPlayConfig(model.getMode()).getPlayconfig();
+			final PlayConfig hsconfig = HSReplay.config.clone();
+			hsconfig.copyModeOptions(current);
+			config.getPlayConfig(model.getMode()).setPlayconfig(hsconfig);
 		}
 
 		logger.info("ゲージ設定");
@@ -689,7 +693,7 @@ public class BMSPlayer extends MainState {
 		} else {
 			
 			if(resource.getRivalScoreData() == null || resource.getCourseBMSModels() != null) {
-				ScoreData targetScore = TargetProperty.getTargetProperty(config.getTargetid()).getTarget(main);
+				ScoreData targetScore = TargetProperty.getTargetProperty(config.getTargetid(resource.getConfigMode())).getTarget(main);
 				resource.setTargetScoreData(targetScore);
 			} else {
 				resource.setTargetScoreData(resource.getRivalScoreData());
@@ -929,12 +933,15 @@ public class BMSPlayer extends MainState {
 					timer.switchTimer(TIMER_ENDOFNOTE_1P, true);
 				}
 				// stage failed判定
-				if (config.getGaugeAutoShift() == PlayerConfig.GAUGEAUTOSHIFT_BESTCLEAR || config.getGaugeAutoShift() == PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER) {
-					final int len = config.getGaugeAutoShift() == PlayerConfig.GAUGEAUTOSHIFT_BESTCLEAR
+				// ゲージオートシフト・下限は KEY モード毎の設定
+				final int gaugeAutoShift = config.getGaugeAutoShift(resource.getConfigMode());
+				final int bottomShiftableGauge = config.getBottomShiftableGauge(resource.getConfigMode());
+				if (gaugeAutoShift == PlayerConfig.GAUGEAUTOSHIFT_BESTCLEAR || gaugeAutoShift == PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER) {
+					final int len = gaugeAutoShift == PlayerConfig.GAUGEAUTOSHIFT_BESTCLEAR
 							? (gauge.getType() >= GrooveGauge.CLASS ? GrooveGauge.EXHARDCLASS + 1 : GrooveGauge.HAZARD + 1)
 							: (gauge.isCourseGauge() ? Math.min(Math.max(config.getGauge(), GrooveGauge.NORMAL) + GrooveGauge.CLASS - GrooveGauge.NORMAL, GrooveGauge.EXHARDCLASS) + 1 : config.getGauge() + 1);
 					int type = gauge.isCourseGauge() ? GrooveGauge.CLASS
-							: gauge.getType() < config.getBottomShiftableGauge() ? gauge.getType() : config.getBottomShiftableGauge();
+							: gauge.getType() < bottomShiftableGauge ? gauge.getType() : bottomShiftableGauge;
 					for (int i = type; i < len; i++) {
 						if (gauge.getGauge(i).getValue() > 0f && gauge.getGauge(i).isQualified()) {
 							type = i;
@@ -948,7 +955,7 @@ public class BMSPlayer extends MainState {
 					// ゲージ0になった時点で小節数を記録
 					recordFailMeasure(ptime);
 
-					switch(config.getGaugeAutoShift()) {
+					switch(gaugeAutoShift) {
 					case PlayerConfig.GAUGEAUTOSHIFT_NONE:
 						// FAILED移行
 						state = STATE_FAILED;

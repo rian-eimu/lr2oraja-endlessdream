@@ -1214,8 +1214,8 @@ public class IntegerPropertyFactory {
 			return state.resource.getPlayerConfig().getLnmode(Mode.BEAT_7K);
 		}),
 		notesdisplaytimingautoadjust(75, (state) -> (state.resource.getPlayerConfig().isNotesDisplayTimingAutoAdjust() ? 1 : 0)),
-		gaugeautoshift(78, (state) -> (state.resource.getPlayerConfig().getGaugeAutoShift())),
-		bottomshiftablegauge(341, (state) -> (state.resource.getPlayerConfig().getBottomShiftableGauge())),
+		gaugeautoshift(78, (state) -> (state.resource.getPlayerConfig().getGaugeAutoShift(MusicSelector.getConfigMode(state)))),
+		bottomshiftablegauge(341, (state) -> (state.resource.getPlayerConfig().getBottomShiftableGauge(MusicSelector.getConfigMode(state)))),
 		bga(72, (state) -> (state.resource.getConfig().getBga())),
 		
 		difficulty(10, (state) -> {
