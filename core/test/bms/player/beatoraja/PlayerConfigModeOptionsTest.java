@@ -114,15 +114,18 @@ class PlayerConfigModeOptionsTest {
     @Test
     void copyModeOptionsKeepsCurrentValuesOnHsReplay() {
         PlayConfig current = new PlayConfig();
+        current.setLnmode(2);
         current.setTargetid("RATE_A");
         current.setGaugeAutoShift(PlayerConfig.GAUGEAUTOSHIFT_CONTINUE);
         current.setBottomShiftableGauge(GrooveGauge.EASY);
         PlayConfig replay = new PlayConfig();
         replay.setHispeed(3.0f);
         replay.setTargetid("MAX");
+        replay.setLnmode(0);
 
         replay.copyModeOptions(current);
         assertEquals(3.0f, replay.getHispeed());
+        assertEquals(2, replay.getLnmode());
         assertEquals("RATE_A", replay.getTargetid());
         assertEquals(PlayerConfig.GAUGEAUTOSHIFT_CONTINUE, replay.getGaugeAutoShift());
         assertEquals(GrooveGauge.EASY, replay.getBottomShiftableGauge());

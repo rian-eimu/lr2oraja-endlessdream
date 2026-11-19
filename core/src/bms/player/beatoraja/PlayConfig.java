@@ -355,12 +355,13 @@ public class PlayConfig implements Cloneable {
 	}
 
 	/**
-	 * HS オプション以外の KEY モード毎の設定 (ターゲットスコア・ゲージオートシフト・ゲージ下限) を
+	 * HS オプション以外の KEY モード毎の設定 (LN モード・ターゲットスコア・ゲージオートシフト・ゲージ下限) を
 	 * 未設定状態も含めてそのまま複製する
 	 *
 	 * @param src 複製元
 	 */
 	public void copyModeOptions(PlayConfig src) {
+		this.lnmode = src.lnmode;
 		this.targetid = src.targetid;
 		this.gaugeAutoShift = src.gaugeAutoShift;
 		this.bottomShiftableGauge = src.bottomShiftableGauge;

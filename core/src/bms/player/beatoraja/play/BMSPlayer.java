@@ -539,7 +539,7 @@ public class BMSPlayer extends MainState {
 
 		if(HSReplay != null && HSReplay.config != null) {
 			//保存されたHSオプションログからHSオプション再現
-			// ターゲットスコア・ゲージオートシフトは HS オプションではないため、現在の設定を維持する
+			// LN MODE・ターゲットスコア・ゲージオートシフトは HS オプションではないため、現在の設定を維持する
 			final PlayConfig current = config.getPlayConfig(model.getMode()).getPlayconfig();
 			final PlayConfig hsconfig = HSReplay.config.clone();
 			hsconfig.copyModeOptions(current);
