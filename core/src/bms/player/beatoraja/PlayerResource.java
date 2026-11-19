@@ -51,6 +51,10 @@ public final class PlayerResource {
 	 * BMSModelの元々のモード
 	 */
 	private bms.model.Mode orgmode;
+	/**
+	 * コース 1 曲目の読み込み時のモード (KEY モード毎の設定の参照先)
+	 */
+	private bms.model.Mode courseOrgmode;
 
 	private PlayerData playerdata = new PlayerData();
 
@@ -164,6 +168,7 @@ public final class PlayerResource {
 
 	public void clear() {
 		course = null;
+		courseOrgmode = null;
 		courseindex = 0;
 		cscore = null;
 		score = null;
@@ -435,6 +440,7 @@ public final class PlayerResource {
 			models.add(model);
 		}
 		course = models.toArray(BMSModel.class);
+		courseOrgmode = course.length > 0 ? course[0].getMode() : null;
 		pseudoBssOptionEnabled = pconfig != null && pconfig.isPseudoBssAsBss();
 		courseStagePseudoBssApplied = new boolean[course.length];
 		courseStageLntypes = new int[course.length];
@@ -866,6 +872,33 @@ public final class PlayerResource {
 
 	public void setChartOption(ReplayData chartOption) {
 		this.chartOption = chartOption;
+	}
+
+	/**
+	 * KEY モード毎の設定 (ターゲットスコア・ゲージオートシフト等) の参照先とするモードを返す。
+	 * <ul>
+	 * <li>コース: 1 曲目の読み込み時のモード (コース内でモードが混在していても 1 曲目を代表とする)</li>
+	 * <li>楽曲: 読み込み時の譜面のモード (7to9 等の変換前)</li>
+	 * <li>譜面未読み込み: 楽曲データのモード (なければ BEAT_7K)</li>
+	 * </ul>
+	 *
+	 * @return 対象モード (null にはならない)
+	 */
+	public bms.model.Mode getConfigMode() {
+		if (course != null && courseOrgmode != null) {
+			return courseOrgmode;
+		}
+		if (orgmode != null) {
+			return orgmode;
+		}
+		if (songdata != null) {
+			for (bms.model.Mode m : bms.model.Mode.values()) {
+				if (m.id == songdata.getMode()) {
+					return m;
+				}
+			}
+		}
+		return bms.model.Mode.BEAT_7K;
 	}
 
 	public bms.model.Mode getOriginalMode() {
