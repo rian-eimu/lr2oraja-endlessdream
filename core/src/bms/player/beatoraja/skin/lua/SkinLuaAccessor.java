@@ -65,6 +65,7 @@ public class SkinLuaAccessor implements com.badlogic.gdx.utils.Disposable {
 
 		globals.finder = new SkinResourceFinder(this.sandboxRoot);
 		restrictPackageLoaders();
+		LegacySkinLuaApi.install(globals, this::getSkinDirectory, false);
 		initializeModules();
 	}
 

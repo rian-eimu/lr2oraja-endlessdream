@@ -73,7 +73,23 @@ public final class SkinCompatibilityApiTest {
             previewAccessor.exportMainStateAccessor(null);
             previewAccessor.exec("assert(not file_delete('file.txt')); assert(not open_url('https://example.com')); "
                     + "assert(http_get_async('https://example.com')==nil)");
+            // サンドボックス（ヘッダ読み込み等）でも require('luajava') は動作しつつ、ディレクトリ作成やHTTP通信は禁止されること
+            previewAccessor.exec("local j=require('luajava'); local f=j.newInstance('java.io.File','sandbox_created'); "
+                    + "assert(f:mkdir()==false); local g=j.bindClass('com.badlogic.gdx.Gdx'); assert(g.graphics:getWidth()==0); "
+                    + "local ok = pcall(function() j.newInstance('java.net.URL','https://example.com'):openConnection():connect() end); "
+                    + "assert(not ok)");
+            check(!Files.exists(root.resolve("sandbox_created")), "Sandbox must not create directories via luajava");
             previewAccessor.dispose();
+
+            // トップレベルで require('luajava') を呼ぶスキンのヘッダ読み込みがサンドボックスローダーで成功すること
+            Path moduleFile = root.resolve("legacy_result.lua");
+            Files.writeString(moduleFile, "luajava = require('luajava')\n"
+                    + "return { header = { type = 7, name = 'Legacy Test', w = 1920, h = 1080 }, main = function() return {} end }\n");
+            Path skinFile = root.resolve("legacy_header.luaskin");
+            Files.writeString(skinFile, "local t = require('legacy_result')\n"
+                    + "if skin_config then return t.main() else return t.header end\n");
+            var header = LuaSkinLoader.sandboxed(skinFile).loadHeader(skinFile);
+            check(header != null && "Legacy Test".equals(header.getName()), "Sandboxed header load with require('luajava') must succeed");
 
             Gdx.input = (Input) Proxy.newProxyInstance(Input.class.getClassLoader(), new Class<?>[] {Input.class}, (proxy, method, arguments) -> {
                 return switch (method.getName()) {

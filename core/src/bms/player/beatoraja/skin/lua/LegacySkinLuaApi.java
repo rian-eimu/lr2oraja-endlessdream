@@ -43,11 +43,20 @@ final class LegacySkinLuaApi {
 	private static final int HTTP_MAX_TIMEOUT_MS = 5000;
 
 	static void install(Globals globals, Supplier<Path> skinDirectorySupplier) {
+		install(globals, skinDirectorySupplier, true);
+	}
+
+	/**
+	 * 旧スキン向けの限定的な luajava / debug ファサードを Lua 環境へ登録する.
+	 *
+	 * @param allowSideEffects false の場合（ヘッダ読み込み等のサンドボックス）、ディレクトリ作成やHTTP通信などの副作用を禁止する
+	 */
+	static void install(Globals globals, Supplier<Path> skinDirectorySupplier, boolean allowSideEffects) {
 		SkinLuaPathResolver pathResolver = new SkinLuaPathResolver(skinDirectorySupplier);
 		LuaTable luajava = new LuaTable();
 		luajava.set("bindClass", new BindClassFunction());
-		luajava.set("new", new NewFunction(pathResolver));
-		luajava.set("newInstance", new NewInstanceFunction(pathResolver));
+		luajava.set("new", new NewFunction(pathResolver, allowSideEffects));
+		luajava.set("newInstance", new NewInstanceFunction(pathResolver, allowSideEffects));
 		globals.set("luajava", luajava);
 		globals.package_.setIsLoaded("luajava", luajava);
 
@@ -78,9 +87,11 @@ final class LegacySkinLuaApi {
 
 	private static final class NewFunction extends VarArgFunction {
 		private final SkinLuaPathResolver pathResolver;
+		private final boolean allowSideEffects;
 
-		private NewFunction(SkinLuaPathResolver pathResolver) {
+		private NewFunction(SkinLuaPathResolver pathResolver, boolean allowSideEffects) {
 			this.pathResolver = pathResolver;
+			this.allowSideEffects = allowSideEffects;
 		}
 
 		@Override
@@ -91,7 +102,7 @@ final class LegacySkinLuaApi {
 			}
 			String className = classFacade.get(CLASS_NAME).optjstring(null);
 			if ("java.io.File".equals(className)) {
-				return fileFacade(pathResolver, arguments.checkjstring(2));
+				return fileFacade(pathResolver, arguments.checkjstring(2), allowSideEffects);
 			}
 			throw new LuaError("Legacy Lua skin constructor access denied: " + className);
 		}
@@ -99,16 +110,18 @@ final class LegacySkinLuaApi {
 
 	private static final class NewInstanceFunction extends VarArgFunction {
 		private final SkinLuaPathResolver pathResolver;
+		private final boolean allowSideEffects;
 
-		private NewInstanceFunction(SkinLuaPathResolver pathResolver) {
+		private NewInstanceFunction(SkinLuaPathResolver pathResolver, boolean allowSideEffects) {
 			this.pathResolver = pathResolver;
+			this.allowSideEffects = allowSideEffects;
 		}
 
 		@Override
 		public Varargs invoke(Varargs arguments) {
 			return switch (arguments.checkjstring(1)) {
-				case "java.io.File" -> fileFacade(pathResolver, arguments.checkjstring(2));
-				case "java.net.URL" -> urlFacade(arguments.checkjstring(2));
+				case "java.io.File" -> fileFacade(pathResolver, arguments.checkjstring(2), allowSideEffects);
+				case "java.net.URL" -> urlFacade(arguments.checkjstring(2), allowSideEffects);
 				case "java.io.InputStreamReader" -> arguments.arg(2);
 				case "java.io.BufferedReader" -> bufferedReaderFacade(arguments.arg(2));
 				default -> throw new LuaError("Legacy Lua skin constructor access denied: " + arguments.arg1());
@@ -116,7 +129,7 @@ final class LegacySkinLuaApi {
 		}
 	}
 
-	private static LuaTable fileFacade(SkinLuaPathResolver pathResolver, String pathText) {
+	private static LuaTable fileFacade(SkinLuaPathResolver pathResolver, String pathText, boolean allowSideEffects) {
 		Path path = pathResolver.resolve(pathText);
 		LuaTable facade = new LuaTable();
 		LuaTable metatable = new LuaTable();
@@ -143,6 +156,9 @@ final class LegacySkinLuaApi {
 		facade.set("mkdir", new OneArgFunction() {
 			@Override
 			public LuaValue call(LuaValue ignored) {
+				if (!allowSideEffects) {
+					return LuaValue.FALSE;
+				}
 				try {
 					Files.createDirectory(pathResolver.resolve(path.toString()));
 					return LuaValue.TRUE;
@@ -159,7 +175,7 @@ final class LegacySkinLuaApi {
 					int index = 1;
 					for (Path file : stream) {
 						if (index > 4096) throw new IOException("Too many skin directory entries");
-						if (!Files.isSymbolicLink(file)) files.set(index++, fileFacade(pathResolver, file.toString()));
+						if (!Files.isSymbolicLink(file)) files.set(index++, fileFacade(pathResolver, file.toString(), allowSideEffects));
 					}
 				} catch (IOException | RuntimeException e) {
 					return LuaValue.NIL;
@@ -170,8 +186,8 @@ final class LegacySkinLuaApi {
 		return facade;
 	}
 
-	private static LuaTable urlFacade(String urlText) {
-		LegacyHttpConnection connection = new LegacyHttpConnection(urlText);
+	private static LuaTable urlFacade(String urlText, boolean allowSideEffects) {
+		LegacyHttpConnection connection = new LegacyHttpConnection(urlText, allowSideEffects);
 		LuaTable facade = new LuaTable();
 		facade.set("openConnection", new OneArgFunction() {
 			@Override
@@ -262,13 +278,15 @@ final class LegacySkinLuaApi {
 
 	private static final class LegacyHttpConnection {
 		private final String urlText;
+		private final boolean allowSideEffects;
 		private String method = "GET";
 		private int timeout = HTTP_DEFAULT_TIMEOUT_MS;
 		private int maxBytes = SkinHttpBody.DEFAULT_MAX_BYTES;
 		private HttpURLConnection connection;
 
-		private LegacyHttpConnection(String urlText) {
+		private LegacyHttpConnection(String urlText, boolean allowSideEffects) {
 			this.urlText = urlText;
+			this.allowSideEffects = allowSideEffects;
 		}
 
 		private void setRequestMethod(String method) {
@@ -283,6 +301,9 @@ final class LegacySkinLuaApi {
 		}
 
 		private void connect() {
+			if (!allowSideEffects) {
+				throw new LuaError("Legacy Lua skin HTTP access denied in sandbox");
+			}
 			if (connection != null) {
 				return;
 			}
@@ -410,8 +431,18 @@ final class LegacySkinLuaApi {
 		facade.set("getControllers", new OneArgFunction() {
 			@Override
 			public LuaValue call(LuaValue ignored) {
-				Array<Controller> controllers = Controllers.getControllers();
 				LuaTable result = new LuaTable();
+				if (Gdx.app == null) {
+					result.set("size", 0);
+					result.set("first", new OneArgFunction() {
+						@Override
+						public LuaValue call(LuaValue ignored) {
+							return LuaValue.NIL;
+						}
+					});
+					return result;
+				}
+				Array<Controller> controllers = Controllers.getControllers();
 				result.set("size", controllers.size);
 				result.set("first", new OneArgFunction() {
 					@Override
