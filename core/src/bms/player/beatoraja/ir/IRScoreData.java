@@ -34,6 +34,10 @@ public class IRScoreData {
 	 */
 	public final boolean pseudoBss;
 	/**
+	 * スコア自体は保存せず打鍵数のみをIRへ送信・加算するプレイかどうか
+	 */
+	public final boolean keystrokeOnly;
+	/**
 	 * プレイヤーID
 	 */
 	public final String id;
@@ -177,9 +181,23 @@ public class IRScoreData {
 			long avgjudge, int maxcombo, int notes, int passnotes, int minbp, int option, long seed, int assist,
 			int gauge, BMSPlayerInputDevice.Type deviceType, JudgeAlgorithm judgeAlgorithm, BMSPlayerRule rule,
 			String skin, long playtime, boolean pseudoBss) {
+		this(sha256, lntype, id, player, clear, date, epg, lpg, egr, lgr, egd, lgd, ebd, lbd,
+				epr, lpr, ems, lms, avgjudge, maxcombo, notes, passnotes, minbp, option, seed, assist,
+				gauge, deviceType, judgeAlgorithm, rule, skin, playtime, pseudoBss, false);
+	}
+
+	/**
+	 * 実演奏時間・疑似BSS/MSS変換適用フラグ・打鍵数のみ送信フラグ付きのIRスコアデータを生成する。
+	 */
+	public IRScoreData(String sha256, int lntype, String id, String player, ClearType clear, long date, int epg,
+			int lpg, int egr, int lgr, int egd, int lgd, int ebd, int lbd, int epr, int lpr, int ems, int lms,
+			long avgjudge, int maxcombo, int notes, int passnotes, int minbp, int option, long seed, int assist,
+			int gauge, BMSPlayerInputDevice.Type deviceType, JudgeAlgorithm judgeAlgorithm, BMSPlayerRule rule,
+			String skin, long playtime, boolean pseudoBss, boolean keystrokeOnly) {
 		this.sha256 = sha256;
 		this.lntype = toIrLntype(lntype, pseudoBss);
 		this.pseudoBss = pseudoBss || isPseudoBssLntype(this.lntype);
+		this.keystrokeOnly = keystrokeOnly;
 		this.id = id;
 		this.player = player;
 		this.clear = clear;
@@ -214,17 +232,22 @@ public class IRScoreData {
 	}
 
 	public IRScoreData(ScoreData score) {
-		this(score, score.getMode(), false);
+		this(score, score.getMode(), false, false);
 	}
 
 	public IRScoreData(ScoreData score, boolean pseudoBss) {
-		this(score, score.getMode(), pseudoBss);
+		this(score, score.getMode(), pseudoBss, false);
 	}
 
 	public IRScoreData(ScoreData score, int baseLntype, boolean pseudoBss) {
+		this(score, baseLntype, pseudoBss, false);
+	}
+
+	public IRScoreData(ScoreData score, int baseLntype, boolean pseudoBss, boolean keystrokeOnly) {
 		this.sha256 = score.getSha256();
 		this.lntype = toIrLntype(baseLntype, pseudoBss);
 		this.pseudoBss = pseudoBss || isPseudoBssLntype(this.lntype);
+		this.keystrokeOnly = keystrokeOnly;
 		this.id = score.getID();
 		this.player = score.getPlayer();
 		this.clear = ClearType.getClearTypeByID(score.getClear());

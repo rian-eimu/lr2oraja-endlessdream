@@ -132,22 +132,24 @@ public class MusicResult extends AbstractResult {
         		}
         		processedIRs.add(irc.config.getIrname());
 
-    			boolean send = resource.isUpdateScore() && !resource.isForceNoIRSend();
-    			switch(irc.config.getIrsend()) {
-    			case IRConfig.IR_SEND_ALWAYS:
-    				break;
-    			case IRConfig.IR_SEND_COMPLETE_SONG:
-    				FloatArray gauge = resource.getGauge()[resource.getGrooveGauge().getType()];
-    				send &= gauge.get(gauge.size - 1) > 0.0;
-    				break;
-    			case IRConfig.IR_SEND_UPDATE_SCORE:
-    				send &= (newscore.getExscore() > oldscore.getExscore() || newscore.getClear() > oldscore.getClear()
-    						|| newscore.getCombo() > oldscore.getCombo() || newscore.getMinbp() < oldscore.getMinbp());
-    				break;
-    			}
+    			final boolean keystrokeOnly = !resource.isUpdateScore();
+    			FloatArray gauge = resource.getGauge()[resource.getGrooveGauge().getType()];
+    			boolean songCompleted = gauge.get(gauge.size - 1) > 0.0;
+    			boolean send = IRUtil.shouldSendSinglePlayToIR(
+    					resource.isUpdateScore(),
+    					resource.isForceNoIRSend(),
+    					resource.isKeystrokeIRSendAllowed(),
+    					irc.config.getIrsend(),
+    					songCompleted,
+    					newscore,
+    					oldscore);
     			
     			if(send) {
                     if (IRUtil.shouldSkipIR(irc.config.getIrname(), resource.getPlayerConfig().isDxMode())) {
+                        continue;
+                    }
+                    if (IRUtil.shouldSkipKeystrokeOnlyScoreSend(irc.config.getIrname(), keystrokeOnly)) {
+                        logger.info("{}: スコア非保存オプションによる打鍵数のみ送信対象外のためスキップしました。", irc.config.getIrname());
                         continue;
                     }
                     if (IRUtil.shouldSkipPseudoBssScoreSend(irc.config.getIrname(), resource.isPseudoBssApplied())) {
@@ -164,7 +166,7 @@ public class MusicResult extends AbstractResult {
                     final int baseLnmode = resource.getBMSModel() != null && resource.getBMSModel().containsUndefinedLongNote()
                             ? resource.getLnmode() : newscore.getMode();
                     IRSendStatus status = new IRSendStatus(irc.connection, resource.getSongdata(), newscore,
-                            resource.getReplayData(), baseLnmode, pseudoBss);
+                            resource.getReplayData(), baseLnmode, pseudoBss, keystrokeOnly);
     				main.irSendStatus.add(status);
 					addedScores.add(status);
     			}
@@ -203,7 +205,7 @@ public class MusicResult extends AbstractResult {
                         if (response.isSucceeded()) {
                             var lnMode = main.getPlayerResource().getLnmode();
                             main.getRivalDataAccessor().updateAllRivalsScores(response.getData(), songData, lnMode);
-							ranking.updateScore(ir[0].player, main.getRivalDataAccessor(), response.getData(), newscore.getExscore() > oldscore.getExscore() ? newscore : oldscore);
+							ranking.updateScore(ir[0].player, main.getRivalDataAccessor(), response.getData(), resource.isUpdateScore() && newscore.getExscore() > oldscore.getExscore() ? newscore : oldscore);
 							rankingOffset = ranking.getRank() > 10 ? ranking.getRank() - 5 : 0;
 							logger.info("IRからのスコア取得成功 : {}", response.getMessage());
 						} else {
