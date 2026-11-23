@@ -14,6 +14,7 @@ import bms.model.ChartInformation;
 import bms.model.ChartSource;
 import bms.player.beatoraja.ClearType;
 import bms.player.beatoraja.CourseData;
+import bms.player.beatoraja.IRConfig;
 import bms.player.beatoraja.MainController;
 import bms.player.beatoraja.ReplayData;
 import bms.player.beatoraja.ScoreData;
@@ -163,6 +164,79 @@ public class IRUtilTest {
         assertNotNull(captured[0]);
         assertEquals(IRScoreData.LNTYPE_CN_PLUS, captured[0].lntype);
         assertTrue(captured[0].pseudoBss);
+        assertFalse(captured[0].keystrokeOnly);
+    }
+
+    @Test
+    public void testKeystrokeOnlySendFilteringAndProtocolRoundTrip() {
+        // 1. IR別スキップ判定（打鍵数のみ送信は rianIR 専用）
+        assertFalse(IRUtil.shouldSkipKeystrokeOnlyScoreSend("rianIR", false));
+        assertFalse(IRUtil.shouldSkipKeystrokeOnlyScoreSend("Mocha-Repository", false));
+        assertFalse(IRUtil.shouldSkipKeystrokeOnlyScoreSend("rianIR", true));
+        assertTrue(IRUtil.shouldSkipKeystrokeOnlyScoreSend("Mocha-Repository", true));
+        assertTrue(IRUtil.shouldSkipKeystrokeOnlyScoreSend("BMS-IR", true));
+        assertTrue(IRUtil.shouldSkipKeystrokeOnlyScoreSend("LR2IR", true));
+        assertTrue(IRUtil.shouldSkipKeystrokeOnlyScoreSend(null, true));
+
+        // 2. 有効打鍵数判定（PGREAT / GREAT / GOOD / BAD のみ対象、POOR / MISS のみは除外）
+        ScoreData zeroKeystrokes = new ScoreData();
+        zeroKeystrokes.setEpr(20);
+        zeroKeystrokes.setEms(50);
+        assertFalse(IRUtil.hasValidKeystrokes(null));
+        assertFalse(IRUtil.hasValidKeystrokes(zeroKeystrokes));
+
+        ScoreData validKeystrokes = new ScoreData();
+        validKeystrokes.setEpg(100);
+        validKeystrokes.setLgr(25);
+        validKeystrokes.setEbd(3);
+        validKeystrokes.setClear(ClearType.LightAssistEasy.id);
+        validKeystrokes.setMinbp(15);
+        assertTrue(IRUtil.hasValidKeystrokes(validKeystrokes));
+
+        ScoreData higherBest = new ScoreData();
+        higherBest.setEpg(500);
+        higherBest.setClear(ClearType.Hard.id);
+        higherBest.setCombo(1000);
+        higherBest.setMinbp(1);
+
+        // 3. スコア非保存オプション（H-RANDOM / DBR 等）時は IR_SEND_UPDATE_SCORE でも毎回送信し、IR_SEND_COMPLETE_SONG のみ完奏条件に従う
+        assertTrue(IRUtil.shouldSendSinglePlayToIR(false, false, true, IRConfig.IR_SEND_ALWAYS, false, validKeystrokes, higherBest));
+        assertTrue(IRUtil.shouldSendSinglePlayToIR(false, false, true, IRConfig.IR_SEND_UPDATE_SCORE, false, validKeystrokes, higherBest));
+        assertFalse(IRUtil.shouldSendSinglePlayToIR(false, false, true, IRConfig.IR_SEND_COMPLETE_SONG, false, validKeystrokes, higherBest));
+        assertTrue(IRUtil.shouldSendSinglePlayToIR(false, false, true, IRConfig.IR_SEND_COMPLETE_SONG, true, validKeystrokes, higherBest));
+
+        // 4. 判定幅拡大・ExtraNote（keystrokeIRSendAllowed=false）、FreqTrainer・osu（forceNoIRSend=true）、0打鍵時は送信しない
+        assertFalse(IRUtil.shouldSendSinglePlayToIR(false, false, false, IRConfig.IR_SEND_ALWAYS, true, validKeystrokes, higherBest));
+        assertFalse(IRUtil.shouldSendSinglePlayToIR(false, true, true, IRConfig.IR_SEND_ALWAYS, true, validKeystrokes, higherBest));
+        assertFalse(IRUtil.shouldSendSinglePlayToIR(false, false, true, IRConfig.IR_SEND_ALWAYS, true, zeroKeystrokes, higherBest));
+
+        // 5. IRWorkerProtocol DTO 往復および IRSendStatus での keystrokeOnly 保持
+        IRScoreData keystrokeIrScore = new IRScoreData(validKeystrokes, IRScoreData.LNTYPE_CN, true, true);
+        assertTrue(keystrokeIrScore.keystrokeOnly);
+        assertTrue(keystrokeIrScore.pseudoBss);
+        IRScoreData roundTripped = IRWorkerProtocol.Score.from(keystrokeIrScore).toIRScoreData();
+        assertTrue(roundTripped.keystrokeOnly);
+        assertTrue(roundTripped.pseudoBss);
+        assertEquals(IRScoreData.LNTYPE_CN_PLUS, roundTripped.lntype);
+
+        IRScoreData[] captured = new IRScoreData[1];
+        IRConnection stubIr = new TestIRConnectionBase() {
+            @Override
+            public IRResponse<Object> sendPlayData(IRChartData model, IRScoreData score) {
+                captured[0] = score;
+                return new IRResponse<Object>() {
+                    @Override public boolean isSucceeded() { return true; }
+                    @Override public String getMessage() { return "ok"; }
+                    @Override public Object getData() { return null; }
+                };
+            }
+        };
+        MainController.IRSendStatus status = new MainController.IRSendStatus(
+                stubIr, createSongWithPath("D:/bms/sample/hran.bms"), validKeystrokes, new ReplayData(),
+                IRScoreData.LNTYPE_LN, false, true);
+        assertTrue(status.send());
+        assertNotNull(captured[0]);
+        assertTrue(captured[0].keystrokeOnly);
     }
 
     private static SongData createSongWithPath(String path) {

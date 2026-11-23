@@ -5,6 +5,8 @@ import java.net.URISyntaxException;
 import java.util.Locale;
 
 import bms.player.beatoraja.CourseData;
+import bms.player.beatoraja.IRConfig;
+import bms.player.beatoraja.ScoreData;
 import bms.player.beatoraja.song.SongData;
 
 /**
@@ -53,6 +55,79 @@ public class IRUtil {
             return false;
         }
         return !isRianIR(irName);
+    }
+
+    /**
+     * スコア非保存オプション使用時の打鍵数のみ送信において、指定IRへの送信をスキップすべきかどうかを判定する。
+     * 打鍵数のみ送信（keystrokeOnly）は rianIR 専用機能であるため、rianIR 以外に送信しない。
+     *
+     * @param irName IR名
+     * @param keystrokeOnly 打鍵数のみ送信プレイかどうか
+     * @return スキップすべきであればtrue
+     */
+    public static boolean shouldSkipKeystrokeOnlyScoreSend(String irName, boolean keystrokeOnly) {
+        if (!keystrokeOnly) {
+            return false;
+        }
+        return !isRianIR(irName);
+    }
+
+    /**
+     * スコアデータに有効打鍵数（PGREAT + GREAT + GOOD + BAD）が1件以上含まれるかを判定する。
+     *
+     * @param score スコアデータ
+     * @return 有効打鍵が1以上あればtrue
+     */
+    public static boolean hasValidKeystrokes(ScoreData score) {
+        if (score == null) {
+            return false;
+        }
+        long validNotes = (long) score.getEpg() + score.getLpg()
+                + score.getEgr() + score.getLgr()
+                + score.getEgd() + score.getLgd()
+                + score.getEbd() + score.getLbd();
+        return validNotes > 0L;
+    }
+
+    /**
+     * 単曲リザルト画面において、スコア通常送信または打鍵数のみ送信の対象になるかを判定する。
+     *
+     * @param updateScore 通常スコア保存が有効か（isUpdateScore）
+     * @param forceNoIRSend 強制IR送信抑止が有効か（FreqTrainer・osu譜面など）
+     * @param keystrokeIRSendAllowed 打鍵数のみ送信が許可されたオプション構成か
+     * @param irSendMode IRConfig の送信タイミング設定
+     * @param songCompleted 完奏条件（最終ゲージ > 0）を満たしているか
+     * @param newScore 今回のスコアデータ
+     * @param oldScore 既存の自己ベストスコアデータ
+     * @return 送信対象であればtrue
+     */
+    public static boolean shouldSendSinglePlayToIR(
+            boolean updateScore,
+            boolean forceNoIRSend,
+            boolean keystrokeIRSendAllowed,
+            int irSendMode,
+            boolean songCompleted,
+            ScoreData newScore,
+            ScoreData oldScore) {
+        if (forceNoIRSend || newScore == null) {
+            return false;
+        }
+        if (updateScore) {
+            return switch (irSendMode) {
+                case IRConfig.IR_SEND_COMPLETE_SONG -> songCompleted;
+                case IRConfig.IR_SEND_UPDATE_SCORE -> oldScore == null
+                        || newScore.getExscore() > oldScore.getExscore()
+                        || newScore.getClear() > oldScore.getClear()
+                        || newScore.getCombo() > oldScore.getCombo()
+                        || newScore.getMinbp() < oldScore.getMinbp();
+                default -> true;
+            };
+        }
+        if (!keystrokeIRSendAllowed || !hasValidKeystrokes(newScore)) {
+            return false;
+        }
+        // 打鍵数のみ送信時は IR_SEND_UPDATE_SCORE でも毎回送信し、IR_SEND_COMPLETE_SONG のみ完奏条件を適用する
+        return irSendMode != IRConfig.IR_SEND_COMPLETE_SONG || songCompleted;
     }
 
     // =========================================================================

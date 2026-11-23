@@ -234,6 +234,7 @@ public class BMSPlayer extends MainState {
 
 		boolean score = true;
 		boolean forceNoIRSend = false;
+		boolean disallowKeystrokeIRSend = false;
 		conditionalInitialMarginTime = resource.getMarginTime();
 		final List<java.util.function.Consumer<BMSModel>> branchModSteps = new ArrayList<>();
 
@@ -304,6 +305,7 @@ public class BMSPlayer extends MainState {
 					|| config.getLongnoteMarginRate() > 100)) {
 				assist = Math.max(assist, 2);
 				score = false;
+				disallowKeystrokeIRSend = true;
 			}
 
 			// Override judge rank
@@ -317,6 +319,7 @@ public class BMSPlayer extends MainState {
 					// Like expand judge treatment above if the original judge window is stricter than customized one
 					assist = Math.max(assist, 2);
 					score = false;
+					disallowKeystrokeIRSend = true;
 				}
 				model.setJudgerank(overridingJudgeWindowRate);
 				branchModSteps.add(m -> m.setJudgerank(overridingJudgeWindowRate));
@@ -353,6 +356,9 @@ public class BMSPlayer extends MainState {
 				if(mod.getAssistLevel() != PatternModifier.AssistLevel.NONE) {
 					assist = Math.max(assist, mod.getAssistLevel() == PatternModifier.AssistLevel.ASSIST ? 2 : 1);
 					score = false;
+					if (mod instanceof ExtraNoteModifier) {
+						disallowKeystrokeIRSend = true;
+					}
 				}
 				final long modSeed = mod.getSeed();
 				branchModSteps.add(m -> {
@@ -578,6 +584,7 @@ public class BMSPlayer extends MainState {
 		resource.setUpdateScore(score);
 		resource.setUpdateCourseScore(resource.isUpdateCourseScore() && score);
 		resource.setForceNoIRSend(forceNoIRSend);
+		resource.setKeystrokeIRSendAllowed(!forceNoIRSend && !disallowKeystrokeIRSend);
 		final boolean pseudoBssAsBss = resource.getPlayerConfig().isPseudoBssAsBss();
 		this.conditionalModifierApplier = m -> {
 			// 分岐後モデルはパーサから再構築されるため、初回ロード時と同じく疑似BSS変換を

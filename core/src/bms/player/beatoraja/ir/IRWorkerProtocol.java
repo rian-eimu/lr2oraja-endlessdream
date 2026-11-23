@@ -369,6 +369,7 @@ final class IRWorkerProtocol {
 		public String sha256;
 		public int lntype;
 		public boolean pseudoBss;
+		public boolean keystrokeOnly;
 		public String id;
 		public String player;
 		public ClearType clear;
@@ -412,6 +413,7 @@ final class IRWorkerProtocol {
 			dto.sha256 = score.sha256;
 			dto.lntype = score.lntype;
 			dto.pseudoBss = score.pseudoBss;
+			dto.keystrokeOnly = score.keystrokeOnly;
 			dto.id = score.id;
 			dto.player = score.player;
 			dto.clear = score.clear;
@@ -453,7 +455,7 @@ final class IRWorkerProtocol {
 			long effectivePlaytime = playtime >= 0 ? playtime : (playDuration > 0 ? playDuration : -1);
 			IRScoreData score = new IRScoreData(sha256, lntype, id, player, clear, date, epg, lpg, egr, lgr, egd, lgd, ebd, lbd,
 					epr, lpr, ems, lms, avgjudge, maxcombo, notes, passnotes, minbp, option, seed, assist, gauge,
-					deviceType, judgeAlgorithm, rule, skin, effectivePlaytime, pseudoBss);
+					deviceType, judgeAlgorithm, rule, skin, effectivePlaytime, pseudoBss, keystrokeOnly);
 			score.gaugeHistory = gaugeHistory != null ? gaugeHistory.toIRGaugeHistory() : null;
 			score.replayData = replayData;
 			score.replays = replays;

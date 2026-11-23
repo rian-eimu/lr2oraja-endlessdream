@@ -146,6 +146,7 @@ public final class PlayerResource {
 	private boolean freqOn;
 	private String freqString;
 	private boolean forceNoIRSend;
+	private boolean keystrokeIRSendAllowed = true;
 	private boolean pseudoBssOptionEnabled;
 	private boolean pseudoBssApplied;
 	private boolean[] courseStagePseudoBssApplied;
@@ -183,6 +184,7 @@ public final class PlayerResource {
 		setTablename("");
 		setTablelevel("");
 		failMeasure = Double.NaN;
+		keystrokeIRSendAllowed = true;
 		pseudoBssOptionEnabled = false;
 		pseudoBssApplied = false;
 		courseStagePseudoBssApplied = null;
@@ -931,6 +933,14 @@ public final class PlayerResource {
 
 	public void setForceNoIRSend(boolean forceNoIRSend) {
 		this.forceNoIRSend = forceNoIRSend;
+	}
+
+	public boolean isKeystrokeIRSendAllowed() {
+		return keystrokeIRSendAllowed;
+	}
+
+	public void setKeystrokeIRSendAllowed(boolean keystrokeIRSendAllowed) {
+		this.keystrokeIRSendAllowed = keystrokeIRSendAllowed;
 	}
 
 	public Future<BMSLoudnessAnalyzer.AnalysisResult> getAnalysisTask() {

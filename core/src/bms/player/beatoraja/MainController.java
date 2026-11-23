@@ -1248,14 +1248,18 @@ public class MainController {
 		public final ReplayData[] replays;
 		public final int lntype;
 		public final boolean pseudoBss;
+		public final boolean keystrokeOnly;
 		public volatile int retry = 0;
 		public volatile long lastTry = 0;
 		public volatile long retryAfterMillis = 0;
 		public volatile boolean isSent = false;
 		public IRSendStatus(IRConnection ir, SongData song, ScoreData score, ReplayData replay) {
-			this(ir, song, score, replay, score != null ? score.getMode() : 0, false);
+			this(ir, song, score, replay, score != null ? score.getMode() : 0, false, false);
 		}
 		public IRSendStatus(IRConnection ir, SongData song, ScoreData score, ReplayData replay, int lntype, boolean pseudoBss) {
+			this(ir, song, score, replay, lntype, pseudoBss, false);
+		}
+		public IRSendStatus(IRConnection ir, SongData song, ScoreData score, ReplayData replay, int lntype, boolean pseudoBss, boolean keystrokeOnly) {
 			this.ir = ir;
 			this.song = song;
 			this.course = null;
@@ -1264,6 +1268,7 @@ public class MainController {
 			this.replays = null;
 			this.lntype = lntype;
 			this.pseudoBss = pseudoBss;
+			this.keystrokeOnly = keystrokeOnly;
 		}
 		public IRSendStatus(IRConnection ir, CourseData course, int lnmode, boolean pseudoBss, ScoreData score, ReplayData[] replays) {
 			this.ir = ir;
@@ -1274,6 +1279,7 @@ public class MainController {
 			this.replays = replays;
 			this.lntype = IRScoreData.toIrLntype(lnmode, pseudoBss);
 			this.pseudoBss = pseudoBss || IRScoreData.isPseudoBssLntype(this.lntype);
+			this.keystrokeOnly = false;
 		}
 
 		/**
@@ -1309,7 +1315,7 @@ public class MainController {
 			String targetTitle = course != null ? course.getName() : (song != null ? song.getTitle() : "");
 			logger.info("IRへスコア送信中 : {}", targetTitle);
 			lastTry = System.currentTimeMillis();
-			bms.player.beatoraja.ir.IRScoreData irScore = new bms.player.beatoraja.ir.IRScoreData(score, lntype, pseudoBss);
+			bms.player.beatoraja.ir.IRScoreData irScore = new bms.player.beatoraja.ir.IRScoreData(score, lntype, pseudoBss, keystrokeOnly);
 			final IRResponse<Object> send1;
 			if (course != null) {
 				irScore.replays = replays;
