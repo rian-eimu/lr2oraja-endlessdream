@@ -689,6 +689,7 @@ public class BMSPlayer extends MainState {
 		if (autoplay.mode == BMSPlayerMode.Mode.PRACTICE) {
 			getScoreDataProperty().setTargetScore(0, null, 0, null, model.getTotalNotes());
 			practice.create(model, main.getConfig(), config);
+			gauge = practice.getGauge(model);
 			state = STATE_PRACTICE;
 		} else {
 			
@@ -853,6 +854,9 @@ public class BMSPlayer extends MainState {
 					randomModifier.modify(model);
 
 					gauge = practice.getGauge(model);
+					for (int i = 0; i < gaugelog.length; i++) {
+						gaugelog[i].clear();
+					}
 					model.setJudgerank(property.judgerank);
 					lanerender.init(model);
 					judge.init(model, resource);
@@ -936,8 +940,8 @@ public class BMSPlayer extends MainState {
 					timer.switchTimer(TIMER_ENDOFNOTE_1P, true);
 				}
 				// stage failed判定
-				// ゲージオートシフト・下限は KEY モード毎の設定
-				final int gaugeAutoShift = config.getGaugeAutoShift(resource.getConfigMode());
+				// ゲージオートシフト・下限は KEY モード毎の設定（プラクティス時は GAUGE TYPE 設定を維持するため無効化）
+				final int gaugeAutoShift = resolveEffectiveGaugeAutoShift(autoplay, config, resource.getConfigMode());
 				final int bottomShiftableGauge = config.getBottomShiftableGauge(resource.getConfigMode());
 				if (gaugeAutoShift == PlayerConfig.GAUGEAUTOSHIFT_BESTCLEAR || gaugeAutoShift == PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER) {
 					final int len = gaugeAutoShift == PlayerConfig.GAUGEAUTOSHIFT_BESTCLEAR
@@ -1127,6 +1131,13 @@ public class BMSPlayer extends MainState {
 
 	private boolean shouldSendOrajaHelperPlayEvents() {
 		return resource.getPlayMode().mode == BMSPlayerMode.Mode.PLAY && resource.isUpdateScore();
+	}
+
+	static int resolveEffectiveGaugeAutoShift(BMSPlayerMode autoplay, PlayerConfig config, Mode configMode) {
+		if (autoplay != null && autoplay.mode == BMSPlayerMode.Mode.PRACTICE) {
+			return PlayerConfig.GAUGEAUTOSHIFT_NONE;
+		}
+		return config.getGaugeAutoShift(configMode);
 	}
 
 	public void setPlaySpeed(int playspeed) {

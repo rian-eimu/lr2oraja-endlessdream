@@ -11,7 +11,6 @@ import bms.model.BMSModel;
 import bms.model.Mode;
 import bms.model.TimeLine;
 import bms.player.beatoraja.Config;
-import bms.player.beatoraja.PlayerConfig;
 import bms.player.beatoraja.input.BMSPlayerInputProcessor;
 import bms.player.beatoraja.input.KeyBoardInputProcesseor.ControlKeys;
 
@@ -42,6 +41,7 @@ public final class PracticeConfiguration {
 	private static final String[] DPRANDOM = { "NORMAL", "FLIP" };
 	private static final String[] GRAPHTYPESTR = {"NOTETYPE", "JUDGE", "EARLYLATE"};
 	private static final String[] SCROLLMODESTR = {"OFF", "REMOVE", "ADD"};
+	private static final String[] EXTRANOTESTR = {"OFF", "1", "2", "3"};
 
 	private PracticeProperty property = new PracticeProperty();
 	private boolean dxMode = false;
@@ -87,8 +87,7 @@ public final class PracticeConfiguration {
 		if(property.total == 0) {
 			property.total = model.getTotal();
 		}
-		property.extranotedepth = MathUtils.clamp(property.extranotedepth,
-				PlayerConfig.EXTRA_NOTE_DEPTH_MIN, PlayerConfig.EXTRA_NOTE_DEPTH_MAX);
+		property.extranotedepth = MathUtils.clamp(property.extranotedepth, 0, EXTRANOTESTR.length - 1);
 		// DX MODE時の初期ゲージ設定（未保存またはデフォルト値の場合に適用）
 		if (dxMode) {
 			if (property.gaugetype >= 3) {
@@ -770,13 +769,6 @@ public final class PracticeConfiguration {
 		SCROLLMODE((practice, inc, isAnalog, turboSpeed) -> {
 			practice.property.scrollmode = (practice.property.scrollmode + (inc ? 1 : 2)) % 3;
 		}, false, "SCROLL MODIFY MODE", practice -> SCROLLMODESTR[practice.property.scrollmode]),
-		EXTRANOTE((practice, inc, isAnalog, turboSpeed) -> {
-			int change = turboSpeed ? 5 : 1;
-			practice.property.extranotedepth = MathUtils.clamp(
-					practice.property.extranotedepth + (inc ? change : -change),
-					PlayerConfig.EXTRA_NOTE_DEPTH_MIN, PlayerConfig.EXTRA_NOTE_DEPTH_MAX);
-		}, false, "EXTRA NOTE", practice -> practice.property.extranotedepth == 0
-				? "OFF" : Integer.toString(practice.property.extranotedepth)),
 		OPTION1P((practice, inc, isAnalog, turboSpeed) -> {
 			final int options = (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K ? 7 : 10);
 			practice.property.random = (practice.property.random + (inc ? 1 : (options -1))) % options;
@@ -786,7 +778,10 @@ public final class PracticeConfiguration {
 		}, false, "OPTION-2P", practice -> RANDOM[practice.property.random2], practice -> practice.model.getMode().player == 2),
 		OPTIONDP((practice, inc, isAnalog, turboSpeed) -> {
 			practice.property.doubleop = (practice.property.doubleop + 1) % 2;
-		}, false, "OPTION-DP", practice -> DPRANDOM[practice.property.doubleop], practice -> practice.model.getMode().player == 2);
+		}, false, "OPTION-DP", practice -> DPRANDOM[practice.property.doubleop], practice -> practice.model.getMode().player == 2),
+		EXTRANOTE((practice, inc, isAnalog, turboSpeed) -> {
+			practice.property.extranotedepth = (practice.property.extranotedepth + (inc ? 1 : 3)) % 4;
+		}, false, "EXTRA NOTE", practice -> EXTRANOTESTR[practice.property.extranotedepth]);
 
 		public final PracticeAction action;
 

@@ -4,6 +4,7 @@ import bms.model.BMSModel;
 import bms.model.Mode;
 import bms.model.NormalNote;
 import bms.model.TimeLine;
+import bms.player.beatoraja.BMSPlayerMode;
 import bms.player.beatoraja.Config;
 import bms.player.beatoraja.PlayerConfig;
 import bms.player.beatoraja.input.KeyBoardInputProcesseor.ControlKeys;
@@ -111,24 +112,59 @@ class PracticeConfigurationTest {
     }
 
     @Test
-    @DisplayName("EXTRA NOTE が通常操作で1刻み・TURBO操作で5刻みに増減し範囲内にクランプされること")
-    void testExtraNoteAdjustmentAndClamping() {
-        assertEquals("EXTRA NOTE : OFF", PracticeElement.EXTRANOTE.text.apply(practice));
-
-        PracticeElement.EXTRANOTE.action.run(practice, true, false, false);
-        assertEquals(1, practice.getPracticeProperty().extranotedepth);
-        assertEquals("EXTRA NOTE : 1", PracticeElement.EXTRANOTE.text.apply(practice));
-
-        PracticeElement.EXTRANOTE.action.run(practice, true, false, true);
-        assertEquals(6, practice.getPracticeProperty().extranotedepth);
-
-        practice.getPracticeProperty().extranotedepth = PlayerConfig.EXTRA_NOTE_DEPTH_MAX;
-        PracticeElement.EXTRANOTE.action.run(practice, true, false, true);
-        assertEquals(PlayerConfig.EXTRA_NOTE_DEPTH_MAX, practice.getPracticeProperty().extranotedepth);
+    @DisplayName("EXTRA NOTE が通常設定と同等に 0(OFF) -> 1 -> 2 -> 3 -> 0(OFF) と双方向循環し表示文字列が一致すること")
+    void testExtraNoteCycleAndText() {
+        String[] expectedText = {"EXTRA NOTE : OFF", "EXTRA NOTE : 1", "EXTRA NOTE : 2", "EXTRA NOTE : 3"};
+        for (int i = 0; i < expectedText.length; i++) {
+            practice.getPracticeProperty().extranotedepth = i;
+            assertEquals(expectedText[i], PracticeElement.EXTRANOTE.text.apply(practice));
+        }
 
         practice.getPracticeProperty().extranotedepth = 0;
-        PracticeElement.EXTRANOTE.action.run(practice, false, false, false);
-        assertEquals(PlayerConfig.EXTRA_NOTE_DEPTH_MIN, practice.getPracticeProperty().extranotedepth);
+        for (int exp : new int[]{1, 2, 3, 0}) {
+            PracticeElement.EXTRANOTE.action.accept(practice, true);
+            assertEquals(exp, practice.getPracticeProperty().extranotedepth);
+        }
+
+        for (int exp : new int[]{3, 2, 1, 0}) {
+            PracticeElement.EXTRANOTE.action.accept(practice, false);
+            assertEquals(exp, practice.getPracticeProperty().extranotedepth);
+        }
+
+        // OPTION-1P が元の11番目(index 10)を維持し、EXTRA NOTE が末尾に来ること
+        practice.create(createPracticeTestModel(Mode.BEAT_7K), new Config());
+        practice.setVisibleItemCount(16);
+        assertEquals("SCROLL MODIFY MODE", practice.getVisibleItemLabel(9));
+        assertEquals("OPTION-1P", practice.getVisibleItemLabel(10));
+        assertEquals("EXTRA NOTE", practice.getVisibleItemLabel(11));
+
+        practice.create(createPracticeTestModel(Mode.BEAT_14K), new Config());
+        practice.setVisibleItemCount(16);
+        assertEquals("OPTION-1P", practice.getVisibleItemLabel(10));
+        assertEquals("OPTION-2P", practice.getVisibleItemLabel(11));
+        assertEquals("OPTION-DP", practice.getVisibleItemLabel(12));
+        assertEquals("EXTRA NOTE", practice.getVisibleItemLabel(13));
+    }
+
+    @Test
+    @DisplayName("プラクティスモードでは通常オプションのゲージオートシフト設定に関わらず GAUGE TYPE が維持されること")
+    void testPracticeDisablesNormalGaugeAutoShift() {
+        PlayerConfig playerConfig = new PlayerConfig();
+        playerConfig.setGauge(GrooveGauge.HARD);
+        playerConfig.setGaugeAutoShift(Mode.BEAT_7K, PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER);
+
+        assertEquals(PlayerConfig.GAUGEAUTOSHIFT_NONE,
+                BMSPlayer.resolveEffectiveGaugeAutoShift(BMSPlayerMode.PRACTICE, playerConfig, Mode.BEAT_7K));
+        assertEquals(PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER,
+                BMSPlayer.resolveEffectiveGaugeAutoShift(BMSPlayerMode.PLAY, playerConfig, Mode.BEAT_7K));
+
+        BMSModel model = createPracticeTestModel(Mode.BEAT_7K);
+        practice.create(model, new Config(), playerConfig);
+        practice.getPracticeProperty().gaugetype = GrooveGauge.EXHARD;
+        practice.getPracticeProperty().startgauge = 80;
+        GrooveGauge gauge = practice.getGauge(model);
+        assertEquals(GrooveGauge.EXHARD, gauge.getType());
+        assertEquals(80f, gauge.getValue());
     }
 
     @Test
