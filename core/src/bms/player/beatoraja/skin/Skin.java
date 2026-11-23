@@ -617,13 +617,16 @@ public class Skin {
 		}
 
 		public void draw(BitmapFont font, String s, float x, float y, Color c) {
-			for (TextureRegion region : font.getRegions()) {
-				setFilter(region);
+			if (s == null || s.isEmpty()) {
+				return;
 			}
-			preDraw();
 			font.setColor(c);
-			font.draw(sprite, s, x, y);
-			postDraw();
+			com.badlogic.gdx.graphics.g2d.BitmapFontCache cache = font.getCache();
+			cache.clear();
+			if (cache.addText(s, x, y).runs.size == 0) {
+				return;
+			}
+			drawFontCache(font, cache, null);
 		}
 
 		public void draw(BitmapFont font, GlyphLayout layout, float x, float y) {
@@ -631,12 +634,46 @@ public class Skin {
 		}
 
 		public void draw(BitmapFont font, GlyphLayout layout, float x, float y, Consumer<ShaderProgram> shaderVariableSetter) {
-			for (TextureRegion region : font.getRegions()) {
-				setFilter(region);
+			if (layout.runs.size == 0) {
+				return;
 			}
-			preDraw(shaderVariableSetter);
-			font.draw(sprite, layout, x, y);
-			postDraw();
+			com.badlogic.gdx.graphics.g2d.BitmapFontCache cache = font.getCache();
+			cache.clear();
+			cache.addText(layout, x, y);
+			drawFontCache(font, cache, shaderVariableSetter);
+		}
+
+		private void drawFontCache(BitmapFont font, com.badlogic.gdx.graphics.g2d.BitmapFontCache cache,
+				Consumer<ShaderProgram> shaderVariableSetter) {
+			Array<TextureRegion> regions = font.getRegions();
+			boolean prepared = false;
+			int appliedWidth = -1;
+			int appliedHeight = -1;
+			for (int page = 0, pageCount = regions.size; page < pageCount; page++) {
+				int vertexCount = cache.getVertexCount(page);
+				if (vertexCount <= 0) {
+					continue;
+				}
+				Texture texture = regions.get(page).getTexture();
+				setFilter(texture);
+				if (!prepared) {
+					preDraw(shaderVariableSetter);
+					prepared = true;
+					appliedWidth = textureWidth;
+					appliedHeight = textureHeight;
+				} else if (type == TYPE_BILINEAR && shaders[type] != null
+						&& (appliedWidth != textureWidth || appliedHeight != textureHeight)) {
+					// ページ毎にテクスチャサイズが異なる場合はバッチを切ってu_textureSizeを更新する
+					sprite.flush();
+					shaders[type].setUniformf("u_textureSize", textureWidth, textureHeight);
+					appliedWidth = textureWidth;
+					appliedHeight = textureHeight;
+				}
+				sprite.draw(texture, cache.getVertices(page), 0, vertexCount);
+			}
+			if (prepared) {
+				postDraw();
+			}
 		}
 
 		public void draw(Texture image, float x, float y, float w, float h) {
