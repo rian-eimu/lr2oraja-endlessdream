@@ -103,10 +103,11 @@ public final class SkinPractice extends SkinObject {
 		float x = region.x + region.width / 8;
 		float y = region.y + region.height * 7 / 8;
 		if (legacyFont != null) {
+			int row = 0;
 			for (int i = 0; i < PracticeConfiguration.elements.length; i++) {
 				if (practice.isElementAvailable(i)) {
 					Color color = practice.getCursorPosition() == i ? focusedColor : unfocusedColor;
-					float itemY = y - ySpacing * i;
+					float itemY = y - ySpacing * row++;
 					sprite.draw(legacyFont, practice.getItemLabel(i), x, itemY, color);
 					sprite.draw(legacyFont, practice.getItemValue(i), x + 150, itemY, color);
 				}
@@ -131,8 +132,8 @@ public final class SkinPractice extends SkinObject {
 				helpLine2 += mode == Mode.KEYBOARD_24K || mode == Mode.KEYBOARD_24K_DOUBLE
 						? "PRESS C1 TO PLAY" : "PRESS 1KEY TO PLAY";
 			}
-			sprite.draw(legacyFont, helpLine1, x, y - ySpacing * 13 - 12, Color.ORANGE);
-			sprite.draw(legacyFont, helpLine2, x, y - ySpacing * 14 - 12, Color.ORANGE);
+			sprite.draw(legacyFont, helpLine1, x, y - ySpacing * PracticeConfiguration.elements.length - 12, Color.ORANGE);
+			sprite.draw(legacyFont, helpLine2, x, y - ySpacing * (PracticeConfiguration.elements.length + 1) - 12, Color.ORANGE);
 
 			String[] judge = {"PGREAT :", "GREAT  :", "GOOD   :", "BAD    :", "POOR   :", "KPOOR  :"};
 			for (int i = 0; i < judge.length; i++) {
