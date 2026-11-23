@@ -798,11 +798,14 @@ public class BMSPlayer extends MainState {
 				// 設定操作中も非同期の音量解析完了をチェック
 				checkVolumeAnalysis(false);
 
-				if (input.getKeyState(0) && resource.mediaLoadFinished() &&  micronow > (skin.getLoadstart() + skin.getLoadend()) * 1000
+				if (practice.isPlayKeyPressed(input) && resource.mediaLoadFinished() &&  micronow > (skin.getLoadstart() + skin.getLoadend()) * 1000
 						&& micronow - startpressedtime > 1000000) {
 					PracticeProperty property = practice.getPracticeProperty();
 					control.setEnableControl(true);
 					control.setEnableCursor(true);
+					if (property.extranotedepth > 0) {
+						new ExtraNoteModifier(config.getExtranoteType(), property.extranotedepth, config.isExtranoteScratch()).modify(model);
+					}
 					final FrequencyType freqOption = main.getConfig().getAudioConfig().getFreqOption();
 					final bms.player.beatoraja.audio.AudioDriver audio = main.getAudioProcessor();
 					final float freqRate = property.freq / 100f;

@@ -11,6 +11,7 @@ import bms.model.BMSModel;
 import bms.model.Mode;
 import bms.model.TimeLine;
 import bms.player.beatoraja.Config;
+import bms.player.beatoraja.PlayerConfig;
 import bms.player.beatoraja.input.BMSPlayerInputProcessor;
 import bms.player.beatoraja.input.KeyBoardInputProcesseor.ControlKeys;
 
@@ -86,6 +87,8 @@ public final class PracticeConfiguration {
 		if(property.total == 0) {
 			property.total = model.getTotal();
 		}
+		property.extranotedepth = MathUtils.clamp(property.extranotedepth,
+				PlayerConfig.EXTRA_NOTE_DEPTH_MIN, PlayerConfig.EXTRA_NOTE_DEPTH_MAX);
 		// DX MODE時の初期ゲージ設定（未保存またはデフォルト値の場合に適用）
 		if (dxMode) {
 			if (property.gaugetype >= 3) {
@@ -290,7 +293,31 @@ public final class PracticeConfiguration {
 		return gauge;
 	}
 	
+	public boolean isPlayKeyPressed(BMSPlayerInputProcessor input) {
+		return model != null && isPlayKeyPressed(input::getKeyState, model.getMode());
+	}
+
+	static boolean isPlayKeyPressed(IntPredicate keyState, Mode mode) {
+		if (keyState.test(0)) {
+			return true;
+		}
+		if (mode == Mode.BEAT_10K) {
+			return keyState.test(7);
+		}
+		if (mode == Mode.BEAT_14K) {
+			return keyState.test(9);
+		}
+		if (mode == Mode.KEYBOARD_24K_DOUBLE) {
+			return keyState.test(26);
+		}
+		return false;
+	}
+
 	public void processInput(BMSPlayerInputProcessor input) {
+		processInput(PracticeInput.from(input));
+	}
+
+	void processInput(PracticeInput input) {
 		controls.readInput(input, model.getMode());
 		boolean turbo = controls.getInputTurbo();
 
@@ -356,6 +383,47 @@ public final class PracticeConfiguration {
 		return controls.getInputTurbo();
 	}
 
+	interface PracticeInput {
+		boolean getControlKeyState(ControlKeys key);
+
+		boolean getKeyState(int index);
+
+		boolean isAnalogInput(int index);
+
+		void resetAnalogInput(int index);
+
+		int getAnalogDiffAndReset(int index, int msTolerance);
+
+		static PracticeInput from(BMSPlayerInputProcessor input) {
+			return new PracticeInput() {
+				@Override
+				public boolean getControlKeyState(ControlKeys key) {
+					return input.getControlKeyState(key);
+				}
+
+				@Override
+				public boolean getKeyState(int index) {
+					return input.getKeyState(index);
+				}
+
+				@Override
+				public boolean isAnalogInput(int index) {
+					return input.isAnalogInput(index);
+				}
+
+				@Override
+				public void resetAnalogInput(int index) {
+					input.resetAnalogInput(index);
+				}
+
+				@Override
+				public int getAnalogDiffAndReset(int index, int msTolerance) {
+					return input.getAnalogDiffAndReset(index, msTolerance);
+				}
+			};
+		}
+	}
+
 	private final class PracticeModeControls {
 		private boolean inputUp;
 		private boolean inputDown;
@@ -382,7 +450,7 @@ public final class PracticeConfiguration {
 			analogTicksPerScroll = config.getAnalogTicksPerScroll();
 		}
 
-		public void readInput(BMSPlayerInputProcessor input, Mode mode) {
+		public void readInput(PracticeInput input, Mode mode) {
 			final boolean inputUpPrev = inputUp;
 			final boolean inputDownPrev = inputDown;
 			final boolean inputLeftPrev = inputLeft;
@@ -406,22 +474,15 @@ public final class PracticeConfiguration {
 				inputLeft = input.getControlKeyState(ControlKeys.LEFT);
 				inputRight = input.getControlKeyState(ControlKeys.RIGHT);
 				inputTurbo = input.getKeyState(3);
-				boolean turntableHorizontalMode = input.getKeyState(1) || inputTurbo;
+				boolean turntableHorizontalKey = input.getKeyState(1);
 
 				if (mode == Mode.BEAT_10K) {
-					//  1 3    8 10
-					// 0 2 4  7 9 11
-					inputUp = inputUp || input.getKeyState(8) || input.getKeyState(10);
-					inputDown = inputDown || input.getKeyState(9);
-					inputLeft = inputLeft || input.getKeyState(7);
-					inputRight = inputRight || input.getKeyState(11);
+					// 2P側も1P側と同様に 2KEY(8)+SCR=左右, 4KEY(10)=TURBO とする
+					turntableHorizontalKey = turntableHorizontalKey || input.getKeyState(8);
+					inputTurbo = inputTurbo || input.getKeyState(10);
 				} else if (mode == Mode.BEAT_14K) {
-					//  1 3 5    10 12 14
-					// 0 2 4 6  9 11 13 15
-					inputUp = inputUp || input.getKeyState(10) || input.getKeyState(14);
-					inputDown = inputDown || input.getKeyState(11) || input.getKeyState(13);
-					inputLeft = inputLeft || input.getKeyState(9);
-					inputRight = inputRight || input.getKeyState(15);
+					// 2P側も1P側と同様に 2KEY(10)+SCR=左右, 4KEY(12)=TURBO とする
+					turntableHorizontalKey = turntableHorizontalKey || input.getKeyState(10);
 					inputTurbo = inputTurbo || input.getKeyState(12);
 				} else if (mode == Mode.KEYBOARD_24K || mode == Mode.KEYBOARD_24K_DOUBLE) {
 					//  1 3   6 8 10
@@ -431,7 +492,16 @@ public final class PracticeConfiguration {
 					inputLeft = inputLeft || input.getKeyState(5);
 					inputRight = inputRight || input.getKeyState(11);
 					inputTurbo = inputTurbo || input.getKeyState(8);
+					if (mode == Mode.KEYBOARD_24K_DOUBLE) {
+						turntableHorizontalKey = turntableHorizontalKey || input.getKeyState(27);
+						inputUp = inputUp || input.getKeyState(32) || input.getKeyState(36);
+						inputDown = inputDown || input.getKeyState(33) || input.getKeyState(35);
+						inputLeft = inputLeft || input.getKeyState(31);
+						inputRight = inputRight || input.getKeyState(37);
+						inputTurbo = inputTurbo || input.getKeyState(29) || input.getKeyState(34);
+					}
 				}
+				boolean turntableHorizontalMode = turntableHorizontalKey || inputTurbo;
 
 				int turntableUpIndex1 = -1;
 				int turntableDownIndex1 = -1;
@@ -506,7 +576,7 @@ public final class PracticeConfiguration {
 			}
 		}
 
-		private void processTurntableInput(BMSPlayerInputProcessor input, int index, boolean scratchUp, boolean turntableHorizontalMode, boolean resetAnalogInput) {
+		private void processTurntableInput(PracticeInput input, int index, boolean scratchUp, boolean turntableHorizontalMode, boolean resetAnalogInput) {
 			if (index == -1) return;
 			if (input.isAnalogInput(index)) {
 				if (resetAnalogInput) {
@@ -700,6 +770,13 @@ public final class PracticeConfiguration {
 		SCROLLMODE((practice, inc, isAnalog, turboSpeed) -> {
 			practice.property.scrollmode = (practice.property.scrollmode + (inc ? 1 : 2)) % 3;
 		}, false, "SCROLL MODIFY MODE", practice -> SCROLLMODESTR[practice.property.scrollmode]),
+		EXTRANOTE((practice, inc, isAnalog, turboSpeed) -> {
+			int change = turboSpeed ? 5 : 1;
+			practice.property.extranotedepth = MathUtils.clamp(
+					practice.property.extranotedepth + (inc ? change : -change),
+					PlayerConfig.EXTRA_NOTE_DEPTH_MIN, PlayerConfig.EXTRA_NOTE_DEPTH_MAX);
+		}, false, "EXTRA NOTE", practice -> practice.property.extranotedepth == 0
+				? "OFF" : Integer.toString(practice.property.extranotedepth)),
 		OPTION1P((practice, inc, isAnalog, turboSpeed) -> {
 			final int options = (practice.model.getMode() == Mode.POPN_5K || practice.model.getMode() == Mode.POPN_9K ? 7 : 10);
 			practice.property.random = (practice.property.random + (inc ? 1 : (options -1))) % options;
@@ -798,5 +875,9 @@ public final class PracticeConfiguration {
 		 * スクロール追加/削除モード
 		 */
 		public int scrollmode = 0;
+		/**
+		 * 追加ノーツ数 (Extra Note)
+		 */
+		public int extranotedepth = 0;
 	}
 }

@@ -131,8 +131,8 @@ public final class SkinPractice extends SkinObject {
 				helpLine2 += mode == Mode.KEYBOARD_24K || mode == Mode.KEYBOARD_24K_DOUBLE
 						? "PRESS C1 TO PLAY" : "PRESS 1KEY TO PLAY";
 			}
-			sprite.draw(legacyFont, helpLine1, x, y - ySpacing * 13 - 12, Color.ORANGE);
-			sprite.draw(legacyFont, helpLine2, x, y - ySpacing * 14 - 12, Color.ORANGE);
+			sprite.draw(legacyFont, helpLine1, x, y - ySpacing * PracticeConfiguration.elements.length - 12, Color.ORANGE);
+			sprite.draw(legacyFont, helpLine2, x, y - ySpacing * (PracticeConfiguration.elements.length + 1) - 12, Color.ORANGE);
 
 			String[] judge = {"PGREAT :", "GREAT  :", "GOOD   :", "BAD    :", "POOR   :", "KPOOR  :"};
 			for (int i = 0; i < judge.length; i++) {
