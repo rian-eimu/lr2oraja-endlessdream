@@ -118,6 +118,27 @@ public class PlayConfig implements Cloneable {
 
 	public static final int LNMODE_UNSET = -1;
 	public static final int LNMODE_MAX = 3;
+	/**
+	 * ターゲットスコアのID ({@link bms.player.beatoraja.play.TargetProperty})。
+	 * null は未設定 (旧 config_player.json 由来) を表し、
+	 * {@link PlayerConfig#validate()} で旧 PlayerConfig.targetid の値を引き継ぐ。
+	 */
+	private String targetid = null;
+	/**
+	 * プレイ中のゲージ切替 ({@link PlayerConfig#GAUGEAUTOSHIFT_NONE} 等)。
+	 * {@link #UNSET} は未設定を表し、{@link PlayerConfig#validate()} で旧 PlayerConfig.gaugeAutoShift の値を引き継ぐ。
+	 */
+	private int gaugeAutoShift = UNSET;
+	/**
+	 * GASで遷移可能なゲージの下限 (ASSIST EASY, EASY, NORMAL)。
+	 * {@link #UNSET} は未設定を表し、{@link PlayerConfig#validate()} で旧 PlayerConfig.bottomShiftableGauge の値を引き継ぐ。
+	 */
+	private int bottomShiftableGauge = UNSET;
+
+	/**
+	 * KEY モード毎に保持する設定の未設定値
+	 */
+	public static final int UNSET = -1;
 
 
 	public PlayConfig() {
@@ -288,7 +309,78 @@ public class PlayConfig implements Cloneable {
 		return lnmode >= 0;
 	}
 
+	public String getTargetid() {
+		return targetid;
+	}
+
+	public void setTargetid(String targetid) {
+		this.targetid = targetid != null && !targetid.isBlank() ? targetid : null;
+	}
+
+	/**
+	 * @return ターゲットスコアが設定済みか (旧設定からの移行前は false)
+	 */
+	public boolean isTargetidSet() {
+		return targetid != null;
+	}
+
+	public int getGaugeAutoShift() {
+		return gaugeAutoShift;
+	}
+
+	public void setGaugeAutoShift(int gaugeAutoShift) {
+		this.gaugeAutoShift = MathUtils.clamp(gaugeAutoShift, PlayerConfig.GAUGEAUTOSHIFT_NONE, PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER);
+	}
+
+	/**
+	 * @return ゲージオートシフトが設定済みか (旧設定からの移行前は false)
+	 */
+	public boolean isGaugeAutoShiftSet() {
+		return gaugeAutoShift >= 0;
+	}
+
+	public int getBottomShiftableGauge() {
+		return bottomShiftableGauge;
+	}
+
+	public void setBottomShiftableGauge(int bottomShiftableGauge) {
+		this.bottomShiftableGauge = MathUtils.clamp(bottomShiftableGauge, bms.player.beatoraja.play.GrooveGauge.ASSISTEASY, bms.player.beatoraja.play.GrooveGauge.NORMAL);
+	}
+
+	/**
+	 * @return ゲージオートシフトの下限が設定済みか (旧設定からの移行前は false)
+	 */
+	public boolean isBottomShiftableGaugeSet() {
+		return bottomShiftableGauge >= 0;
+	}
+
+	/**
+	 * HS オプション以外の KEY モード毎の設定 (判定タイミング・判定アルゴリズム・LN モード・ターゲットスコア・ゲージオートシフト・ゲージ下限) を
+	 * 未設定状態も含めてそのまま複製する
+	 *
+	 * @param src 複製元
+	 */
+	public void copyModeOptions(PlayConfig src) {
+		this.judgetiming = src.judgetiming;
+		this.judgetype = src.judgetype;
+		this.lnmode = src.lnmode;
+		this.targetid = src.targetid;
+		this.gaugeAutoShift = src.gaugeAutoShift;
+		this.bottomShiftableGauge = src.bottomShiftableGauge;
+	}
+
 	public void validate() {
+		// 未設定値・不正値は未設定に戻し、PlayerConfig 側で旧値を引き継がせる
+		if (targetid != null && (targetid.isBlank() || targetid.length() > 128)) {
+			targetid = null;
+		}
+		if (gaugeAutoShift != UNSET) {
+			gaugeAutoShift = gaugeAutoShift < 0 ? UNSET : Math.min(gaugeAutoShift, PlayerConfig.GAUGEAUTOSHIFT_SELECT_TO_UNDER);
+		}
+		if (bottomShiftableGauge != UNSET) {
+			bottomShiftableGauge = bottomShiftableGauge < bms.player.beatoraja.play.GrooveGauge.ASSISTEASY ? UNSET
+					: Math.min(bottomShiftableGauge, bms.player.beatoraja.play.GrooveGauge.NORMAL);
+		}
 		if (lnmode != LNMODE_UNSET) {
 			// 未設定(-1)以外の負数は不正値として未設定に戻し、PlayerConfig 側で旧値を引き継がせる
 			lnmode = lnmode < 0 ? LNMODE_UNSET : Math.min(lnmode, LNMODE_MAX);

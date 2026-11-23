@@ -222,7 +222,7 @@ public class StringPropertyFactory {
 		player(2, (state) -> (state.resource.getPlayerConfig().getName())),
 		target(3, (state) -> {
 			if (state instanceof MusicSelector) {
-				return TargetProperty.getTargetName(state.resource.getPlayerConfig().getTargetid());					
+				return TargetProperty.getTargetName(state.resource.getPlayerConfig().getTargetid(MusicSelector.getConfigMode(state)));					
 			} else {
 				final ScoreData target = state.resource.getTargetScoreData();
 				return target != null ? target.getPlayer() : "";
@@ -417,9 +417,10 @@ public class StringPropertyFactory {
 		private static StringProperty createTargetname(final int index) {
 			return (state) -> {
 				String[] targets = TargetProperty.getTargets();
+				final String targetid = state.resource.getPlayerConfig().getTargetid(MusicSelector.getConfigMode(state));
 				int id = -1;
 				for(int i = 0;i < targets.length;i++) {
-					if(targets[i].equals(state.resource.getPlayerConfig().getTargetid())) {
+					if(targets[i].equals(targetid)) {
 						id = i;
 						break;
 					}

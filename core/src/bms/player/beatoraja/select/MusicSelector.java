@@ -742,7 +742,8 @@ public final class MusicSelector extends MainState {
 	}
 
 	/**
-	 * 選択中のバーで LN モードの表示・変更対象とするモードを返す。
+	 * 選択中のバーで KEY モード毎の設定 (LN モード・ターゲットスコア・ゲージオートシフト等) の
+	 * 表示・変更対象とするモードを返す。
 	 * <ul>
 	 * <li>楽曲バー: 楽曲のモード</li>
 	 * <li>コースバー: 1 曲目のモード (コース内でモードが混在していても 1 曲目を代表とする)</li>
@@ -750,9 +751,9 @@ public final class MusicSelector extends MainState {
 	 * </ul>
 	 * {@link #getSelectedBarPlayConfig()} の楽曲/フォルダ時の扱いに合わせている。
 	 *
-	 * @return LN モードの対象モード (null にはならない)
+	 * @return 対象モード (null にはならない)
 	 */
-	public Mode getSelectedBarLnmodeTarget() {
+	public Mode getSelectedBarConfigMode() {
 		Bar current = manager.getSelected();
 		Mode mode = null;
 		if (current instanceof SongBar songbar && songbar.existsSong()) {
@@ -766,10 +767,25 @@ public final class MusicSelector extends MainState {
 	}
 
 	/**
-	 * @return 選択中のバーに対応する LN モード ({@link #getSelectedBarLnmodeTarget()} のモードの設定値)
+	 * @return 選択中のバーに対応する LN モード ({@link #getSelectedBarConfigMode()} のモードの設定値)
 	 */
 	public int getSelectedBarLnmode() {
-		return config.getLnmode(getSelectedBarLnmodeTarget());
+		return config.getLnmode(getSelectedBarConfigMode());
+	}
+
+	/**
+	 * KEY モード毎の設定 (ターゲットスコア・ゲージオートシフト等) の参照先とするモードを返す。
+	 * 選曲画面では選択中のバーのモード ({@link #getSelectedBarConfigMode()})、
+	 * それ以外では読み込み済み譜面・コースのモード ({@link PlayerResource#getConfigMode()}) を使用する。
+	 *
+	 * @param state 現在のステート
+	 * @return 対象モード (null にはならない)
+	 */
+	public static Mode getConfigMode(MainState state) {
+		if (state instanceof MusicSelector selector) {
+			return selector.getSelectedBarConfigMode();
+		}
+		return state.resource != null ? state.resource.getConfigMode() : Mode.BEAT_7K;
 	}
 
 	/**
